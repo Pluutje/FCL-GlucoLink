@@ -1,0 +1,1188 @@
+package com.fclglucolink.app.data
+
+import android.content.Context
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.doublePreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import com.fclglucolink.app.alarm.AlarmAlertMode
+import com.fclglucolink.app.alarm.AlarmEscalation
+import com.fclglucolink.app.alarm.AlarmType
+import com.fclglucolink.app.calibration.CalibrationMode
+import com.fclglucolink.app.sensor.SensorSlot
+import com.fclglucolink.app.sensor.SensorType
+import com.fclglucolink.app.sensor.caresensair.CareSensAirScanResult
+import com.fclglucolink.app.sensor.simulator.PersistedSimulatorMode
+import com.fclglucolink.app.smoothing.SmoothingStrength
+import com.fclglucolink.app.ui.GlucoseUnit
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+
+/**
+ * 30/07/2026 (editor) — bewust simpele DataStore-preferences i.p.v. Room voor
+ * instellingen: geen queries nodig, gewoon los opgeslagen velden.
+ *
+ * 10/08/2026 (editor, RONDE 79 — 2-sensoren-architectuur) — GROOT herontwerp:
+ * elk veld dat "de actieve sensor" beschrijft (welk type, welk BLE-adres, en
+ * alle CareSens-/G6-identiteitsvelden) was tot vandaag een enkele, kale
+ * DataStore-sleutel — er was letterlijk geen plek om een tweede sensor
+ * tegelijk in kwijt te kunnen. Vanaf nu heeft bijna elke per-sensor-functie
+ * een `slot: SensorSlot`-parameter (zie SensorDriver.kt's kdoc bij
+ * SensorSlot); de onderliggende sleutel wordt dan `"${basisnaam}_${slot.suffix}"`
+ * (bv. `selected_sensor_a` / `selected_sensor_b`) via de `slotXxx()`-
+ * hulpfuncties hieronder, i.p.v. 80+ los gedeclareerde sleutels in Keys.
+ *
+ * Wat NIET per slot is (bewust gedeeld/globaal, ongewijzigd): de
+ * app-brede togglegs calibrationEnabled/smoothingEnabled/
+ * bondLossAutoRecoveryEnabled/diagnosticFileLoggingEnabled/
+ * batteryOptimizationLastPromptedAtMs — dat blijven, net als vandaag,
+ * instellingen die voor de hele app gelden, niet per fysieke sensor.
+ * (Kan later alsnog per-slot worden als daar behoefte aan blijkt; bewust
+ * NIET vooruit-gebouwd zonder concreet verzoek.)
+ *
+ * 10/08/2026 (editor, RONDE 80, op verzoek na live-test — "functioneel moet
+ * de calibratie ook sensor afhankelijk worden nu kan ik wel een ofset kiezen
+ * maar die wordt dan gelijk bij zowel slot a als b gebruikt") —
+ * calibrationMode/calibrationManualOffsetMmol zijn NU WEL per-slot (de
+ * concrete behoefte die de kdoc hierboven al voorzag). calibrationEnabled
+ * (de aan/uit-hoofdschakelaar, geen waarde) blijft bewust globaal — daar is
+ * geen apart verzoek voor. Zie [migrateLegacyCalibrationToSlotAOnce] voor de
+ * bijbehorende, SEPARAAT bewaakte migratie (de hoofdmigratie
+ * [migrateLegacySingleSlotDataOnce] had op het moment van dit verzoek al op
+ * bestaande installaties gedraaid, dus kon niet simpelweg uitgebreid worden).
+ *
+ * De oude blunte `broadcastEnabled`-schakelaar (simpel aan/uit, geen
+ * bronkeuze) is vervangen door `aapsActiveSlot: SensorSlot?` — precies het
+ * gevraagde model: "beide slots kunnen zenden naar AAPS waarbij er
+ * uiteraard maar max 1 actief kan zijn, maar ze moeten ook beiden uit
+ * kunnen" (null = geen van beide zendt).
+ *
+ * Migratie: [migrateLegacySingleSlotDataOnce] kopieert bij de eerste start
+ * na deze update alle bestaande (pre-multi-slot) waarden één keer naar Slot
+ * A, zodat een bestaande installatie niets kwijtraakt. Zie die functie's
+ * kdoc voor het volledige mechanisme.
+ */
+private val Context.dataStore by preferencesDataStore(name = "fclglucolink_settings")
+
+class AppSettings(private val context: Context) {
+
+    private object Keys {
+        // ===== Niet-slot-gebonden (app-breed) =====
+        val BATTERY_OPTIMIZATION_LAST_PROMPTED_AT_MS = longPreferencesKey("battery_optimization_last_prompted_at_ms")
+        val DIAGNOSTIC_FILE_LOGGING_ENABLED = booleanPreferencesKey("diagnostic_file_logging_enabled")
+        val CALIBRATION_ENABLED = booleanPreferencesKey("calibration_enabled")
+        val SMOOTHING_ENABLED = booleanPreferencesKey("smoothing_enabled")
+
+        // 18/08/2026 (editor, RONDE 114, op verzoek: "een algemene filtering
+        // sterkte 3 keuze schakelaar [...] onder de enable smoothing die dan
+        // indien enable uitgeschakeld ook grijs wordt") — zie
+        // smoothing/KalmanSmoother.kt's SmoothingStrength-kdoc. Bewust
+        // GLOBAAL (net als SMOOTHING_ENABLED hierboven), niet per-slot —
+        // dezelfde reden als daar: dit is een algemene, sensor-onafhankelijke
+        // instelling.
+        val SMOOTHING_STRENGTH = stringPreferencesKey("smoothing_strength")
+        val BOND_LOSS_AUTO_RECOVERY_ENABLED = booleanPreferencesKey("bond_loss_auto_recovery_enabled")
+
+        // 16/08/2026 (editor, RONDE 111, op verzoek: "zou er een instelbare
+        // filtering mogelijk zijn die de eerste 2 dagen iets heftiger
+        // filtert en dan langzaam afbouwt" — n.a.v. community-meldingen dat
+        // CareSens Air de eerste dag(en) "springerig" kan zijn en AAPS/
+        // FCLvNext daardoor onterecht kan reageren op ruisgevoelige
+        // STIJGINGEN) — app-breed, geen per-slot (net als SMOOTHING_ENABLED
+        // zelf): de gebruiker wil één instelling die voor elke sensor in elk
+        // slot geldt, niet per sensortype (zie het gesprek — "in principe
+        // heeft iedere sensor er last van"). Hangt bewust ONDER smoothing
+        // (alleen relevant als smoothing zelf aan staat) — zie
+        // smoothing/KalmanSmoother.kt's klasse-kdoc voor het volledige
+        // mechanisme en de doorgerekende afweging.
+        val SMOOTHING_BREAK_IN_FILTER_ENABLED = booleanPreferencesKey("smoothing_breakin_filter_enabled")
+
+        // Duur in uren totdat de extra inloop-demping (nagenoeg) volledig is
+        // afgebouwd — exponentieel, τ = deze waarde / 5 (zie KalmanSmoother.kt).
+        val SMOOTHING_BREAK_IN_FILTER_DURATION_HOURS = doublePreferencesKey("smoothing_breakin_filter_duration_hours")
+
+        // 18/08/2026 (editor, RONDE 113, op verzoek: "toon gefilterde data op
+        // hoofdscherm") — losse, app-brede (niet per-slot) aan/uit-toggle voor
+        // de nieuwe raw/gekalibreerd/gefilterd-regel op StatusScreen.kt/
+        // CombiScreen.kt. Bewust ONAFHANKELIJK van of de waarden daadwerkelijk
+        // verschillen — zie GlucoseReading.calibratedMgdl's kdoc en
+        // StatusScreen.kt's SlotStatusContent voor de volledige aanleiding
+        // (het gesprek verwierp expliciet het bestaande "alleen tonen bij
+        // verschil"-patroon van de oude raw-indicator in BgRingDisplay).
+        val SMOOTHING_SHOW_PIPELINE_ON_MAIN_SCREEN = booleanPreferencesKey("smoothing_show_pipeline_on_main_screen")
+
+        // 13/08/2026 (editor, RONDE 104 — Fase 1, op verzoek: "een mg/dl vs
+        // mmol/l knop") — app-breed, geen per-slot: de weergave-eenheid is een
+        // voorkeur van de gebruiker, geen eigenschap van een fysieke sensor
+        // (zie klasse-kdoc's globaal-vs-per-slot-regel bovenaan dit bestand).
+        val DISPLAY_UNIT = stringPreferencesKey("display_unit")
+
+        // 13/08/2026 (editor, RONDE 106, Fase 2 stap 1, op verzoek: "1 overal
+        // knop om in 1 keer alle alarmen aan/uit te zetten") — hoofdschakelaar
+        // voor het hele alarmsysteem, zie alarm/AlarmType.kt's klasse-kdoc.
+        // De losse per-type instellingen (aan/uit/drempel/voorlooptijd/
+        // geluid/trilling × 7 types) gebruiken de alarmXxx()-sleutelfabrieken
+        // hieronder (zelfde patroon als slotXxx() voor sensoren) i.p.v. hier
+        // tientallen losse Keys-velden te declareren.
+        val ALARMS_MASTER_ENABLED = booleanPreferencesKey("alarms_master_enabled")
+
+        // 10/08/2026 (editor, RONDE 80) — de OUDE, nu-legacy globale
+        // calibratie-sleutels: alleen nog gelezen door
+        // [migrateLegacyCalibrationToSlotAOnce], nooit meer beschreven. Per-
+        // slot vervangers gaan via slotString("calibration_mode", slot) /
+        // slotDouble("calibration_manual_offset_mmol", slot) hieronder — zelfde
+        // basisnaam, dus de migratie is een simpele 1-op-1 kopie naar Slot A.
+        val LEGACY_CALIBRATION_MODE = stringPreferencesKey("calibration_mode")
+        val LEGACY_CALIBRATION_MANUAL_OFFSET_MMOL = doublePreferencesKey("calibration_manual_offset_mmol")
+
+        // 10/08/2026 (editor, RONDE 80) — bewaakt dat
+        // migrateLegacyCalibrationToSlotAOnce() precies één keer draait.
+        // APART van MIGRATION_DUAL_SLOT_DONE: die hoofdmigratie had op
+        // bestaande installaties (incl. de gebruiker's toestel) al gedraaid
+        // vóórdat dit per-slot-calibratie-verzoek er was, dus een nieuwe,
+        // eigen vlag is nodig — anders zou deze migratie op zulke toestellen
+        // nooit meer lopen.
+        val MIGRATION_CALIBRATION_PER_SLOT_DONE = booleanPreferencesKey("migration_calibration_per_slot_done")
+
+        // 10/08/2026 (editor, RONDE 79) — vervangt BROADCAST_ENABLED (oude
+        // blunte aan/uit-schakelaar zonder bronkeuze). "A"/"B"/afwezig=null.
+        val AAPS_ACTIVE_SLOT = stringPreferencesKey("aaps_active_slot")
+
+        // 10/08/2026 (editor, RONDE 79) — bewaakt dat migrateLegacySingleSlotDataOnce()
+        // precies één keer draait, zie die functie's kdoc.
+        val MIGRATION_DUAL_SLOT_DONE = booleanPreferencesKey("migration_dual_slot_done")
+
+        // ===== Legacy (pre-RONDE-79) sleutels — alleen nog gelezen door de
+        // eenmalige migratie hieronder, nooit meer beschreven. Namen
+        // ongewijzigd t.o.v. vóór deze ronde, zodat bestaande DataStore-data
+        // op het toestel gewoon aansluit. =====
+        val LEGACY_SELECTED_SENSOR = stringPreferencesKey("selected_sensor")
+        val LEGACY_DEVICE_ADDRESS = stringPreferencesKey("device_address")
+        val LEGACY_BROADCAST_ENABLED = booleanPreferencesKey("broadcast_enabled")
+        val LEGACY_SENSOR_STARTED_AT_MS = longPreferencesKey("sensor_started_at_ms")
+        val LEGACY_CARESENS_SENSOR_CODE = stringPreferencesKey("caresens_sensor_code")
+        val LEGACY_CARESENS_SERIAL = stringPreferencesKey("caresens_serial")
+        val LEGACY_CARESENS_PIN = stringPreferencesKey("caresens_pin")
+        val LEGACY_CARESENS_EXPIRY_YYMMDD = stringPreferencesKey("caresens_expiry_yymmdd")
+        val LEGACY_CARESENS_NEXT_SEQUENCE = intPreferencesKey("caresens_next_sequence")
+        val LEGACY_CARESENS_SENSOR_STARTED_AT_MS = longPreferencesKey("caresens_sensor_started_at_ms")
+        val LEGACY_CARESENS_LAST_CONNECTED_AT_MS = longPreferencesKey("caresens_last_connected_at_ms")
+        val LEGACY_DEXCOM_G6_TRANSMITTER_ID = stringPreferencesKey("dexcom_g6_transmitter_id")
+        val LEGACY_DEXCOM_G6_LAST_CONNECTED_AT_MS = longPreferencesKey("dexcom_g6_last_connected_at_ms")
+        val LEGACY_DEXCOM_G6_LAST_CONFIRMED_SENSOR_CODE = stringPreferencesKey("dexcom_g6_last_confirmed_sensor_code")
+        val LEGACY_DEXCOM_G6_SESSION_START_CONFIRMED_AT_MS = longPreferencesKey("dexcom_g6_session_start_confirmed_at_ms")
+        val LEGACY_DEXCOM_G6_LAST_CALIBRATION_STATE = intPreferencesKey("dexcom_g6_last_calibration_state")
+        val LEGACY_DEXCOM_G6_WARMUP_SECONDS = intPreferencesKey("dexcom_g6_warmup_seconds")
+        val LEGACY_DEXCOM_G6_TYPICAL_SENSOR_DAYS = intPreferencesKey("dexcom_g6_typical_sensor_days")
+        val LEGACY_DEXCOM_G6_VOLTAGE_A = intPreferencesKey("dexcom_g6_voltage_a")
+        val LEGACY_DEXCOM_G6_VOLTAGE_B = intPreferencesKey("dexcom_g6_voltage_b")
+        val LEGACY_DEXCOM_G6_TEMPERATURE_C = intPreferencesKey("dexcom_g6_temperature_c")
+        val LEGACY_DEXCOM_G6_LAST_BATTERY_QUERY_AT_MS = longPreferencesKey("dexcom_g6_last_battery_query_at_ms")
+        val LEGACY_CALIBRATION_CLEARED_FOR_DEVICE_ADDRESS = stringPreferencesKey("calibration_cleared_for_device_address")
+        val LEGACY_SENSOR_SESSION_STARTED_FOR_DEVICE_ADDRESS = stringPreferencesKey("sensor_session_started_for_device_address")
+        val LEGACY_SIMULATOR_MODE = stringPreferencesKey("simulator_active_mode")
+        val LEGACY_SIMULATOR_REPEAT_MGDL = doublePreferencesKey("simulator_repeat_mgdl")
+        val LEGACY_SIMULATOR_INTERVAL_MS = longPreferencesKey("simulator_interval_ms")
+        val LEGACY_EXTERNAL_LIST_URI = stringPreferencesKey("simulator_external_list_uri")
+        // Bewust NIET gemigreerd (blijven ongewijzigd/globaal, zie kdoc
+        // bovenaan dit bestand): DEXCOM_G6_PENDING_NEW_SENSOR_CODE,
+        // DEXCOM_G6_PENDING_STOP_BEFORE_START, DEXCOM_G6_PENDING_STOP_SENSOR_ONLY,
+        // DEXCOM_G6_SESSION_START_FAIL_COUNT, PENDING_CROSS_TYPE_SWITCH — dit
+        // zijn allemaal eenmalige/get-and-clear actie-vlaggen die na de
+        // update toch leeg beginnen (er loopt op het moment van updaten nooit
+        // een "pending" actie), dus niets om over te zetten.
+    }
+
+    // ===== Slot-sleutel-fabrieken =====
+    // 10/08/2026 (editor, RONDE 79) — i.p.v. 80+ individueel gedeclareerde
+    // Keys (elk basisveld × 2 slots): elke per-sensor-functie bouwt zijn
+    // eigen sleutel met dezelfde basisnaam als vóór deze ronde, plus
+    // "_a"/"_b". Zelfde basisnamen als de oude (nu LEGACY_*) sleutels
+    // hierboven, dus de migratiefunctie kan simpelweg 1-op-1 overzetten.
+    private fun slotString(base: String, slot: SensorSlot): Preferences.Key<String> =
+        stringPreferencesKey("${base}_${slot.suffix}")
+    private fun slotLong(base: String, slot: SensorSlot): Preferences.Key<Long> =
+        longPreferencesKey("${base}_${slot.suffix}")
+    private fun slotInt(base: String, slot: SensorSlot): Preferences.Key<Int> =
+        intPreferencesKey("${base}_${slot.suffix}")
+    private fun slotDouble(base: String, slot: SensorSlot): Preferences.Key<Double> =
+        doublePreferencesKey("${base}_${slot.suffix}")
+
+    // 13/08/2026 (editor, RONDE 106) — zelfde fabriekspatroon als slotXxx()
+    // hierboven, nu voor per-alarmtype instellingen i.p.v. per-sensor-slot.
+    // "alarm_" + basisnaam + het (lowercase) type-suffix, bv.
+    // "alarm_threshold_mgdl_urgent_low".
+    private fun alarmBoolean(base: String, type: AlarmType): Preferences.Key<Boolean> =
+        booleanPreferencesKey("alarm_${base}_${type.name.lowercase()}")
+    private fun alarmDouble(base: String, type: AlarmType): Preferences.Key<Double> =
+        doublePreferencesKey("alarm_${base}_${type.name.lowercase()}")
+    private fun alarmInt(base: String, type: AlarmType): Preferences.Key<Int> =
+        intPreferencesKey("alarm_${base}_${type.name.lowercase()}")
+    private fun alarmString(base: String, type: AlarmType): Preferences.Key<String> =
+        stringPreferencesKey("alarm_${base}_${type.name.lowercase()}")
+    private fun alarmLong(base: String, type: AlarmType): Preferences.Key<Long> =
+        longPreferencesKey("alarm_${base}_${type.name.lowercase()}")
+
+    // ============================================================
+    // AAPS-routing (nieuw, RONDE 79) — vervangt broadcastEnabled
+    // ============================================================
+
+    /** 10/08/2026 (editor, RONDE 79, op verzoek: "beide slots moeten kunnen
+     *  zenden naar aaps waarbij er uiteraard maar max 1 actief kan zijn,
+     *  maar ze moeten ook beiden uit kunnen") — null = geen enkele slot
+     *  zendt. `BleConnectionService` broadcast alleen readings van de slot
+     *  die hier staat; de andere slot blijft gewoon lokaal verzamelen/tonen
+     *  (hot standby). Wisselen is bewust één expliciete actie
+     *  (setAapsActiveSlot), geen automatische arbitrage. */
+    val aapsActiveSlot: Flow<SensorSlot?> = context.dataStore.data.map { prefs ->
+        parseSlotOrNull(prefs[Keys.AAPS_ACTIVE_SLOT])
+    }
+
+    suspend fun setAapsActiveSlot(slot: SensorSlot?) {
+        context.dataStore.edit { prefs ->
+            if (slot == null) prefs.remove(Keys.AAPS_ACTIVE_SLOT) else prefs[Keys.AAPS_ACTIVE_SLOT] = slot.name
+        }
+    }
+
+    /** Eenmalige lezing voor BleConnectionService's reading-pijplijn — zelfde
+     *  reden als de bestaande isBroadcastEnabled()-stijl "once"-functies
+     *  elders in dit bestand: geen losse Flow-collector nodig per meting. */
+    suspend fun getAapsActiveSlotOnce(): SensorSlot? =
+        parseSlotOrNull(context.dataStore.data.first()[Keys.AAPS_ACTIVE_SLOT])
+
+    private fun parseSlotOrNull(raw: String?): SensorSlot? =
+        raw?.let { runCatching { SensorSlot.valueOf(it) }.getOrNull() }
+
+    // ============================================================
+    // Niet-slot-gebonden (app-breed, ongewijzigd t.o.v. vóór RONDE 79)
+    // ============================================================
+
+    val diagnosticFileLoggingEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.DIAGNOSTIC_FILE_LOGGING_ENABLED] ?: false
+    }
+
+    suspend fun setDiagnosticFileLoggingEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[Keys.DIAGNOSTIC_FILE_LOGGING_ENABLED] = enabled }
+    }
+
+    suspend fun isDiagnosticFileLoggingEnabled(): Boolean =
+        context.dataStore.data.first()[Keys.DIAGNOSTIC_FILE_LOGGING_ENABLED] ?: false
+
+    val batteryOptimizationLastPromptedAtMs: Flow<Long?> = context.dataStore.data.map { prefs ->
+        prefs[Keys.BATTERY_OPTIMIZATION_LAST_PROMPTED_AT_MS]
+    }
+
+    suspend fun setBatteryOptimizationLastPromptedAtMs(value: Long) {
+        context.dataStore.edit { prefs -> prefs[Keys.BATTERY_OPTIMIZATION_LAST_PROMPTED_AT_MS] = value }
+    }
+
+    /** 13/08/2026 (editor, RONDE 104, Fase 1) — zie ui/Units.kt's
+     *  [GlucoseUnit]-kdoc voor de volledige aanleiding. `MMOL` is de default
+     *  (behoudt het gedrag van vóór deze ronde voor bestaande installaties).
+     *  Zelfde `runCatching { ... }.getOrNull() ?: default`-patroon als
+     *  [parseCalibrationMode] hieronder, voor dezelfde reden: een onbekende/
+     *  corrupte opgeslagen waarde mag nooit een crash geven, gewoon terugval
+     *  naar de default. */
+    val displayUnit: Flow<GlucoseUnit> = context.dataStore.data.map { prefs ->
+        parseDisplayUnit(prefs[Keys.DISPLAY_UNIT])
+    }
+
+    suspend fun setDisplayUnit(unit: GlucoseUnit) {
+        context.dataStore.edit { prefs -> prefs[Keys.DISPLAY_UNIT] = unit.name }
+    }
+
+    suspend fun getDisplayUnitOnce(): GlucoseUnit =
+        parseDisplayUnit(context.dataStore.data.first()[Keys.DISPLAY_UNIT])
+
+    private fun parseDisplayUnit(raw: String?): GlucoseUnit =
+        runCatching { raw?.let { GlucoseUnit.valueOf(it) } }.getOrNull() ?: GlucoseUnit.MMOL
+
+    val calibrationEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.CALIBRATION_ENABLED] ?: false
+    }
+
+    suspend fun setCalibrationEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[Keys.CALIBRATION_ENABLED] = enabled }
+    }
+
+    suspend fun isCalibrationEnabled(): Boolean =
+        context.dataStore.data.first()[Keys.CALIBRATION_ENABLED] ?: false
+
+    // 10/08/2026 (editor, RONDE 80) — per-slot (was globaal, zie kdoc bovenaan
+    // dit bestand): elke slot heeft nu zijn eigen kalibratie-modus/-offset,
+    // via dezelfde slotString/slotDouble-sleutelfabriek als de rest.
+    fun calibrationMode(slot: SensorSlot): Flow<CalibrationMode> = context.dataStore.data.map { prefs ->
+        parseCalibrationMode(prefs[slotString("calibration_mode", slot)])
+    }
+
+    suspend fun setCalibrationMode(slot: SensorSlot, mode: CalibrationMode) {
+        context.dataStore.edit { prefs -> prefs[slotString("calibration_mode", slot)] = mode.name }
+    }
+
+    suspend fun getCalibrationModeOnce(slot: SensorSlot): CalibrationMode =
+        parseCalibrationMode(context.dataStore.data.first()[slotString("calibration_mode", slot)])
+
+    private fun parseCalibrationMode(raw: String?): CalibrationMode =
+        runCatching { raw?.let { CalibrationMode.valueOf(it) } }.getOrNull() ?: CalibrationMode.SPLINE
+
+    fun calibrationManualOffsetMmol(slot: SensorSlot): Flow<Double> = context.dataStore.data.map { prefs ->
+        prefs[slotDouble("calibration_manual_offset_mmol", slot)] ?: 0.0
+    }
+
+    suspend fun setCalibrationManualOffsetMmol(slot: SensorSlot, value: Double) {
+        context.dataStore.edit { prefs -> prefs[slotDouble("calibration_manual_offset_mmol", slot)] = value }
+    }
+
+    suspend fun getCalibrationManualOffsetMmolOnce(slot: SensorSlot): Double =
+        context.dataStore.data.first()[slotDouble("calibration_manual_offset_mmol", slot)] ?: 0.0
+
+    val smoothingEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.SMOOTHING_ENABLED] ?: false
+    }
+
+    suspend fun setSmoothingEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[Keys.SMOOTHING_ENABLED] = enabled }
+    }
+
+    suspend fun isSmoothingEnabled(): Boolean =
+        context.dataStore.data.first()[Keys.SMOOTHING_ENABLED] ?: false
+
+    /** RONDE 114 — zie [Keys.SMOOTHING_STRENGTH]'s kdoc en
+     *  [SmoothingStrength]'s kdoc in KalmanSmoother.kt. Default MEDIUM
+     *  (schaal ×1.0) — exact het bestaande gedrag van vóór deze ronde, dus
+     *  geen gedragswijziging voor gebruikers die de nieuwe knop niet
+     *  aanraken. Zelfde onbekende-waarde-fallback-patroon als
+     *  [parseCalibrationMode] hieronder. */
+    val smoothingStrength: Flow<SmoothingStrength> = context.dataStore.data.map { prefs ->
+        parseSmoothingStrength(prefs[Keys.SMOOTHING_STRENGTH])
+    }
+
+    suspend fun setSmoothingStrength(strength: SmoothingStrength) {
+        context.dataStore.edit { prefs -> prefs[Keys.SMOOTHING_STRENGTH] = strength.name }
+    }
+
+    suspend fun getSmoothingStrengthOnce(): SmoothingStrength =
+        parseSmoothingStrength(context.dataStore.data.first()[Keys.SMOOTHING_STRENGTH])
+
+    private fun parseSmoothingStrength(raw: String?): SmoothingStrength =
+        runCatching { raw?.let { SmoothingStrength.valueOf(it) } }.getOrNull() ?: SmoothingStrength.MEDIUM
+
+    /** RONDE 111 — zie [Keys.SMOOTHING_BREAK_IN_FILTER_ENABLED]'s kdoc.
+     *  Default UIT: een gedragswijziging voor bestaande gebruikers moet
+     *  bewust aangezet worden, net als smoothing zelf. */
+    val breakInFilterEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.SMOOTHING_BREAK_IN_FILTER_ENABLED] ?: false
+    }
+
+    suspend fun setBreakInFilterEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[Keys.SMOOTHING_BREAK_IN_FILTER_ENABLED] = enabled }
+    }
+
+    suspend fun isBreakInFilterEnabledOnce(): Boolean =
+        context.dataStore.data.first()[Keys.SMOOTHING_BREAK_IN_FILTER_ENABLED] ?: false
+
+    /** RONDE 111 — default 24 uur, zoals in het gesprek als voorbeeld
+     *  genoemd ("een instelling van 24 uur betekent dat het na 24 uur
+     *  volledig is uitgewerkt"). */
+    val breakInFilterDurationHours: Flow<Double> = context.dataStore.data.map { prefs ->
+        prefs[Keys.SMOOTHING_BREAK_IN_FILTER_DURATION_HOURS] ?: 24.0
+    }
+
+    suspend fun setBreakInFilterDurationHours(hours: Double) {
+        context.dataStore.edit { prefs -> prefs[Keys.SMOOTHING_BREAK_IN_FILTER_DURATION_HOURS] = hours }
+    }
+
+    suspend fun getBreakInFilterDurationHoursOnce(): Double =
+        context.dataStore.data.first()[Keys.SMOOTHING_BREAK_IN_FILTER_DURATION_HOURS] ?: 24.0
+
+    /** RONDE 113 — zie [Keys.SMOOTHING_SHOW_PIPELINE_ON_MAIN_SCREEN]'s kdoc.
+     *  Default UIT: net als de andere smoothing-gerelateerde togglegs hierboven
+     *  is dit een bewuste opt-in, geen gedragswijziging voor bestaande
+     *  gebruikers die niemand gevraagd heeft. */
+    val showFilteredPipelineOnMainScreen: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.SMOOTHING_SHOW_PIPELINE_ON_MAIN_SCREEN] ?: false
+    }
+
+    suspend fun setShowFilteredPipelineOnMainScreen(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[Keys.SMOOTHING_SHOW_PIPELINE_ON_MAIN_SCREEN] = enabled }
+    }
+
+    suspend fun isShowFilteredPipelineOnMainScreenOnce(): Boolean =
+        context.dataStore.data.first()[Keys.SMOOTHING_SHOW_PIPELINE_ON_MAIN_SCREEN] ?: false
+
+    val bondLossAutoRecoveryEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.BOND_LOSS_AUTO_RECOVERY_ENABLED] ?: false
+    }
+
+    suspend fun setBondLossAutoRecoveryEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[Keys.BOND_LOSS_AUTO_RECOVERY_ENABLED] = enabled }
+    }
+
+    suspend fun isBondLossAutoRecoveryEnabledOnce(): Boolean =
+        context.dataStore.data.first()[Keys.BOND_LOSS_AUTO_RECOVERY_ENABLED] ?: false
+
+    // ============================================================
+    // Per-slot identiteit — welk sensortype/adres zit in deze slot
+    // ============================================================
+
+    fun selectedSensor(slot: SensorSlot): Flow<SensorType?> = context.dataStore.data.map { prefs ->
+        prefs[slotString("selected_sensor", slot)]?.let { name ->
+            runCatching { SensorType.valueOf(name) }.getOrNull()
+        }
+    }
+
+    suspend fun getSelectedSensorOnce(slot: SensorSlot): SensorType? =
+        selectedSensor(slot).first()
+
+    fun deviceAddress(slot: SensorSlot): Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[slotString("device_address", slot)]
+    }
+
+    suspend fun getDeviceAddressOnce(slot: SensorSlot): String? =
+        context.dataStore.data.first()[slotString("device_address", slot)]
+
+    /**
+     * 10/08/2026 (editor, RONDE 79 — 2-sensoren-architectuur) — handige
+     * samenvatting voor de plekken die alleen willen weten OF er ergens een
+     * sensor geconfigureerd is, om te beslissen of BleConnectionService
+     * (opnieuw) gestart moet worden (MainActivity.kt's herstart-check,
+     * ConnectionWatchdog.kt's wekker/boot-receiver) — die plekken hoeven zelf
+     * niet te weten WELKE slot(s) dat zijn, dat bepaalt BleConnectionService's
+     * eigen onStartCommand()-lus per slot onafhankelijk (zie dat bestand).
+     */
+    suspend fun hasAnySlotConfigured(): Boolean = SensorSlot.entries.any { slot ->
+        getSelectedSensorOnce(slot) != null && getDeviceAddressOnce(slot) != null
+    }
+
+    /**
+     * 10/08/2026 (editor, RONDE 79) — zelfde onderscheid als vóór deze ronde
+     * (zie de uitgebreide historische kdoc die hier tot RONDE 78 stond, nu
+     * verkort): bij het kiezen van een sensor-TYPE voor een slot wordt alleen
+     * het GENERIEKE, sessie-gebonden deel gewist (device-adres van deze
+     * slot, de generieke sensor_started_at_ms-fallback, een eventuele
+     * pending G6-nieuwe-sensor-code) — de eigenlijke CareSens-/G6-
+     * IDENTITEITSVELDEN (transmitter-ID, gescande barcode, batterij-info,
+     * laatste-verbinding) blijven staan, want die horen bij het TYPE zelf
+     * (al gescheiden via de sleutelnaam), niet bij "wat toevallig actief
+     * is" — zo hoeft bv. een G6-transmitter-ID niet opnieuw getypt te
+     * worden na tijdelijk terug- en weer-overschakelen. Alles hier is nu
+     * bovendien slot-gebonden: Slot A en Slot B kunnen dus onafhankelijk
+     * van elkaar, zelfs met hetzelfde sensortype, hun eigen identiteit
+     * vasthouden.
+     */
+    suspend fun setSelectedSensor(slot: SensorSlot, sensorType: SensorType) {
+        context.dataStore.edit { prefs ->
+            val key = slotString("selected_sensor", slot)
+            val previousSensor = prefs[key]
+            val isRealSwitch = previousSensor != sensorType.name
+            prefs[key] = sensorType.name
+            if (!isRealSwitch) return@edit
+            prefs.remove(slotString("device_address", slot))
+            prefs.remove(slotLong("sensor_started_at_ms", slot))
+            prefs.remove(slotString("dexcom_g6_pending_new_sensor_code", slot))
+            prefs[booleanPreferencesKey("pending_cross_type_switch_${slot.suffix}")] = true
+        }
+    }
+
+    /**
+     * 10/08/2026 (editor, RONDE 80, letterlijk verzoek — "dat ik als sensor
+     * ook geen kan kiezen bij de sensoren") — expliciete "None"-keuze voor een
+     * slot: verwijdert zowel de gekozen sensor-TYPE-sleutel als het device-
+     * adres van deze slot (zelfde adres-wis-stap als [clearDeviceAddress]/de
+     * bestaande "Disconnect"-knoppen, zodat BleConnectionService's
+     * onStartCommand()-lus voor deze slot niets meer vindt om mee te
+     * verbinden). Laat, net als [setSelectedSensor]'s kdoc hierboven al voor
+     * een type-WISSEL beschrijft, de type-specifieke IDENTITEITSVELDEN
+     * (G6-transmitter-ID, CareSens-scan e.d.) bewust ongemoeid — die horen
+     * bij het type zelf, niet bij "is dit slot nu actief", zodat later
+     * opnieuw kiezen voor hetzelfde type de setup-wizard weer kan overslaan.
+     *
+     * Als deze slot toevallig de AAPS-zendende slot was, wordt [aapsActiveSlot]
+     * ook meteen leeggemaakt — een lege slot kan nooit een geldige
+     * AAPS-databron zijn, dus zonder deze stap zou de UI een tabblad als
+     * "Sending to AAPS" blijven tonen terwijl er feitelijk niets meer aan
+     * hangt.
+     */
+    suspend fun clearSelectedSensor(slot: SensorSlot) {
+        context.dataStore.edit { prefs ->
+            prefs.remove(slotString("selected_sensor", slot))
+            prefs.remove(slotString("device_address", slot))
+            if (parseSlotOrNull(prefs[Keys.AAPS_ACTIVE_SLOT]) == slot) {
+                prefs.remove(Keys.AAPS_ACTIVE_SLOT)
+            }
+        }
+    }
+
+    suspend fun setDeviceAddress(slot: SensorSlot, address: String) {
+        context.dataStore.edit { prefs -> prefs[slotString("device_address", slot)] = address }
+    }
+
+    /** Voor de "Verbinding verbreken"-actie: laat selectedSensor bewust
+     *  staan (handig als "laatst gebruikt"), wist alleen het device-adres
+     *  van déze slot. */
+    suspend fun clearDeviceAddress(slot: SensorSlot) {
+        context.dataStore.edit { prefs -> prefs.remove(slotString("device_address", slot)) }
+    }
+
+    suspend fun hasKnownDexcomG6TransmitterOnce(slot: SensorSlot): Boolean =
+        getDexcomG6TransmitterIdOnce(slot) != null
+
+    suspend fun hasKnownCareSensAirScanOnce(slot: SensorSlot): Boolean =
+        getCareSensAirScanOnce(slot) != null
+
+    /** Get-and-clear, per slot — zie setSelectedSensor()'s kdoc: signaal
+     *  voor de sensor-wisselmarker op de BG-grafiek van déze slot. */
+    suspend fun consumePendingCrossTypeSwitch(slot: SensorSlot): Boolean {
+        val key = booleanPreferencesKey("pending_cross_type_switch_${slot.suffix}")
+        var wasSet = false
+        context.dataStore.edit { prefs ->
+            wasSet = prefs[key] ?: false
+            prefs.remove(key)
+        }
+        return wasSet
+    }
+
+    /** Generieke sessie-start-fallback (types zonder eigen "echt"
+     *  startmoment, zoals de simulator) — per slot, éénmalig gezet zodra
+     *  er voor het eerst mee verbonden wordt. */
+    suspend fun getOrInitSensorStartedAtMs(slot: SensorSlot): Long {
+        val key = slotLong("sensor_started_at_ms", slot)
+        val existing = context.dataStore.data.first()[key]
+        if (existing != null) return existing
+        val now = System.currentTimeMillis()
+        context.dataStore.edit { prefs -> prefs[key] = now }
+        return now
+    }
+
+    /** 11/08/2026 (editor, RONDE 90) — passieve, NIET-initialiserende variant
+     *  van [getOrInitSensorStartedAtMs] — voor weergave-only contexten
+     *  (CombiScreen.kt's fingerprik-markers) waar geen sensor-sessie hoeft
+     *  te bestaan, en dus ook geen bijwerking mag optreden als 'm nog niet
+     *  bestaat (in tegenstelling tot CalibrationScreen.kt, dat alleen
+     *  bereikbaar is vanuit een tab MET een actieve sensor, en dus gewoon
+     *  de suspend-variant hierboven blijft gebruiken). Geeft `null` terug
+     *  als er nog geen sessie is geweest voor deze slot. */
+    fun sensorStartedAtMsFlow(slot: SensorSlot): Flow<Long?> =
+        context.dataStore.data.map { prefs -> prefs[slotLong("sensor_started_at_ms", slot)] }
+
+    // ============================================================
+    // CareSens Air — per slot
+    // ============================================================
+
+    suspend fun saveCareSensAirScan(slot: SensorSlot, result: CareSensAirScanResult) {
+        context.dataStore.edit { prefs ->
+            prefs[slotString("caresens_sensor_code", slot)] = result.sensorCode
+            prefs[slotString("caresens_serial", slot)] = result.serial
+            prefs[slotString("caresens_pin", slot)] = result.pin
+            prefs[slotString("caresens_expiry_yymmdd", slot)] = result.expiryYyMmDd
+        }
+    }
+
+    fun careSensAirScan(slot: SensorSlot): Flow<CareSensAirScanResult?> = context.dataStore.data.map { prefs ->
+        val sensorCode = prefs[slotString("caresens_sensor_code", slot)]
+        val serial = prefs[slotString("caresens_serial", slot)]
+        val pin = prefs[slotString("caresens_pin", slot)]
+        val expiry = prefs[slotString("caresens_expiry_yymmdd", slot)]
+        if (sensorCode != null && serial != null && pin != null && expiry != null) {
+            CareSensAirScanResult(sensorCode = sensorCode, serial = serial, pin = pin, expiryYyMmDd = expiry)
+        } else {
+            null
+        }
+    }
+
+    suspend fun getCareSensAirScanOnce(slot: SensorSlot): CareSensAirScanResult? = careSensAirScan(slot).first()
+
+    suspend fun getCareSensAirNextSequence(slot: SensorSlot): Int =
+        context.dataStore.data.first()[slotInt("caresens_next_sequence", slot)] ?: 0
+
+    suspend fun setCareSensAirNextSequence(slot: SensorSlot, value: Int) {
+        context.dataStore.edit { prefs -> prefs[slotInt("caresens_next_sequence", slot)] = value }
+    }
+
+    suspend fun setCareSensAirSensorStartedAtMs(slot: SensorSlot, value: Long) {
+        context.dataStore.edit { prefs -> prefs[slotLong("caresens_sensor_started_at_ms", slot)] = value }
+    }
+
+    fun careSensAirSensorStartedAtMs(slot: SensorSlot): Flow<Long?> = context.dataStore.data.map { prefs ->
+        prefs[slotLong("caresens_sensor_started_at_ms", slot)]
+    }
+
+    suspend fun setCareSensAirLastConnectedAtMs(slot: SensorSlot, value: Long) {
+        context.dataStore.edit { prefs -> prefs[slotLong("caresens_last_connected_at_ms", slot)] = value }
+    }
+
+    fun careSensAirLastConnectedAtMs(slot: SensorSlot): Flow<Long?> = context.dataStore.data.map { prefs ->
+        prefs[slotLong("caresens_last_connected_at_ms", slot)]
+    }
+
+    suspend fun getCareSensAirLastConnectedAtMsOnce(slot: SensorSlot): Long? =
+        context.dataStore.data.first()[slotLong("caresens_last_connected_at_ms", slot)]
+
+    // ============================================================
+    // Dexcom G6 — per slot
+    // ============================================================
+
+    suspend fun setDexcomG6TransmitterId(slot: SensorSlot, id: String) {
+        context.dataStore.edit { prefs -> prefs[slotString("dexcom_g6_transmitter_id", slot)] = id }
+    }
+
+    fun dexcomG6TransmitterId(slot: SensorSlot): Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[slotString("dexcom_g6_transmitter_id", slot)]
+    }
+
+    suspend fun getDexcomG6TransmitterIdOnce(slot: SensorSlot): String? =
+        context.dataStore.data.first()[slotString("dexcom_g6_transmitter_id", slot)]
+
+    suspend fun setDexcomG6LastConnectedAtMs(slot: SensorSlot, value: Long) {
+        context.dataStore.edit { prefs -> prefs[slotLong("dexcom_g6_last_connected_at_ms", slot)] = value }
+    }
+
+    fun dexcomG6LastConnectedAtMs(slot: SensorSlot): Flow<Long?> = context.dataStore.data.map { prefs ->
+        prefs[slotLong("dexcom_g6_last_connected_at_ms", slot)]
+    }
+
+    suspend fun getDexcomG6LastConnectedAtMsOnce(slot: SensorSlot): Long? =
+        context.dataStore.data.first()[slotLong("dexcom_g6_last_connected_at_ms", slot)]
+
+    suspend fun setDexcomG6PendingNewSensorCode(slot: SensorSlot, code: String) {
+        context.dataStore.edit { prefs ->
+            prefs[slotString("dexcom_g6_pending_new_sensor_code", slot)] = code
+            prefs.remove(slotLong("dexcom_g6_session_start_confirmed_at_ms", slot))
+            prefs.remove(slotInt("dexcom_g6_session_start_fail_count", slot))
+        }
+    }
+
+    fun dexcomG6PendingNewSensorCode(slot: SensorSlot): Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[slotString("dexcom_g6_pending_new_sensor_code", slot)]
+    }
+
+    suspend fun getDexcomG6PendingNewSensorCodeOnce(slot: SensorSlot): String? =
+        context.dataStore.data.first()[slotString("dexcom_g6_pending_new_sensor_code", slot)]
+
+    suspend fun clearDexcomG6PendingNewSensorCode(slot: SensorSlot) {
+        context.dataStore.edit { prefs -> prefs.remove(slotString("dexcom_g6_pending_new_sensor_code", slot)) }
+    }
+
+    suspend fun setDexcomG6SessionStartConfirmedAtMs(slot: SensorSlot, value: Long) {
+        context.dataStore.edit { prefs -> prefs[slotLong("dexcom_g6_session_start_confirmed_at_ms", slot)] = value }
+    }
+
+    suspend fun clearDexcomG6SessionStartConfirmedAtMs(slot: SensorSlot) {
+        context.dataStore.edit { prefs -> prefs.remove(slotLong("dexcom_g6_session_start_confirmed_at_ms", slot)) }
+    }
+
+    fun dexcomG6SessionStartConfirmedAtMs(slot: SensorSlot): Flow<Long?> = context.dataStore.data.map { prefs ->
+        prefs[slotLong("dexcom_g6_session_start_confirmed_at_ms", slot)]
+    }
+
+    suspend fun getDexcomG6SessionStartConfirmedAtMsOnce(slot: SensorSlot): Long? =
+        context.dataStore.data.first()[slotLong("dexcom_g6_session_start_confirmed_at_ms", slot)]
+
+    suspend fun setDexcomG6LastConfirmedSensorCode(slot: SensorSlot, code: String) {
+        context.dataStore.edit { prefs -> prefs[slotString("dexcom_g6_last_confirmed_sensor_code", slot)] = code }
+    }
+
+    fun dexcomG6LastConfirmedSensorCode(slot: SensorSlot): Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[slotString("dexcom_g6_last_confirmed_sensor_code", slot)]
+    }
+
+    suspend fun incrementDexcomG6SessionStartFailCount(slot: SensorSlot) {
+        context.dataStore.edit { prefs ->
+            val key = slotInt("dexcom_g6_session_start_fail_count", slot)
+            prefs[key] = (prefs[key] ?: 0) + 1
+        }
+    }
+
+    suspend fun resetDexcomG6SessionStartFailCount(slot: SensorSlot) {
+        context.dataStore.edit { prefs -> prefs.remove(slotInt("dexcom_g6_session_start_fail_count", slot)) }
+    }
+
+    fun dexcomG6SessionStartFailCount(slot: SensorSlot): Flow<Int> = context.dataStore.data.map { prefs ->
+        prefs[slotInt("dexcom_g6_session_start_fail_count", slot)] ?: 0
+    }
+
+    suspend fun setDexcomG6LastCalibrationState(slot: SensorSlot, raw: Int) {
+        context.dataStore.edit { prefs -> prefs[slotInt("dexcom_g6_last_calibration_state", slot)] = raw }
+    }
+
+    fun dexcomG6LastCalibrationState(slot: SensorSlot): Flow<Int?> = context.dataStore.data.map { prefs ->
+        prefs[slotInt("dexcom_g6_last_calibration_state", slot)]
+    }
+
+    suspend fun getDexcomG6LastCalibrationStateOnce(slot: SensorSlot): Int? =
+        context.dataStore.data.first()[slotInt("dexcom_g6_last_calibration_state", slot)]
+
+    /** `warmupSeconds` blijft nullable — zie de historische kdoc die hier
+     *  tot RONDE 78 stond (xDrip+'s "short form"-antwoord is niet altijd
+     *  betrouwbaar voor dit veld); `typicalSensorDays` wordt altijd
+     *  opgeslagen. */
+    suspend fun setDexcomG6WarmupCapability(slot: SensorSlot, warmupSeconds: Int?, typicalSensorDays: Int) {
+        context.dataStore.edit { prefs ->
+            if (warmupSeconds != null) prefs[slotInt("dexcom_g6_warmup_seconds", slot)] = warmupSeconds
+            prefs[slotInt("dexcom_g6_typical_sensor_days", slot)] = typicalSensorDays
+        }
+    }
+
+    fun dexcomG6WarmupSeconds(slot: SensorSlot): Flow<Int?> = context.dataStore.data.map { prefs ->
+        prefs[slotInt("dexcom_g6_warmup_seconds", slot)]
+    }
+
+    suspend fun getDexcomG6WarmupSecondsOnce(slot: SensorSlot): Int? =
+        context.dataStore.data.first()[slotInt("dexcom_g6_warmup_seconds", slot)]
+
+    fun dexcomG6TypicalSensorDays(slot: SensorSlot): Flow<Int?> = context.dataStore.data.map { prefs ->
+        prefs[slotInt("dexcom_g6_typical_sensor_days", slot)]
+    }
+
+    suspend fun getDexcomG6TypicalSensorDaysOnce(slot: SensorSlot): Int? =
+        context.dataStore.data.first()[slotInt("dexcom_g6_typical_sensor_days", slot)]
+
+    suspend fun getDexcomG6LastVersion2QueryAtMsOnce(slot: SensorSlot): Long? =
+        context.dataStore.data.first()[slotLong("dexcom_g6_last_version2_query_at_ms", slot)]
+
+    suspend fun setDexcomG6LastVersion2QueryAtMs(slot: SensorSlot, value: Long) {
+        context.dataStore.edit { prefs -> prefs[slotLong("dexcom_g6_last_version2_query_at_ms", slot)] = value }
+    }
+
+    suspend fun setDexcomG6PendingStopBeforeStart(slot: SensorSlot, value: Boolean) {
+        context.dataStore.edit { prefs -> prefs[booleanPreferencesKey("dexcom_g6_pending_stop_before_start_${slot.suffix}")] = value }
+    }
+
+    suspend fun consumeDexcomG6PendingStopBeforeStart(slot: SensorSlot): Boolean {
+        val key = booleanPreferencesKey("dexcom_g6_pending_stop_before_start_${slot.suffix}")
+        var wasSet = false
+        context.dataStore.edit { prefs ->
+            wasSet = prefs[key] ?: false
+            prefs.remove(key)
+        }
+        return wasSet
+    }
+
+    suspend fun setDexcomG6PendingStopSensorOnly(slot: SensorSlot, value: Boolean) {
+        context.dataStore.edit { prefs -> prefs[booleanPreferencesKey("dexcom_g6_pending_stop_sensor_only_${slot.suffix}")] = value }
+    }
+
+    suspend fun consumeDexcomG6PendingStopSensorOnly(slot: SensorSlot): Boolean {
+        val key = booleanPreferencesKey("dexcom_g6_pending_stop_sensor_only_${slot.suffix}")
+        var wasSet = false
+        context.dataStore.edit { prefs ->
+            wasSet = prefs[key] ?: false
+            prefs.remove(key)
+        }
+        return wasSet
+    }
+
+    suspend fun setDexcomG6BatteryInfo(slot: SensorSlot, voltageA: Int, voltageB: Int, temperatureC: Int, atMs: Long) {
+        context.dataStore.edit { prefs ->
+            prefs[slotInt("dexcom_g6_voltage_a", slot)] = voltageA
+            prefs[slotInt("dexcom_g6_voltage_b", slot)] = voltageB
+            prefs[slotInt("dexcom_g6_temperature_c", slot)] = temperatureC
+            prefs[slotLong("dexcom_g6_last_battery_query_at_ms", slot)] = atMs
+        }
+    }
+
+    data class DexcomG6BatteryInfo(val voltageA: Int, val voltageB: Int, val temperatureC: Int, val queriedAtMs: Long)
+
+    fun dexcomG6BatteryInfo(slot: SensorSlot): Flow<DexcomG6BatteryInfo?> = context.dataStore.data.map { prefs ->
+        val a = prefs[slotInt("dexcom_g6_voltage_a", slot)]
+        val b = prefs[slotInt("dexcom_g6_voltage_b", slot)]
+        val t = prefs[slotInt("dexcom_g6_temperature_c", slot)]
+        val at = prefs[slotLong("dexcom_g6_last_battery_query_at_ms", slot)]
+        if (a != null && b != null && t != null && at != null) DexcomG6BatteryInfo(a, b, t, at) else null
+    }
+
+    suspend fun getDexcomG6LastBatteryQueryAtMsOnce(slot: SensorSlot): Long? =
+        context.dataStore.data.first()[slotLong("dexcom_g6_last_battery_query_at_ms", slot)]
+
+    // ============================================================
+    // Dexcom G7/ONE+ — per slot
+    // ============================================================
+
+    /** 17/08/2026 (editor, RONDE 112) — de 4-cijferige koppelcode op de
+     *  sensor-applicator, zie ui/DexcomG7SetupScreen.kt. Dient TWEE doelen:
+     *  het J-PAKE-wachtwoord (sensor/dexcomg7/DexcomG7Crypto.kt) ÉN (anders
+     *  dan G6's transmitter-ID) GEEN rol in de BLE-naam-filter, zie
+     *  DexcomG7Driver.kt's kdoc bij buildPairingListFilter(). */
+    suspend fun setDexcomG7PairingCode(slot: SensorSlot, code: String) {
+        context.dataStore.edit { prefs -> prefs[slotString("dexcom_g7_pairing_code", slot)] = code }
+    }
+
+    fun dexcomG7PairingCode(slot: SensorSlot): Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[slotString("dexcom_g7_pairing_code", slot)]
+    }
+
+    suspend fun getDexcomG7PairingCodeOnce(slot: SensorSlot): String? =
+        context.dataStore.data.first()[slotString("dexcom_g7_pairing_code", slot)]
+
+    suspend fun hasKnownDexcomG7PairingCodeOnce(slot: SensorSlot): Boolean =
+        getDexcomG7PairingCodeOnce(slot) != null
+
+    suspend fun setDexcomG7LastConnectedAtMs(slot: SensorSlot, value: Long) {
+        context.dataStore.edit { prefs -> prefs[slotLong("dexcom_g7_last_connected_at_ms", slot)] = value }
+    }
+
+    fun dexcomG7LastConnectedAtMs(slot: SensorSlot): Flow<Long?> = context.dataStore.data.map { prefs ->
+        prefs[slotLong("dexcom_g7_last_connected_at_ms", slot)]
+    }
+
+    suspend fun getDexcomG7LastConnectedAtMsOnce(slot: SensorSlot): Long? =
+        context.dataStore.data.first()[slotLong("dexcom_g7_last_connected_at_ms", slot)]
+
+    // ============================================================
+    // Kalibratie-/sessie-bookkeeping — per slot (was device-adres-gated,
+    // maar met 2 gelijktijdige devices moet dit nu ook per slot los
+    // bijgehouden kunnen worden)
+    // ============================================================
+
+    suspend fun getCalibrationClearedForDeviceAddressOnce(slot: SensorSlot): String? =
+        context.dataStore.data.first()[slotString("calibration_cleared_for_device_address", slot)]
+
+    suspend fun setCalibrationClearedForDeviceAddress(slot: SensorSlot, address: String) {
+        context.dataStore.edit { prefs -> prefs[slotString("calibration_cleared_for_device_address", slot)] = address }
+    }
+
+    suspend fun getSensorSessionStartedForDeviceAddressOnce(slot: SensorSlot): String? =
+        context.dataStore.data.first()[slotString("sensor_session_started_for_device_address", slot)]
+
+    suspend fun setSensorSessionStartedForDeviceAddress(slot: SensorSlot, address: String) {
+        context.dataStore.edit { prefs -> prefs[slotString("sensor_session_started_for_device_address", slot)] = address }
+    }
+
+    // ============================================================
+    // Simulator — per slot (twee simulators kunnen straks onafhankelijk
+    // van elkaar draaien, elk met hun eigen modus/lijst-bestand)
+    // ============================================================
+
+    suspend fun setActiveSimulatorMode(slot: SensorSlot, mode: PersistedSimulatorMode) {
+        context.dataStore.edit { prefs ->
+            val modeKey = slotString("simulator_active_mode", slot)
+            val repeatKey = slotDouble("simulator_repeat_mgdl", slot)
+            val intervalKey = slotLong("simulator_interval_ms", slot)
+            when (mode) {
+                is PersistedSimulatorMode.None -> {
+                    prefs[modeKey] = "NONE"
+                    prefs.remove(repeatKey)
+                    prefs.remove(intervalKey)
+                }
+                is PersistedSimulatorMode.Repeat -> {
+                    prefs[modeKey] = "REPEAT"
+                    prefs[repeatKey] = mode.glucoseMgdl
+                    prefs[intervalKey] = mode.intervalMs
+                }
+                is PersistedSimulatorMode.RandomWalk -> {
+                    prefs[modeKey] = "RANDOM_WALK"
+                    prefs[intervalKey] = mode.intervalMs
+                }
+                is PersistedSimulatorMode.ListReplay -> {
+                    prefs[modeKey] = "LIST_REPLAY"
+                    prefs[intervalKey] = mode.intervalMs
+                }
+            }
+        }
+    }
+
+    suspend fun readActiveSimulatorMode(slot: SensorSlot): PersistedSimulatorMode {
+        val prefs = context.dataStore.data.first()
+        val intervalMs = prefs[slotLong("simulator_interval_ms", slot)] ?: (5 * 60_000L)
+        return when (prefs[slotString("simulator_active_mode", slot)]) {
+            "REPEAT" -> {
+                val mgdl = prefs[slotDouble("simulator_repeat_mgdl", slot)]
+                if (mgdl != null) PersistedSimulatorMode.Repeat(mgdl, intervalMs) else PersistedSimulatorMode.None
+            }
+            "RANDOM_WALK" -> PersistedSimulatorMode.RandomWalk(intervalMs)
+            "LIST_REPLAY" -> PersistedSimulatorMode.ListReplay(intervalMs)
+            else -> PersistedSimulatorMode.None
+        }
+    }
+
+    fun externalListUri(slot: SensorSlot): Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[slotString("simulator_external_list_uri", slot)]
+    }
+
+    suspend fun setExternalListUri(slot: SensorSlot, uri: String) {
+        context.dataStore.edit { prefs -> prefs[slotString("simulator_external_list_uri", slot)] = uri }
+    }
+
+    // ============================================================
+    // Alarmen (nieuw, RONDE 106, Fase 2 stap 1 — instellingen-laag) — zie
+    // alarm/AlarmType.kt's klasse-kdoc voor het volledige ontwerp. Globaal
+    // (niet per-slot): het AAPS-actieve slot bewaakt de alarmen (eerder
+    // bevestigd), maar de gevarengrenzen zelf zijn een voorkeur van de
+    // gebruiker, geen eigenschap van een fysieke sensor — zelfde redenering
+    // als displayUnit hierboven.
+    // ============================================================
+
+    /** Hoofdschakelaar — op verzoek: "1 overal knop om in 1 keer alle
+     *  alarmen aan/uit te zetten". Staat deze uit, dan wordt (zodra de
+     *  evaluatie-motor in een latere ronde gebouwd is) geen enkel alarm
+     *  afgevuurd, ongeacht de losse per-type aan/uit-standen hieronder — die
+     *  blijven gewoon opgeslagen (op verzoek: "de laatst ingestelde waarde
+     *  wel persistent over een restart dan wel app update"), zodat
+     *  opnieuw inschakelen precies de vorige configuratie teruggeeft, geen
+     *  enkele per-type instelling gaat verloren door de hoofdschakelaar om
+     *  te zetten. Default UIT — een bewuste, expliciete opt-in (geen
+     *  installatie draait vandaag al met alarmen, dus er is geen "bestaand
+     *  gedrag behouden"-argument zoals bij displayUnit's MMOL-default;
+     *  hier is UIT gewoon de veiligste eerste stand). */
+    val alarmsMasterEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.ALARMS_MASTER_ENABLED] ?: false
+    }
+
+    suspend fun setAlarmsMasterEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[Keys.ALARMS_MASTER_ENABLED] = enabled }
+    }
+
+    suspend fun isAlarmsMasterEnabledOnce(): Boolean =
+        context.dataStore.data.first()[Keys.ALARMS_MASTER_ENABLED] ?: false
+
+    /** Per-type aan/uit — AlarmSettingsScreen.kt maakt de rij pas
+     *  interactief als [alarmsMasterEnabled] ook aan staat (UI-gate), maar
+     *  de waarde zelf leeft hier onafhankelijk van de hoofdschakelaar, dus
+     *  blijft intact als de hoofdschakelaar heen-en-weer gezet wordt. */
+    fun alarmEnabled(type: AlarmType): Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[alarmBoolean("enabled", type)] ?: false
+    }
+
+    suspend fun setAlarmEnabled(type: AlarmType, enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[alarmBoolean("enabled", type)] = enabled }
+    }
+
+    suspend fun isAlarmEnabledOnce(type: AlarmType): Boolean =
+        context.dataStore.data.first()[alarmBoolean("enabled", type)] ?: false
+
+    /** Drempelwaarde in mg/dL — relevant voor AlarmCategory.THRESHOLD_LOW/
+     *  THRESHOLD_HIGH-types. Valt terug op [AlarmType.defaultThresholdMgdl]
+     *  (0.0 voor een type dat er geen heeft, wat in de praktijk nooit
+     *  gelezen wordt voor zo'n type — PREDICTIVE_LOW/PREDICTIVE_HIGH/
+     *  STALE_DATA gebruiken hun eigen velden hieronder). */
+    fun alarmThresholdMgdl(type: AlarmType): Flow<Double> = context.dataStore.data.map { prefs ->
+        prefs[alarmDouble("threshold_mgdl", type)] ?: (type.defaultThresholdMgdl ?: 0.0)
+    }
+
+    suspend fun setAlarmThresholdMgdl(type: AlarmType, valueMgdl: Double) {
+        context.dataStore.edit { prefs -> prefs[alarmDouble("threshold_mgdl", type)] = valueMgdl }
+    }
+
+    suspend fun getAlarmThresholdMgdlOnce(type: AlarmType): Double =
+        context.dataStore.data.first()[alarmDouble("threshold_mgdl", type)] ?: (type.defaultThresholdMgdl ?: 0.0)
+
+    /** Voorlooptijd in minuten — voor AlarmType.PREDICTIVE_LOW/PREDICTIVE_HIGH
+     *  (hoeveel eerder dan de daadwerkelijke LOW- resp. HIGH-drempel-
+     *  overschrijding de eerste waarschuwing mag komen, zie AlarmType.kt's
+     *  kdoc). */
+    fun alarmLeadTimeMinutes(type: AlarmType): Flow<Int> = context.dataStore.data.map { prefs ->
+        prefs[alarmInt("lead_time_minutes", type)] ?: (type.defaultLeadTimeMinutes ?: 15)
+    }
+
+    suspend fun setAlarmLeadTimeMinutes(type: AlarmType, minutes: Int) {
+        context.dataStore.edit { prefs -> prefs[alarmInt("lead_time_minutes", type)] = minutes }
+    }
+
+    /** "Geen verse waarde meer"-drempel in minuten — alleen voor
+     *  AlarmType.STALE_DATA. */
+    fun alarmStaleMinutes(type: AlarmType): Flow<Int> = context.dataStore.data.map { prefs ->
+        prefs[alarmInt("stale_minutes", type)] ?: (type.defaultStaleMinutes ?: 20)
+    }
+
+    suspend fun setAlarmStaleMinutes(type: AlarmType, minutes: Int) {
+        context.dataStore.edit { prefs -> prefs[alarmInt("stale_minutes", type)] = minutes }
+    }
+
+    /** 13/08/2026 (editor, RONDE 106b, op verzoek: "ik wil echter per
+     *  alarmsoort een eigen geluid kunnen kiezen uit de geluiden op de
+     *  telefoon (zoals je ook een ringtone voor de telefoon kunt kiezen)")
+     *  — vervangt het oude, vaste "Urgent"/"Gentle"-geluidsprofiel uit
+     *  RONDE 106. De waarde is de URI (als string) die Android's eigen
+     *  RingtoneManager.ACTION_RINGTONE_PICKER teruggeeft (zie
+     *  AlarmSettingsScreen.kt's SoundPickerRow) — `null` = nog geen keuze
+     *  gemaakt, dan geldt het systeem-standaardalarmgeluid
+     *  (RingtoneManager.getDefaultUri(TYPE_ALARM), bepaald in de UI-laag,
+     *  niet hier — deze klasse weet niets van Android's RingtoneManager). */
+    fun alarmSoundUri(type: AlarmType): Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[alarmString("sound_uri", type)]
+    }
+
+    suspend fun setAlarmSoundUri(type: AlarmType, uri: String?) {
+        context.dataStore.edit { prefs ->
+            val key = alarmString("sound_uri", type)
+            if (uri == null) prefs.remove(key) else prefs[key] = uri
+        }
+    }
+
+    suspend fun getAlarmSoundUriOnce(type: AlarmType): String? =
+        context.dataStore.data.first()[alarmString("sound_uri", type)]
+
+    /** Los van [alarmSoundUri]: WELK bestand er klinkt vs. HOE het klinkt
+     *  (direct op volle sterkte, of langzaam opbouwend) — zie AlarmType.kt's
+     *  klasse-kdoc voor waarom dit sinds RONDE 106b twee onafhankelijke
+     *  instellingen zijn i.p.v. één gekoppeld profiel. */
+    fun alarmEscalation(type: AlarmType): Flow<AlarmEscalation> = context.dataStore.data.map { prefs ->
+        parseAlarmEscalation(prefs[alarmString("escalation", type)]) ?: type.defaultEscalation
+    }
+
+    suspend fun setAlarmEscalation(type: AlarmType, escalation: AlarmEscalation) {
+        context.dataStore.edit { prefs -> prefs[alarmString("escalation", type)] = escalation.name }
+    }
+
+    suspend fun getAlarmEscalationOnce(type: AlarmType): AlarmEscalation =
+        parseAlarmEscalation(context.dataStore.data.first()[alarmString("escalation", type)]) ?: type.defaultEscalation
+
+    private fun parseAlarmEscalation(raw: String?): AlarmEscalation? =
+        raw?.let { runCatching { AlarmEscalation.valueOf(it) }.getOrNull() }
+
+    /** 13/08/2026 (editor, RONDE 107b, op verzoek: "ik wil per alarm kunnen
+     *  kiezen tussen alarm of vibrate of both") — vervangt de oude losse
+     *  aan/uit-vibratieschakelaar (Ronde 106/107) door één 3-standen-keuze
+     *  per type, zie alarm/AlarmType.kt's [AlarmAlertMode]-kdoc. Default
+     *  BOTH — meest opvallend, zelfde bedoeling als de oude AAN-default. */
+    fun alarmAlertMode(type: AlarmType): Flow<AlarmAlertMode> = context.dataStore.data.map { prefs ->
+        parseAlarmAlertMode(prefs[alarmString("alert_mode", type)]) ?: AlarmAlertMode.BOTH
+    }
+
+    suspend fun setAlarmAlertMode(type: AlarmType, mode: AlarmAlertMode) {
+        context.dataStore.edit { prefs -> prefs[alarmString("alert_mode", type)] = mode.name }
+    }
+
+    suspend fun getAlarmAlertModeOnce(type: AlarmType): AlarmAlertMode =
+        parseAlarmAlertMode(context.dataStore.data.first()[alarmString("alert_mode", type)]) ?: AlarmAlertMode.BOTH
+
+    private fun parseAlarmAlertMode(raw: String?): AlarmAlertMode? =
+        raw?.let { runCatching { AlarmAlertMode.valueOf(it) }.getOrNull() }
+
+    /** 13/08/2026 (editor, RONDE 107 — de alarm-EVALUATIEMOTOR) — runtime-
+     *  boekhouding, geen gebruikersvoorkeur: het tijdstip (epoch-ms) tot
+     *  wanneer dit alarmtype gedempt is, gezet door zowel de "Stop"- als de
+     *  "Snooze"-knop op AlarmActivity.kt (zie AlarmController.kt) — een vast,
+     *  type-afhankelijk afkoelmoment bij Stop, een door de gebruiker gekozen
+     *  duur bij Snooze. `null` = niet gedempt. Bewust WEL in DataStore (dus
+     *  persistent over een service-herstart binnenin dezelfde episode) i.p.v.
+     *  puur in-memory — een door Android gedode/herstarte achtergrondservice
+     *  mag een net-afgehandeld alarm niet meteen weer laten afgaan. */
+    fun alarmMutedUntilMs(type: AlarmType): Flow<Long?> = context.dataStore.data.map { prefs ->
+        prefs[alarmLong("muted_until_ms", type)]
+    }
+
+    suspend fun setAlarmMutedUntilMs(type: AlarmType, untilMs: Long) {
+        context.dataStore.edit { prefs -> prefs[alarmLong("muted_until_ms", type)] = untilMs }
+    }
+
+    suspend fun clearAlarmMutedUntilMs(type: AlarmType) {
+        context.dataStore.edit { prefs -> prefs.remove(alarmLong("muted_until_ms", type)) }
+    }
+
+    // ============================================================
+    // Eenmalige migratie: bestaande (single-slot) data -> Slot A
+    // ============================================================
+
+    /**
+     * 10/08/2026 (editor, RONDE 79) — bij de eerste opstart NA deze update
+     * kopieert dit elke waarde die nog onder een LEGACY_*-sleutel staat
+     * (zie Keys hierboven) één keer naar de bijbehorende Slot-A-sleutel,
+     * zodat een bestaande installatie (jij, met een lopende G6/CareSens-
+     * koppeling) niets kwijtraakt — de app gedraagt zich na de update
+     * alsof je sensor altijd al in Slot A zat. Oude sleutels blijven
+     * ongebruikt in de DataStore staan (onschadelijk, nooit meer gelezen
+     * na deze migratie) i.p.v. actief verwijderd — kleinste, veiligste
+     * wijziging.
+     *
+     * `broadcastEnabled` (default true = "zendt") wordt vertaald naar
+     * `aapsActiveSlot`: als er een sensor gekozen was EN broadcast niet
+     * expliciet uitstond, wordt Slot A de actieve AAPS-bron; anders blijft
+     * aapsActiveSlot leeg (niemand zendt), precies zoals de situatie vóór
+     * de update.
+     *
+     * MOET precies één keer per installatie draaien, VOORDAT enige andere
+     * AppSettings-slot-functie gebruikt wordt — aangeroepen vanuit
+     * FclGlucoLinkApp.onCreate() (zie kdoc daar).
+     */
+    suspend fun migrateLegacySingleSlotDataOnce() {
+        val prefs = context.dataStore.data.first()
+        if (prefs[Keys.MIGRATION_DUAL_SLOT_DONE] == true) return
+
+        context.dataStore.edit { p ->
+            fun <T> copy(from: Preferences.Key<T>, to: Preferences.Key<T>) {
+                val value = p[from] ?: return
+                p[to] = value
+            }
+
+            copy(Keys.LEGACY_SELECTED_SENSOR, slotString("selected_sensor", SensorSlot.A))
+            copy(Keys.LEGACY_DEVICE_ADDRESS, slotString("device_address", SensorSlot.A))
+            copy(Keys.LEGACY_SENSOR_STARTED_AT_MS, slotLong("sensor_started_at_ms", SensorSlot.A))
+            copy(Keys.LEGACY_CARESENS_SENSOR_CODE, slotString("caresens_sensor_code", SensorSlot.A))
+            copy(Keys.LEGACY_CARESENS_SERIAL, slotString("caresens_serial", SensorSlot.A))
+            copy(Keys.LEGACY_CARESENS_PIN, slotString("caresens_pin", SensorSlot.A))
+            copy(Keys.LEGACY_CARESENS_EXPIRY_YYMMDD, slotString("caresens_expiry_yymmdd", SensorSlot.A))
+            copy(Keys.LEGACY_CARESENS_NEXT_SEQUENCE, slotInt("caresens_next_sequence", SensorSlot.A))
+            copy(Keys.LEGACY_CARESENS_SENSOR_STARTED_AT_MS, slotLong("caresens_sensor_started_at_ms", SensorSlot.A))
+            copy(Keys.LEGACY_CARESENS_LAST_CONNECTED_AT_MS, slotLong("caresens_last_connected_at_ms", SensorSlot.A))
+            copy(Keys.LEGACY_DEXCOM_G6_TRANSMITTER_ID, slotString("dexcom_g6_transmitter_id", SensorSlot.A))
+            copy(Keys.LEGACY_DEXCOM_G6_LAST_CONNECTED_AT_MS, slotLong("dexcom_g6_last_connected_at_ms", SensorSlot.A))
+            copy(Keys.LEGACY_DEXCOM_G6_LAST_CONFIRMED_SENSOR_CODE, slotString("dexcom_g6_last_confirmed_sensor_code", SensorSlot.A))
+            copy(Keys.LEGACY_DEXCOM_G6_SESSION_START_CONFIRMED_AT_MS, slotLong("dexcom_g6_session_start_confirmed_at_ms", SensorSlot.A))
+            copy(Keys.LEGACY_DEXCOM_G6_LAST_CALIBRATION_STATE, slotInt("dexcom_g6_last_calibration_state", SensorSlot.A))
+            copy(Keys.LEGACY_DEXCOM_G6_WARMUP_SECONDS, slotInt("dexcom_g6_warmup_seconds", SensorSlot.A))
+            copy(Keys.LEGACY_DEXCOM_G6_TYPICAL_SENSOR_DAYS, slotInt("dexcom_g6_typical_sensor_days", SensorSlot.A))
+            copy(Keys.LEGACY_DEXCOM_G6_VOLTAGE_A, slotInt("dexcom_g6_voltage_a", SensorSlot.A))
+            copy(Keys.LEGACY_DEXCOM_G6_VOLTAGE_B, slotInt("dexcom_g6_voltage_b", SensorSlot.A))
+            copy(Keys.LEGACY_DEXCOM_G6_TEMPERATURE_C, slotInt("dexcom_g6_temperature_c", SensorSlot.A))
+            copy(Keys.LEGACY_DEXCOM_G6_LAST_BATTERY_QUERY_AT_MS, slotLong("dexcom_g6_last_battery_query_at_ms", SensorSlot.A))
+            copy(Keys.LEGACY_CALIBRATION_CLEARED_FOR_DEVICE_ADDRESS, slotString("calibration_cleared_for_device_address", SensorSlot.A))
+            copy(Keys.LEGACY_SENSOR_SESSION_STARTED_FOR_DEVICE_ADDRESS, slotString("sensor_session_started_for_device_address", SensorSlot.A))
+            copy(Keys.LEGACY_SIMULATOR_MODE, slotString("simulator_active_mode", SensorSlot.A))
+            copy(Keys.LEGACY_SIMULATOR_REPEAT_MGDL, slotDouble("simulator_repeat_mgdl", SensorSlot.A))
+            copy(Keys.LEGACY_SIMULATOR_INTERVAL_MS, slotLong("simulator_interval_ms", SensorSlot.A))
+            copy(Keys.LEGACY_EXTERNAL_LIST_URI, slotString("simulator_external_list_uri", SensorSlot.A))
+
+            val hadSelectedSensor = p[Keys.LEGACY_SELECTED_SENSOR] != null
+            val wasBroadcasting = p[Keys.LEGACY_BROADCAST_ENABLED] ?: true
+            if (hadSelectedSensor && wasBroadcasting) {
+                p[Keys.AAPS_ACTIVE_SLOT] = SensorSlot.A.name
+            }
+
+            p[Keys.MIGRATION_DUAL_SLOT_DONE] = true
+        }
+    }
+
+    /**
+     * 10/08/2026 (editor, RONDE 80) — SEPARATE eenmalige migratie, los van
+     * [migrateLegacySingleSlotDataOnce] hierboven. Aanleiding: calibrationMode/
+     * calibrationManualOffsetMmol werden pas NU per-slot (zie kdoc bovenaan dit
+     * bestand); de hoofdmigratie had op dat moment al gedraaid op bestaande
+     * installaties (incl. de gebruiker's toestel, bevestigd via live
+     * screenshots), dus die was géén plek meer om dit aan toe te voegen — zijn
+     * MIGRATION_DUAL_SLOT_DONE-vlag staat immers al op true en de functie
+     * keert dan meteen terug, VOORDAT nieuwe copy()-regels ooit bereikt
+     * zouden worden.
+     *
+     * Kopieert de oude globale calibratiewaarden (als die er waren) één keer
+     * naar Slot A — Slot B begint voor kalibratie leeg/op de standaardwaarden,
+     * precies zoals de gebruiker's live-test-situatie was (kalibratie was tot
+     * nu toe altijd impliciet "voor de hele app", dus voor de sensor die de
+     * gebruiker feitelijk aan het kalibreren was, meestal Slot A).
+     *
+     * MOET, net als de hoofdmigratie, aangeroepen worden vanuit
+     * FclGlucoLinkApp.onCreate(), VOORDAT enig scherm calibrationMode(slot)/
+     * calibrationManualOffsetMmol(slot) leest.
+     */
+    suspend fun migrateLegacyCalibrationToSlotAOnce() {
+        val prefs = context.dataStore.data.first()
+        if (prefs[Keys.MIGRATION_CALIBRATION_PER_SLOT_DONE] == true) return
+
+        context.dataStore.edit { p ->
+            fun <T> copy(from: Preferences.Key<T>, to: Preferences.Key<T>) {
+                val value = p[from] ?: return
+                p[to] = value
+            }
+
+            copy(Keys.LEGACY_CALIBRATION_MODE, slotString("calibration_mode", SensorSlot.A))
+            copy(Keys.LEGACY_CALIBRATION_MANUAL_OFFSET_MMOL, slotDouble("calibration_manual_offset_mmol", SensorSlot.A))
+
+            p[Keys.MIGRATION_CALIBRATION_PER_SLOT_DONE] = true
+        }
+    }
+}

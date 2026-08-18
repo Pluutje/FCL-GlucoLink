@@ -1,0 +1,573 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<!--
+3    FCLGlucoLink (30/07/2026, editor) — losstaande, minimale sensor-naar-AAPS-
+4    koppel-app. Bewust GEEN AAPS-plugin/module binnen FCLvNext: aparte APK,
+5    aparte installatie, aparte proces-ruimte. Reden (zie ook het gesprek
+6    waaruit dit project ontstond): AAPS verwacht CGM-data toch al via een
+7    losstaand BgSource-achtig kanaal (dezelfde xDrip-broadcast als Juggluco
+8    nu gebruikt), en een BLE-crash/hikje in DEZE app mag nooit het proces
+9    raken waar de dosing-loop (FCLvNext) in draait. Dit manifest declareert
+10    dus alleen wat een pure sensor-koppel-app nodig heeft — geen dosing-,
+11    profiel- of AAPS-brede rechten.
+12-->
+13<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+14    package="com.fclglucolink.app"
+15    android:versionCode="126"
+16    android:versionName="0.9.27c-smoothing-heading-order" >
+17
+18    <uses-sdk
+19        android:minSdkVersion="26"
+20        android:targetSdkVersion="34" />
+21
+22    <!--
+23         30/07/2026 (editor, waarschijnlijke oorzaak "data komt niet bij AAPS
+24         binnen") — Android 11+ (API 30+) pakket-zichtbaarheid: zonder dit
+25         <queries>-blok ziet PackageManager.queryBroadcastReceivers() in
+26         XDripBroadcaster.kt HELEMAAL NIETS, ook niet als AAPS een prima
+27         geregistreerde ontvanger voor deze actie heeft — de resolveReceiver-
+28         Packages()-lijst is dan altijd leeg (zie de "Geen enkele app
+29         gevonden"-log) en er wordt nooit een broadcast verstuurd. Bewust op
+30         actie i.p.v. pakketnaam (geen enkele AAPS-fork hardcoded, past bij
+31         het bestaande ontwerp van XDripBroadcaster).
+32    -->
+33    <queries>
+33-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:24:5-28:15
+34        <intent>
+34-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:25:9-27:18
+35            <action android:name="com.eveningoutpost.dexdrip.BgEstimate" />
+35-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:26:13-76
+35-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:26:21-73
+36        </intent>
+37    </queries>
+38
+39    <!--
+40         30/07/2026 (editor) — neverForLocation: bevestigt aan Android (API>=31)
+41         dat deze app scan-resultaten NOOIT gebruikt om fysieke locatie af te
+42         leiden. Gevolg: op API>=31 is er GEEN enkele locatierechten-vraag
+43         meer nodig voor BLE-scannen (vandaar ook dat ACCESS_FINE_LOCATION
+44         hieronder tot API 30 beperkt blijft) — puur best-practice, verandert
+45         niets aan wat de app al deed.
+46    -->
+47    <uses-permission
+47-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:36:5-38:58
+48        android:name="android.permission.BLUETOOTH_SCAN"
+48-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:37:9-57
+49        android:usesPermissionFlags="neverForLocation" />
+49-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:38:9-55
+50    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+50-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:39:5-76
+50-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:39:22-73
+51    <!--
+52         31/07/2026 (editor, bugfix na crash tijdens de eerste echte BLE-
+53         koppelpoging: "SecurityException: Need BLUETOOTH permission")  —
+54         BLUETOOTH_SCAN/BLUETOOTH_CONNECT hierboven dekken de runtime-
+55         geautoriseerde acties (scannen/verbinden), maar het simpelweg
+56         AANMAKEN van een BluetoothAdapter-referentie
+57         (getSystemService(BluetoothManager)/getBluetoothLeScanner()) loopt
+58         intern nog steeds via een AIDL-aanroep die deze OUDE, "normale"
+59         (geen runtime-prompt, alleen declareren volstaat) permissie
+60         controleert — een bekende, wat contra-intuïtieve Android-eigenaardigheid
+61         die blijkbaar ook op recentere Android-versies nog geldt voor déze
+62         specifieke aanroep. BLUETOOTH_ADMIN erbij voor dezelfde reden (nodig
+63         voor adapter-staat-gerelateerde calls op oudere API-niveaus). Beide
+64         zijn onschadelijk om altijd te declareren, ook op nieuwere Android-
+65         versies waar ze verder geen effect meer hebben.
+66    -->
+67    <uses-permission android:name="android.permission.BLUETOOTH" />
+67-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:54:5-68
+67-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:54:22-65
+68    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+68-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:55:5-74
+68-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:55:22-71
+69    <!--
+70         Alleen nodig op Android <12 (API<31), waar BLE-scannen nog aan
+71         locatierechten vastzat — geen enkel gebruik van daadwerkelijke
+72         locatiedata in deze app.
+73    -->
+74    <uses-permission
+74-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:59:5-61:38
+75        android:name="android.permission.ACCESS_FINE_LOCATION"
+75-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:60:9-63
+76        android:maxSdkVersion="30" />
+76-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:61:9-35
+77    <!--
+78         10/08/2026 (editor, RONDE 77, root-oorzaak van een ~20-25 min BG-gat
+79         tijdens langdurig scherm-uit op een Samsung A40/Android 11 —
+80         diagnostiek: elke scan-rearm (Ronde 76) vuurde precies op tijd maar
+81         leverde nul resultaten op tot het scherm weer aan ging) — zonder
+82         ACCESS_BACKGROUND_LOCATION biedt Android op API<31 geen "Altijd
+83         toestaan"-locatie-optie aan (bevestigd: Instellingen > Apps >
+84         FCLGlucoLink > Machtigingen > Locatie toonde alleen "Bij gebruik
+85         van app"/"Altijd vragen"/"Niet toestaan", tegenover AAPS op
+86         hetzelfde toestel dat wél "Altijd toegestaan" heeft en gebruikt).
+87         Alleen declareren GEEFT deze toestemming niet automatisch — sinds
+88         Android 10 kan deze permissie niet via een normale in-app-prompt
+89         gevraagd worden, de gebruiker moet 'm zelf via dat Instellingen-
+90         scherm aanzetten (zie ManualScreen.kt's nieuwe knop hiervoor, in de
+91         handleiding i.p.v. op een schermknop, want dit is een eenmalige
+92         instelstap per toestel). Bewust dezelfde maxSdkVersion="30"-scope
+93         als ACCESS_FINE_LOCATION hierboven: op API>=31 dekt
+94         BLUETOOTH_SCAN/neverForLocation dit al af, geen locatierechten
+95         nodig.
+96    -->
+97    <uses-permission
+97-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:80:5-82:38
+98        android:name="android.permission.ACCESS_BACKGROUND_LOCATION"
+98-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:81:9-69
+99        android:maxSdkVersion="30" />
+99-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:82:9-35
+100    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+100-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:83:5-77
+100-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:83:22-74
+101    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+101-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:84:5-94
+101-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:84:22-91
+102    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+102-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:85:5-77
+102-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:85:22-74
+103
+104    <!--
+105         30/07/2026 (editor, na feedback: "moet 15 dagen onbeheerd door
+106         kunnen draaien") — een foreground-service met een zichtbare
+107         notificatie hoort op kale Android al vrijgesteld te zijn van
+108         Doze/App Standby-CPU-beperkingen, maar sommige fabrikanten
+109         (Samsung/Xiaomi/Huawei e.d.) hebben daarbovenop een eigen,
+110         agressiever batterijbeheer dat achtergrond-apps alsnog killt.
+111         Deze permissie hoort bij de knop in het menu (StatusScreen.kt) die
+112         de gebruiker naar het systeemscherm stuurt om FCLGlucoLink daar
+113         expliciet van uit te zonderen — geen silent/forced gedrag, puur een
+114         verzoek dat de gebruiker zelf moet goedkeuren.
+115    -->
+116    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+116-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:97:5-95
+116-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:97:22-92
+117
+118    <!--
+119         30/07/2026 (editor, na feedback: "update onregelmatig i.p.v. iedere
+120         5 minuten met scherm dicht") — zie kdoc bij BleConnectionService.kt:
+121         nodig voor de partial wakelock die daar wordt vastgehouden zolang de
+122         service actief is, zodat de eigen `delay()`-timers (simulator-
+123         replay/random-walk) op tijd blijven afgaan ook als het scherm lang
+124         uitstaat.
+125    -->
+126    <uses-permission android:name="android.permission.WAKE_LOCK" />
+126-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:105:5-68
+126-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:105:22-65
+127
+128    <!--
+129         03/08/2026 (editor, ronde 28 — na vergelijking van de ECHTE
+130         manifesten van AAPS/Juggluco/FCLGlucoLink, op verzoek van de
+131         gebruiker) — Juggluco's manifest bevat exact deze combinatie
+132         (RECEIVE_BOOT_COMPLETED + SCHEDULE_EXACT_ALARM(maxSdk 32) +
+133         USE_EXACT_ALARM), samen met eigen `.NumAlarm`/`.Maintenance`/
+134         `.LossOfSensorAlarm`/`.ConnectReceiver`-ontvangers — een
+135         AlarmManager-gebaseerde "wekker" die, anders dan onze eigen
+136         coroutine-timers, expliciet Doze/App Standby doorbreekt en het
+137         proces zelf kan herstarten als Android het ondertussen volledig
+138         gestopt heeft. Zie ConnectionWatchdog.kt's kdoc voor de volledige
+139         aanleiding en werking. SCHEDULE_EXACT_ALARM (t/m API 32) vereist
+140         mogelijk een handmatige gebruikers-toestemming via Instellingen >
+141         Alarmen en herinneringen als canScheduleExactAlarms() false
+142         teruggeeft — ConnectionWatchdog.kt valt dan terug op de inexacte
+143         (maar nog steeds Doze-doorbrekende) variant, crasht nooit.
+144    -->
+145    <uses-permission
+145-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:122:5-106
+146        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+146-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:122:22-76
+147        android:maxSdkVersion="32" />
+147-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:122:77-103
+148    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+148-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:123:5-74
+148-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:123:22-71
+149    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+149-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:124:5-81
+149-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:124:22-78
+150
+151    <!--
+152         13/08/2026 (editor, RONDE 107 — alarm-evaluatiemotor) — normale
+153         permissie (geen runtime-prompt) voor de trilling die
+154         alarm/AlarmSoundPlayer.kt bij een afgaand alarm laat voelen.
+155    -->
+156    <uses-permission android:name="android.permission.VIBRATE" />
+156-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:129:5-66
+156-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:129:22-63
+157    <!--
+158         13/08/2026 (editor, RONDE 107) — nodig voor de scherm-doorbrekende
+159         full-screen-notificatie waarmee alarm/AlarmController.kt
+160         alarm/AlarmActivity.kt opent (Notification.setFullScreenIntent()).
+161         BEKENDE BEPERKING: op Android 14 (API 34) is dit voor gewone apps
+162         niet meer automatisch toegestaan, zie AlarmController.kt's kdoc bij
+163         showFullScreenNotification() — declareren hier is de vereiste
+164         basisstap, maar de gebruiker moet 'm op zulke toestellen mogelijk
+165         zelf via Instellingen aanzetten.
+166    -->
+167    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+167-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:138:5-81
+167-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:138:22-78
+168
+169    <uses-feature
+169-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:140:5-142:35
+170        android:name="android.hardware.bluetooth_le"
+170-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:141:9-53
+171        android:required="true" />
+171-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:142:9-32
+172
+173    <permission
+173-->[androidx.core:core:1.13.1] C:\Users\palap\.gradle\caches\transforms-4\d5bb0c7e27c6c04f471b7154985dcbfe\transformed\core-1.13.1\AndroidManifest.xml:22:5-24:47
+174        android:name="com.fclglucolink.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+174-->[androidx.core:core:1.13.1] C:\Users\palap\.gradle\caches\transforms-4\d5bb0c7e27c6c04f471b7154985dcbfe\transformed\core-1.13.1\AndroidManifest.xml:23:9-81
+175        android:protectionLevel="signature" />
+175-->[androidx.core:core:1.13.1] C:\Users\palap\.gradle\caches\transforms-4\d5bb0c7e27c6c04f471b7154985dcbfe\transformed\core-1.13.1\AndroidManifest.xml:24:9-44
+176
+177    <uses-permission android:name="com.fclglucolink.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" /> <!-- Although the *SdkVersion is captured in gradle build files, this is required for non gradle builds -->
+177-->[androidx.core:core:1.13.1] C:\Users\palap\.gradle\caches\transforms-4\d5bb0c7e27c6c04f471b7154985dcbfe\transformed\core-1.13.1\AndroidManifest.xml:26:5-97
+177-->[androidx.core:core:1.13.1] C:\Users\palap\.gradle\caches\transforms-4\d5bb0c7e27c6c04f471b7154985dcbfe\transformed\core-1.13.1\AndroidManifest.xml:26:22-94
+178    <!-- <uses-sdk android:minSdkVersion="14"/> -->
+179    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+179-->[com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\palap\.gradle\caches\transforms-4\6662a9e6742382b3c1497ffe1c072352\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:25:5-79
+179-->[com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\palap\.gradle\caches\transforms-4\6662a9e6742382b3c1497ffe1c072352\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:25:22-76
+180    <uses-permission android:name="android.permission.INTERNET" />
+180-->[com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\palap\.gradle\caches\transforms-4\6662a9e6742382b3c1497ffe1c072352\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:26:5-67
+180-->[com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\palap\.gradle\caches\transforms-4\6662a9e6742382b3c1497ffe1c072352\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:26:22-64
+181
+182    <application
+182-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:144:5-253:19
+183        android:name="com.fclglucolink.app.FclGlucoLinkApp"
+183-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:145:9-40
+184        android:allowBackup="false"
+184-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:146:9-36
+185        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+185-->[androidx.core:core:1.13.1] C:\Users\palap\.gradle\caches\transforms-4\d5bb0c7e27c6c04f471b7154985dcbfe\transformed\core-1.13.1\AndroidManifest.xml:28:18-86
+186        android:extractNativeLibs="true"
+187        android:icon="@mipmap/ic_launcher"
+187-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:147:9-43
+188        android:label="@string/app_name"
+188-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:148:9-41
+189        android:supportsRtl="true"
+189-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:150:9-35
+190        android:theme="@style/Theme.FCLGlucoLink" >
+190-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:149:9-50
+191
+192        <!--
+193             31/07/2026 (editor) — CareSens Air koppel-stap 1/4: laat Google
+194             Play services de barcode-scanner-module alvast downloaden
+195             tijdens installatie i.p.v. pas bij het eerste gebruik (scheelt
+196             een korte wachttijd/download-melding de eerste keer dat
+197             ui/CareSensAirScanScreen.kt wordt geopend). Optioneel — zonder
+198             dit werkt het ook, dan downloadt Play services de module gewoon
+199             bij het eerste gebruik. Geen CAMERA-permissie nodig: het
+200             scannen zelf gebeurt in een geïsoleerd Play Services-proces,
+201             zie kdoc bij CareSensAirScanScreen.kt.
+202        -->
+203        <meta-data
+203-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:161:9-163:42
+204            android:name="com.google.mlkit.vision.DEPENDENCIES"
+204-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:162:13-64
+205            android:value="barcode_ui" />
+205-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:163:13-39
+206
+207        <activity
+207-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:165:9-173:20
+208            android:name="com.fclglucolink.app.MainActivity"
+208-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:166:13-41
+209            android:exported="true"
+209-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:167:13-36
+210            android:screenOrientation="unspecified" >
+210-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:168:13-52
+211            <intent-filter>
+211-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:169:13-172:29
+212                <action android:name="android.intent.action.MAIN" />
+212-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:170:17-69
+212-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:170:25-66
+213
+214                <category android:name="android.intent.category.LAUNCHER" />
+214-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:171:17-77
+214-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:171:27-74
+215            </intent-filter>
+216        </activity>
+217
+218        <!--
+219             13/08/2026 (editor, RONDE 107) — zie alarm/AlarmActivity.kt's
+220             kdoc: het volledige-scherm-alarmscherm, geopend via
+221             alarm/AlarmController.kt's full-screen-notificatie, niet via
+222             gewone in-app-navigatie. exported="false" — alleen deze app
+223             zelf opent 'm. excludeFromRecents — een alarmscherm hoort geen
+224             eigen kaart in het recente-apps-overzicht te krijgen, net zoals
+225             een systeem-wekker dat ook niet doet. launchMode="singleTop" +
+226             AlarmActivity.onNewIntent(): een tweede alarm terwijl dit
+227             scherm al open staat hergebruikt dezelfde instantie i.p.v. een
+228             stapel losse schermen op te bouwen.
+229        -->
+230        <activity
+230-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:185:9-191:43
+231            android:name="com.fclglucolink.app.alarm.AlarmActivity"
+231-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:186:13-48
+232            android:excludeFromRecents="true"
+232-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:188:13-46
+233            android:exported="false"
+233-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:187:13-37
+234            android:launchMode="singleTop"
+234-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:189:13-43
+235            android:showWhenLocked="true"
+235-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:190:13-42
+236            android:turnScreenOn="true" />
+236-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:191:13-40
+237
+238        <!--
+239             30/07/2026 (editor) — draait de actieve SensorDriver (scan/connect/
+240             notify) los van de UI-levenscyclus, zodat metingen ook doorlopen
+241             als het scherm dicht is. Zie sensor/ble/BleConnectionService.kt.
+242
+243             02/08/2026 (editor, na live-test — gebruiker swipete FCLGlucoLink
+244             (en AAPS) weg uit het recente-apps-overzicht, waarna de Bg-
+245             updates ~12 minuten stilvielen) — android:stopWithTask staat
+246             standaard op "true": zonder deze regel stopt Android deze
+247             foreground service AUTOMATISCH zodra de gebruiker de app-kaart
+248             uit "Recents" wegveegt, ONGEACHT START_STICKY of de wakelock
+249             hierboven (die beschermen tegen geheugendruk/CPU-slaap, niet
+250             tegen deze expliciete, door de gebruiker geïnitieerde stop). Een
+251             swipe uit Recents is voor veel gebruikers een gewoontehandeling
+252             ("apps opruimen") die niet bedoeld is als "stop deze koppeling" —
+253             stopWithTask="false" ontkoppelt de service expliciet van de
+254             taak-levenscyclus, zodat 'm wegvegen de achtergrond-BLE-koppeling
+255             niet meer onderbreekt (de "Verbinding verbreken"-knop op het
+256             statusscherm blijft de bedoelde, expliciete manier om 'm wél te
+257             stoppen).
+258        -->
+259        <service
+259-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:212:9-216:44
+260            android:name="com.fclglucolink.app.sensor.ble.BleConnectionService"
+260-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:213:13-60
+261            android:exported="false"
+261-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:214:13-37
+262            android:foregroundServiceType="connectedDevice"
+262-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:215:13-60
+263            android:stopWithTask="false" />
+263-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:216:13-41
+264
+265        <!--
+266             03/08/2026 (editor, ronde 28) — zie ConnectionWatchdog.kt's kdoc:
+267             ontvangt de zelf-herplannende AlarmManager-tik en herstart
+268             BleConnectionService onvoorwaardelijk veilig. Bewust
+269             exported="false" — alleen deze app zelf plant dit alarm in.
+270        -->
+271        <receiver
+271-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:222:9-225:40
+272            android:name="com.fclglucolink.app.sensor.ble.ConnectionWatchdogReceiver"
+272-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:223:13-66
+273            android:enabled="true"
+273-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:224:13-35
+274            android:exported="false" />
+274-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:225:13-37
+275
+276        <!--
+277             04/08/2026 (editor, ronde 36) — zie PredictiveReconnectAlarm.kt's
+278             kdoc: ontvangt de precies-getimede AlarmManager-wekker die de
+279             kale coroutine-delay() in CareSensAirDriver.kt's
+280             scheduleScanAttempt() vervangt (was Doze-kwetsbaar, vermoedelijk
+281             de oorzaak van het trimodale vertragingspatroon uit ronde 35).
+282             Bewust exported="false", net als de watchdog hierboven.
+283        -->
+284        <receiver
+284-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:233:9-236:40
+285            android:name="com.fclglucolink.app.sensor.ble.PredictiveReconnectAlarmReceiver"
+285-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:234:13-72
+286            android:enabled="true"
+286-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:235:13-35
+287            android:exported="false" />
+287-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:236:13-37
+288
+289        <!--
+290             03/08/2026 (editor, ronde 28) — mirror van Juggluco's `.NumAlarm`:
+291             herstart de koppeling automatisch na een telefoon-herstart,
+292             i.p.v. stil te blijven staan totdat de gebruiker de app zelf
+293             weer opent. exported="true" nodig omdat BOOT_COMPLETED een
+294             systeem-breed verstuurde broadcast is (net als in Juggluco's
+295             eigen manifest).
+296        -->
+297        <receiver
+297-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:244:9-251:20
+298            android:name="com.fclglucolink.app.sensor.ble.BootReceiver"
+298-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:245:13-52
+299            android:enabled="true"
+299-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:246:13-35
+300            android:exported="true" >
+300-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:247:13-36
+301            <intent-filter>
+301-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:248:13-250:29
+302                <action android:name="android.intent.action.BOOT_COMPLETED" />
+302-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:249:17-79
+302-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v7.3-WV\app\src\main\AndroidManifest.xml:249:25-76
+303            </intent-filter>
+304        </receiver>
+305
+306        <!--
+307        This activity is an invisible delegate activity to start scanner activity
+308        and receive result, so it's unnecessary to support screen orientation and
+309        we can avoid any side effect from activity recreation in any case.
+310        -->
+311        <activity
+311-->[com.google.android.gms:play-services-code-scanner:16.1.0] C:\Users\palap\.gradle\caches\transforms-4\247f6081810b49656ea0ee94bac16c27\transformed\play-services-code-scanner-16.1.0\AndroidManifest.xml:15:9-20:20
+312            android:name="com.google.mlkit.vision.codescanner.internal.GmsBarcodeScanningDelegateActivity"
+312-->[com.google.android.gms:play-services-code-scanner:16.1.0] C:\Users\palap\.gradle\caches\transforms-4\247f6081810b49656ea0ee94bac16c27\transformed\play-services-code-scanner-16.1.0\AndroidManifest.xml:16:13-107
+313            android:exported="false"
+313-->[com.google.android.gms:play-services-code-scanner:16.1.0] C:\Users\palap\.gradle\caches\transforms-4\247f6081810b49656ea0ee94bac16c27\transformed\play-services-code-scanner-16.1.0\AndroidManifest.xml:17:13-37
+314            android:screenOrientation="portrait" >
+314-->[com.google.android.gms:play-services-code-scanner:16.1.0] C:\Users\palap\.gradle\caches\transforms-4\247f6081810b49656ea0ee94bac16c27\transformed\play-services-code-scanner-16.1.0\AndroidManifest.xml:18:13-49
+315        </activity>
+316
+317        <service
+317-->[com.google.mlkit:vision-common:17.0.0] C:\Users\palap\.gradle\caches\transforms-4\475ad5bbdeb1bcbb4607e749a3482e6a\transformed\vision-common-17.0.0\AndroidManifest.xml:9:9-15:19
+318            android:name="com.google.mlkit.common.internal.MlKitComponentDiscoveryService"
+318-->[com.google.mlkit:vision-common:17.0.0] C:\Users\palap\.gradle\caches\transforms-4\475ad5bbdeb1bcbb4607e749a3482e6a\transformed\vision-common-17.0.0\AndroidManifest.xml:10:13-91
+319            android:directBootAware="true"
+319-->[com.google.mlkit:common:18.9.0] C:\Users\palap\.gradle\caches\transforms-4\14d87fe58b76b63b8b869af03f53365a\transformed\common-18.9.0\AndroidManifest.xml:17:13-43
+320            android:exported="false" >
+320-->[com.google.mlkit:vision-common:17.0.0] C:\Users\palap\.gradle\caches\transforms-4\475ad5bbdeb1bcbb4607e749a3482e6a\transformed\vision-common-17.0.0\AndroidManifest.xml:11:13-37
+321            <meta-data
+321-->[com.google.mlkit:vision-common:17.0.0] C:\Users\palap\.gradle\caches\transforms-4\475ad5bbdeb1bcbb4607e749a3482e6a\transformed\vision-common-17.0.0\AndroidManifest.xml:12:13-14:85
+322                android:name="com.google.firebase.components:com.google.mlkit.vision.common.internal.VisionCommonRegistrar"
+322-->[com.google.mlkit:vision-common:17.0.0] C:\Users\palap\.gradle\caches\transforms-4\475ad5bbdeb1bcbb4607e749a3482e6a\transformed\vision-common-17.0.0\AndroidManifest.xml:13:17-124
+323                android:value="com.google.firebase.components.ComponentRegistrar" />
+323-->[com.google.mlkit:vision-common:17.0.0] C:\Users\palap\.gradle\caches\transforms-4\475ad5bbdeb1bcbb4607e749a3482e6a\transformed\vision-common-17.0.0\AndroidManifest.xml:14:17-82
+324            <meta-data
+324-->[com.google.mlkit:common:18.9.0] C:\Users\palap\.gradle\caches\transforms-4\14d87fe58b76b63b8b869af03f53365a\transformed\common-18.9.0\AndroidManifest.xml:20:13-22:85
+325                android:name="com.google.firebase.components:com.google.mlkit.common.internal.CommonComponentRegistrar"
+325-->[com.google.mlkit:common:18.9.0] C:\Users\palap\.gradle\caches\transforms-4\14d87fe58b76b63b8b869af03f53365a\transformed\common-18.9.0\AndroidManifest.xml:21:17-120
+326                android:value="com.google.firebase.components.ComponentRegistrar" />
+326-->[com.google.mlkit:common:18.9.0] C:\Users\palap\.gradle\caches\transforms-4\14d87fe58b76b63b8b869af03f53365a\transformed\common-18.9.0\AndroidManifest.xml:22:17-82
+327        </service>
+328
+329        <provider
+329-->[com.google.mlkit:common:18.9.0] C:\Users\palap\.gradle\caches\transforms-4\14d87fe58b76b63b8b869af03f53365a\transformed\common-18.9.0\AndroidManifest.xml:9:9-13:38
+330            android:name="com.google.mlkit.common.internal.MlKitInitProvider"
+330-->[com.google.mlkit:common:18.9.0] C:\Users\palap\.gradle\caches\transforms-4\14d87fe58b76b63b8b869af03f53365a\transformed\common-18.9.0\AndroidManifest.xml:10:13-78
+331            android:authorities="com.fclglucolink.app.mlkitinitprovider"
+331-->[com.google.mlkit:common:18.9.0] C:\Users\palap\.gradle\caches\transforms-4\14d87fe58b76b63b8b869af03f53365a\transformed\common-18.9.0\AndroidManifest.xml:11:13-69
+332            android:exported="false"
+332-->[com.google.mlkit:common:18.9.0] C:\Users\palap\.gradle\caches\transforms-4\14d87fe58b76b63b8b869af03f53365a\transformed\common-18.9.0\AndroidManifest.xml:12:13-37
+333            android:initOrder="99" />
+333-->[com.google.mlkit:common:18.9.0] C:\Users\palap\.gradle\caches\transforms-4\14d87fe58b76b63b8b869af03f53365a\transformed\common-18.9.0\AndroidManifest.xml:13:13-35
+334
+335        <activity
+335-->[com.google.android.gms:play-services-base:18.1.0] C:\Users\palap\.gradle\caches\transforms-4\f2ac98bce2bfa804be0844139ad1ce5f\transformed\play-services-base-18.1.0\AndroidManifest.xml:20:9-22:45
+336            android:name="com.google.android.gms.common.api.GoogleApiActivity"
+336-->[com.google.android.gms:play-services-base:18.1.0] C:\Users\palap\.gradle\caches\transforms-4\f2ac98bce2bfa804be0844139ad1ce5f\transformed\play-services-base-18.1.0\AndroidManifest.xml:20:19-85
+337            android:exported="false"
+337-->[com.google.android.gms:play-services-base:18.1.0] C:\Users\palap\.gradle\caches\transforms-4\f2ac98bce2bfa804be0844139ad1ce5f\transformed\play-services-base-18.1.0\AndroidManifest.xml:22:19-43
+338            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+338-->[com.google.android.gms:play-services-base:18.1.0] C:\Users\palap\.gradle\caches\transforms-4\f2ac98bce2bfa804be0844139ad1ce5f\transformed\play-services-base-18.1.0\AndroidManifest.xml:21:19-78
+339
+340        <meta-data
+340-->[com.google.android.gms:play-services-basement:18.1.0] C:\Users\palap\.gradle\caches\transforms-4\63f767c9c15518a565c9c5e25657d897\transformed\play-services-basement-18.1.0\AndroidManifest.xml:21:9-23:69
+341            android:name="com.google.android.gms.version"
+341-->[com.google.android.gms:play-services-basement:18.1.0] C:\Users\palap\.gradle\caches\transforms-4\63f767c9c15518a565c9c5e25657d897\transformed\play-services-basement-18.1.0\AndroidManifest.xml:22:13-58
+342            android:value="@integer/google_play_services_version" />
+342-->[com.google.android.gms:play-services-basement:18.1.0] C:\Users\palap\.gradle\caches\transforms-4\63f767c9c15518a565c9c5e25657d897\transformed\play-services-basement-18.1.0\AndroidManifest.xml:23:13-66
+343
+344        <provider
+344-->[androidx.emoji2:emoji2:1.3.0] C:\Users\palap\.gradle\caches\transforms-4\2df20029ce7537a444b99f5e6e7cd480\transformed\emoji2-1.3.0\AndroidManifest.xml:24:9-32:20
+345            android:name="androidx.startup.InitializationProvider"
+345-->[androidx.emoji2:emoji2:1.3.0] C:\Users\palap\.gradle\caches\transforms-4\2df20029ce7537a444b99f5e6e7cd480\transformed\emoji2-1.3.0\AndroidManifest.xml:25:13-67
+346            android:authorities="com.fclglucolink.app.androidx-startup"
+346-->[androidx.emoji2:emoji2:1.3.0] C:\Users\palap\.gradle\caches\transforms-4\2df20029ce7537a444b99f5e6e7cd480\transformed\emoji2-1.3.0\AndroidManifest.xml:26:13-68
+347            android:exported="false" >
+347-->[androidx.emoji2:emoji2:1.3.0] C:\Users\palap\.gradle\caches\transforms-4\2df20029ce7537a444b99f5e6e7cd480\transformed\emoji2-1.3.0\AndroidManifest.xml:27:13-37
+348            <meta-data
+348-->[androidx.emoji2:emoji2:1.3.0] C:\Users\palap\.gradle\caches\transforms-4\2df20029ce7537a444b99f5e6e7cd480\transformed\emoji2-1.3.0\AndroidManifest.xml:29:13-31:52
+349                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+349-->[androidx.emoji2:emoji2:1.3.0] C:\Users\palap\.gradle\caches\transforms-4\2df20029ce7537a444b99f5e6e7cd480\transformed\emoji2-1.3.0\AndroidManifest.xml:30:17-75
+350                android:value="androidx.startup" />
+350-->[androidx.emoji2:emoji2:1.3.0] C:\Users\palap\.gradle\caches\transforms-4\2df20029ce7537a444b99f5e6e7cd480\transformed\emoji2-1.3.0\AndroidManifest.xml:31:17-49
+351            <meta-data
+351-->[androidx.lifecycle:lifecycle-process:2.8.2] C:\Users\palap\.gradle\caches\transforms-4\2afef741ed794fa670b6d4c74487181e\transformed\lifecycle-process-2.8.2\AndroidManifest.xml:29:13-31:52
+352                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+352-->[androidx.lifecycle:lifecycle-process:2.8.2] C:\Users\palap\.gradle\caches\transforms-4\2afef741ed794fa670b6d4c74487181e\transformed\lifecycle-process-2.8.2\AndroidManifest.xml:30:17-78
+353                android:value="androidx.startup" />
+353-->[androidx.lifecycle:lifecycle-process:2.8.2] C:\Users\palap\.gradle\caches\transforms-4\2afef741ed794fa670b6d4c74487181e\transformed\lifecycle-process-2.8.2\AndroidManifest.xml:31:17-49
+354            <meta-data
+354-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\palap\.gradle\caches\transforms-4\e818854fe5929707a7732cbe8fb53325\transformed\profileinstaller-1.3.1\AndroidManifest.xml:29:13-31:52
+355                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+355-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\palap\.gradle\caches\transforms-4\e818854fe5929707a7732cbe8fb53325\transformed\profileinstaller-1.3.1\AndroidManifest.xml:30:17-85
+356                android:value="androidx.startup" />
+356-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\palap\.gradle\caches\transforms-4\e818854fe5929707a7732cbe8fb53325\transformed\profileinstaller-1.3.1\AndroidManifest.xml:31:17-49
+357        </provider>
+358
+359        <service
+359-->[androidx.room:room-runtime:2.6.1] C:\Users\palap\.gradle\caches\transforms-4\d1f2cfcb539cec0ec5c73a5e7cb92c60\transformed\room-runtime-2.6.1\AndroidManifest.xml:24:9-28:63
+360            android:name="androidx.room.MultiInstanceInvalidationService"
+360-->[androidx.room:room-runtime:2.6.1] C:\Users\palap\.gradle\caches\transforms-4\d1f2cfcb539cec0ec5c73a5e7cb92c60\transformed\room-runtime-2.6.1\AndroidManifest.xml:25:13-74
+361            android:directBootAware="true"
+361-->[androidx.room:room-runtime:2.6.1] C:\Users\palap\.gradle\caches\transforms-4\d1f2cfcb539cec0ec5c73a5e7cb92c60\transformed\room-runtime-2.6.1\AndroidManifest.xml:26:13-43
+362            android:exported="false" />
+362-->[androidx.room:room-runtime:2.6.1] C:\Users\palap\.gradle\caches\transforms-4\d1f2cfcb539cec0ec5c73a5e7cb92c60\transformed\room-runtime-2.6.1\AndroidManifest.xml:27:13-37
+363        <service
+363-->[com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\palap\.gradle\caches\transforms-4\6662a9e6742382b3c1497ffe1c072352\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:29:9-35:19
+364            android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
+364-->[com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\palap\.gradle\caches\transforms-4\6662a9e6742382b3c1497ffe1c072352\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:30:13-103
+365            android:exported="false" >
+365-->[com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\palap\.gradle\caches\transforms-4\6662a9e6742382b3c1497ffe1c072352\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:31:13-37
+366            <meta-data
+366-->[com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\palap\.gradle\caches\transforms-4\6662a9e6742382b3c1497ffe1c072352\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:32:13-34:39
+367                android:name="backend:com.google.android.datatransport.cct.CctBackendFactory"
+367-->[com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\palap\.gradle\caches\transforms-4\6662a9e6742382b3c1497ffe1c072352\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:33:17-94
+368                android:value="cct" />
+368-->[com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\palap\.gradle\caches\transforms-4\6662a9e6742382b3c1497ffe1c072352\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:34:17-36
+369        </service>
+370        <service
+370-->[com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\palap\.gradle\caches\transforms-4\f6dd115e1238bd679ab4a7afce91e708\transformed\transport-runtime-2.2.6\AndroidManifest.xml:26:9-30:19
+371            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService"
+371-->[com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\palap\.gradle\caches\transforms-4\f6dd115e1238bd679ab4a7afce91e708\transformed\transport-runtime-2.2.6\AndroidManifest.xml:27:13-117
+372            android:exported="false"
+372-->[com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\palap\.gradle\caches\transforms-4\f6dd115e1238bd679ab4a7afce91e708\transformed\transport-runtime-2.2.6\AndroidManifest.xml:28:13-37
+373            android:permission="android.permission.BIND_JOB_SERVICE" >
+373-->[com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\palap\.gradle\caches\transforms-4\f6dd115e1238bd679ab4a7afce91e708\transformed\transport-runtime-2.2.6\AndroidManifest.xml:29:13-69
+374        </service>
+375
+376        <receiver
+376-->[com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\palap\.gradle\caches\transforms-4\f6dd115e1238bd679ab4a7afce91e708\transformed\transport-runtime-2.2.6\AndroidManifest.xml:32:9-34:40
+377            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver"
+377-->[com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\palap\.gradle\caches\transforms-4\f6dd115e1238bd679ab4a7afce91e708\transformed\transport-runtime-2.2.6\AndroidManifest.xml:33:13-132
+378            android:exported="false" />
+378-->[com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\palap\.gradle\caches\transforms-4\f6dd115e1238bd679ab4a7afce91e708\transformed\transport-runtime-2.2.6\AndroidManifest.xml:34:13-37
+379        <receiver
+379-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\palap\.gradle\caches\transforms-4\e818854fe5929707a7732cbe8fb53325\transformed\profileinstaller-1.3.1\AndroidManifest.xml:34:9-52:20
+380            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+380-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\palap\.gradle\caches\transforms-4\e818854fe5929707a7732cbe8fb53325\transformed\profileinstaller-1.3.1\AndroidManifest.xml:35:13-76
+381            android:directBootAware="false"
+381-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\palap\.gradle\caches\transforms-4\e818854fe5929707a7732cbe8fb53325\transformed\profileinstaller-1.3.1\AndroidManifest.xml:36:13-44
+382            android:enabled="true"
+382-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\palap\.gradle\caches\transforms-4\e818854fe5929707a7732cbe8fb53325\transformed\profileinstaller-1.3.1\AndroidManifest.xml:37:13-35
+383            android:exported="true"
+383-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\palap\.gradle\caches\transforms-4\e818854fe5929707a7732cbe8fb53325\transformed\profileinstaller-1.3.1\AndroidManifest.xml:38:13-36
+384            android:permission="android.permission.DUMP" >
+384-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\palap\.gradle\caches\transforms-4\e818854fe5929707a7732cbe8fb53325\transformed\profileinstaller-1.3.1\AndroidManifest.xml:39:13-57
+385            <intent-filter>
+385-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\palap\.gradle\caches\transforms-4\e818854fe5929707a7732cbe8fb53325\transformed\profileinstaller-1.3.1\AndroidManifest.xml:40:13-42:29
+386                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+386-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\palap\.gradle\caches\transforms-4\e818854fe5929707a7732cbe8fb53325\transformed\profileinstaller-1.3.1\AndroidManifest.xml:41:17-91
+386-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\palap\.gradle\caches\transforms-4\e818854fe5929707a7732cbe8fb53325\transformed\profileinstaller-1.3.1\AndroidManifest.xml:41:25-88
+387            </intent-filter>
+388            <intent-filter>
+388-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\palap\.gradle\caches\transforms-4\e818854fe5929707a7732cbe8fb53325\transformed\profileinstaller-1.3.1\AndroidManifest.xml:43:13-45:29
+389                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+389-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\palap\.gradle\caches\transforms-4\e818854fe5929707a7732cbe8fb53325\transformed\profileinstaller-1.3.1\AndroidManifest.xml:44:17-85
+389-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\palap\.gradle\caches\transforms-4\e818854fe5929707a7732cbe8fb53325\transformed\profileinstaller-1.3.1\AndroidManifest.xml:44:25-82
+390            </intent-filter>
+391            <intent-filter>
+391-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\palap\.gradle\caches\transforms-4\e818854fe5929707a7732cbe8fb53325\transformed\profileinstaller-1.3.1\AndroidManifest.xml:46:13-48:29
+392                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+392-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\palap\.gradle\caches\transforms-4\e818854fe5929707a7732cbe8fb53325\transformed\profileinstaller-1.3.1\AndroidManifest.xml:47:17-88
+392-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\palap\.gradle\caches\transforms-4\e818854fe5929707a7732cbe8fb53325\transformed\profileinstaller-1.3.1\AndroidManifest.xml:47:25-85
+393            </intent-filter>
+394            <intent-filter>
+394-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\palap\.gradle\caches\transforms-4\e818854fe5929707a7732cbe8fb53325\transformed\profileinstaller-1.3.1\AndroidManifest.xml:49:13-51:29
+395                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+395-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\palap\.gradle\caches\transforms-4\e818854fe5929707a7732cbe8fb53325\transformed\profileinstaller-1.3.1\AndroidManifest.xml:50:17-95
+395-->[androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\palap\.gradle\caches\transforms-4\e818854fe5929707a7732cbe8fb53325\transformed\profileinstaller-1.3.1\AndroidManifest.xml:50:25-92
+396            </intent-filter>
+397        </receiver>
+398    </application>
+399
+400</manifest>

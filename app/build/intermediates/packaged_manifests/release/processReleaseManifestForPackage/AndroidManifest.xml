@@ -1,0 +1,400 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    FCLGlucoLink (30/07/2026, editor) — losstaande, minimale sensor-naar-AAPS-
+    koppel-app. Bewust GEEN AAPS-plugin/module binnen FCLvNext: aparte APK,
+    aparte installatie, aparte proces-ruimte. Reden (zie ook het gesprek
+    waaruit dit project ontstond): AAPS verwacht CGM-data toch al via een
+    losstaand BgSource-achtig kanaal (dezelfde xDrip-broadcast als Juggluco
+    nu gebruikt), en een BLE-crash/hikje in DEZE app mag nooit het proces
+    raken waar de dosing-loop (FCLvNext) in draait. Dit manifest declareert
+    dus alleen wat een pure sensor-koppel-app nodig heeft — geen dosing-,
+    profiel- of AAPS-brede rechten.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.fclglucolink.app"
+    android:versionCode="126"
+    android:versionName="0.9.27c-smoothing-heading-order" >
+
+    <uses-sdk
+        android:minSdkVersion="26"
+        android:targetSdkVersion="34" />
+
+    <!--
+         30/07/2026 (editor, waarschijnlijke oorzaak "data komt niet bij AAPS
+         binnen") — Android 11+ (API 30+) pakket-zichtbaarheid: zonder dit
+         <queries>-blok ziet PackageManager.queryBroadcastReceivers() in
+         XDripBroadcaster.kt HELEMAAL NIETS, ook niet als AAPS een prima
+         geregistreerde ontvanger voor deze actie heeft — de resolveReceiver-
+         Packages()-lijst is dan altijd leeg (zie de "Geen enkele app
+         gevonden"-log) en er wordt nooit een broadcast verstuurd. Bewust op
+         actie i.p.v. pakketnaam (geen enkele AAPS-fork hardcoded, past bij
+         het bestaande ontwerp van XDripBroadcaster).
+    -->
+    <queries>
+        <intent>
+            <action android:name="com.eveningoutpost.dexdrip.BgEstimate" />
+        </intent>
+    </queries>
+
+    <!--
+         30/07/2026 (editor) — neverForLocation: bevestigt aan Android (API>=31)
+         dat deze app scan-resultaten NOOIT gebruikt om fysieke locatie af te
+         leiden. Gevolg: op API>=31 is er GEEN enkele locatierechten-vraag
+         meer nodig voor BLE-scannen (vandaar ook dat ACCESS_FINE_LOCATION
+         hieronder tot API 30 beperkt blijft) — puur best-practice, verandert
+         niets aan wat de app al deed.
+    -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!--
+         31/07/2026 (editor, bugfix na crash tijdens de eerste echte BLE-
+         koppelpoging: "SecurityException: Need BLUETOOTH permission")  —
+         BLUETOOTH_SCAN/BLUETOOTH_CONNECT hierboven dekken de runtime-
+         geautoriseerde acties (scannen/verbinden), maar het simpelweg
+         AANMAKEN van een BluetoothAdapter-referentie
+         (getSystemService(BluetoothManager)/getBluetoothLeScanner()) loopt
+         intern nog steeds via een AIDL-aanroep die deze OUDE, "normale"
+         (geen runtime-prompt, alleen declareren volstaat) permissie
+         controleert — een bekende, wat contra-intuïtieve Android-eigenaardigheid
+         die blijkbaar ook op recentere Android-versies nog geldt voor déze
+         specifieke aanroep. BLUETOOTH_ADMIN erbij voor dezelfde reden (nodig
+         voor adapter-staat-gerelateerde calls op oudere API-niveaus). Beide
+         zijn onschadelijk om altijd te declareren, ook op nieuwere Android-
+         versies waar ze verder geen effect meer hebben.
+    -->
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <!--
+         Alleen nodig op Android <12 (API<31), waar BLE-scannen nog aan
+         locatierechten vastzat — geen enkel gebruik van daadwerkelijke
+         locatiedata in deze app.
+    -->
+    <uses-permission
+        android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="30" />
+    <!--
+         10/08/2026 (editor, RONDE 77, root-oorzaak van een ~20-25 min BG-gat
+         tijdens langdurig scherm-uit op een Samsung A40/Android 11 —
+         diagnostiek: elke scan-rearm (Ronde 76) vuurde precies op tijd maar
+         leverde nul resultaten op tot het scherm weer aan ging) — zonder
+         ACCESS_BACKGROUND_LOCATION biedt Android op API<31 geen "Altijd
+         toestaan"-locatie-optie aan (bevestigd: Instellingen > Apps >
+         FCLGlucoLink > Machtigingen > Locatie toonde alleen "Bij gebruik
+         van app"/"Altijd vragen"/"Niet toestaan", tegenover AAPS op
+         hetzelfde toestel dat wél "Altijd toegestaan" heeft en gebruikt).
+         Alleen declareren GEEFT deze toestemming niet automatisch — sinds
+         Android 10 kan deze permissie niet via een normale in-app-prompt
+         gevraagd worden, de gebruiker moet 'm zelf via dat Instellingen-
+         scherm aanzetten (zie ManualScreen.kt's nieuwe knop hiervoor, in de
+         handleiding i.p.v. op een schermknop, want dit is een eenmalige
+         instelstap per toestel). Bewust dezelfde maxSdkVersion="30"-scope
+         als ACCESS_FINE_LOCATION hierboven: op API>=31 dekt
+         BLUETOOTH_SCAN/neverForLocation dit al af, geen locatierechten
+         nodig.
+    -->
+    <uses-permission
+        android:name="android.permission.ACCESS_BACKGROUND_LOCATION"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
+         30/07/2026 (editor, na feedback: "moet 15 dagen onbeheerd door
+         kunnen draaien") — een foreground-service met een zichtbare
+         notificatie hoort op kale Android al vrijgesteld te zijn van
+         Doze/App Standby-CPU-beperkingen, maar sommige fabrikanten
+         (Samsung/Xiaomi/Huawei e.d.) hebben daarbovenop een eigen,
+         agressiever batterijbeheer dat achtergrond-apps alsnog killt.
+         Deze permissie hoort bij de knop in het menu (StatusScreen.kt) die
+         de gebruiker naar het systeemscherm stuurt om FCLGlucoLink daar
+         expliciet van uit te zonderen — geen silent/forced gedrag, puur een
+         verzoek dat de gebruiker zelf moet goedkeuren.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!--
+         30/07/2026 (editor, na feedback: "update onregelmatig i.p.v. iedere
+         5 minuten met scherm dicht") — zie kdoc bij BleConnectionService.kt:
+         nodig voor de partial wakelock die daar wordt vastgehouden zolang de
+         service actief is, zodat de eigen `delay()`-timers (simulator-
+         replay/random-walk) op tijd blijven afgaan ook als het scherm lang
+         uitstaat.
+    -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!--
+         03/08/2026 (editor, ronde 28 — na vergelijking van de ECHTE
+         manifesten van AAPS/Juggluco/FCLGlucoLink, op verzoek van de
+         gebruiker) — Juggluco's manifest bevat exact deze combinatie
+         (RECEIVE_BOOT_COMPLETED + SCHEDULE_EXACT_ALARM(maxSdk 32) +
+         USE_EXACT_ALARM), samen met eigen `.NumAlarm`/`.Maintenance`/
+         `.LossOfSensorAlarm`/`.ConnectReceiver`-ontvangers — een
+         AlarmManager-gebaseerde "wekker" die, anders dan onze eigen
+         coroutine-timers, expliciet Doze/App Standby doorbreekt en het
+         proces zelf kan herstarten als Android het ondertussen volledig
+         gestopt heeft. Zie ConnectionWatchdog.kt's kdoc voor de volledige
+         aanleiding en werking. SCHEDULE_EXACT_ALARM (t/m API 32) vereist
+         mogelijk een handmatige gebruikers-toestemming via Instellingen >
+         Alarmen en herinneringen als canScheduleExactAlarms() false
+         teruggeeft — ConnectionWatchdog.kt valt dan terug op de inexacte
+         (maar nog steeds Doze-doorbrekende) variant, crasht nooit.
+    -->
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!--
+         13/08/2026 (editor, RONDE 107 — alarm-evaluatiemotor) — normale
+         permissie (geen runtime-prompt) voor de trilling die
+         alarm/AlarmSoundPlayer.kt bij een afgaand alarm laat voelen.
+    -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!--
+         13/08/2026 (editor, RONDE 107) — nodig voor de scherm-doorbrekende
+         full-screen-notificatie waarmee alarm/AlarmController.kt
+         alarm/AlarmActivity.kt opent (Notification.setFullScreenIntent()).
+         BEKENDE BEPERKING: op Android 14 (API 34) is dit voor gewone apps
+         niet meer automatisch toegestaan, zie AlarmController.kt's kdoc bij
+         showFullScreenNotification() — declareren hier is de vereiste
+         basisstap, maar de gebruiker moet 'm op zulke toestellen mogelijk
+         zelf via Instellingen aanzetten.
+    -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
+    <uses-feature
+        android:name="android.hardware.bluetooth_le"
+        android:required="true" />
+
+    <permission
+        android:name="com.fclglucolink.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+        android:protectionLevel="signature" />
+
+    <uses-permission android:name="com.fclglucolink.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" /> <!-- Although the *SdkVersion is captured in gradle build files, this is required for non gradle builds -->
+    <!-- <uses-sdk android:minSdkVersion="14"/> -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:name="com.fclglucolink.app.FclGlucoLinkApp"
+        android:allowBackup="false"
+        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+        android:extractNativeLibs="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.FCLGlucoLink" >
+
+        <!--
+             31/07/2026 (editor) — CareSens Air koppel-stap 1/4: laat Google
+             Play services de barcode-scanner-module alvast downloaden
+             tijdens installatie i.p.v. pas bij het eerste gebruik (scheelt
+             een korte wachttijd/download-melding de eerste keer dat
+             ui/CareSensAirScanScreen.kt wordt geopend). Optioneel — zonder
+             dit werkt het ook, dan downloadt Play services de module gewoon
+             bij het eerste gebruik. Geen CAMERA-permissie nodig: het
+             scannen zelf gebeurt in een geïsoleerd Play Services-proces,
+             zie kdoc bij CareSensAirScanScreen.kt.
+        -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="barcode_ui" />
+
+        <activity
+            android:name="com.fclglucolink.app.MainActivity"
+            android:exported="true"
+            android:screenOrientation="unspecified" >
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+             13/08/2026 (editor, RONDE 107) — zie alarm/AlarmActivity.kt's
+             kdoc: het volledige-scherm-alarmscherm, geopend via
+             alarm/AlarmController.kt's full-screen-notificatie, niet via
+             gewone in-app-navigatie. exported="false" — alleen deze app
+             zelf opent 'm. excludeFromRecents — een alarmscherm hoort geen
+             eigen kaart in het recente-apps-overzicht te krijgen, net zoals
+             een systeem-wekker dat ook niet doet. launchMode="singleTop" +
+             AlarmActivity.onNewIntent(): een tweede alarm terwijl dit
+             scherm al open staat hergebruikt dezelfde instantie i.p.v. een
+             stapel losse schermen op te bouwen.
+        -->
+        <activity
+            android:name="com.fclglucolink.app.alarm.AlarmActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true" />
+
+        <!--
+             30/07/2026 (editor) — draait de actieve SensorDriver (scan/connect/
+             notify) los van de UI-levenscyclus, zodat metingen ook doorlopen
+             als het scherm dicht is. Zie sensor/ble/BleConnectionService.kt.
+
+             02/08/2026 (editor, na live-test — gebruiker swipete FCLGlucoLink
+             (en AAPS) weg uit het recente-apps-overzicht, waarna de Bg-
+             updates ~12 minuten stilvielen) — android:stopWithTask staat
+             standaard op "true": zonder deze regel stopt Android deze
+             foreground service AUTOMATISCH zodra de gebruiker de app-kaart
+             uit "Recents" wegveegt, ONGEACHT START_STICKY of de wakelock
+             hierboven (die beschermen tegen geheugendruk/CPU-slaap, niet
+             tegen deze expliciete, door de gebruiker geïnitieerde stop). Een
+             swipe uit Recents is voor veel gebruikers een gewoontehandeling
+             ("apps opruimen") die niet bedoeld is als "stop deze koppeling" —
+             stopWithTask="false" ontkoppelt de service expliciet van de
+             taak-levenscyclus, zodat 'm wegvegen de achtergrond-BLE-koppeling
+             niet meer onderbreekt (de "Verbinding verbreken"-knop op het
+             statusscherm blijft de bedoelde, expliciete manier om 'm wél te
+             stoppen).
+        -->
+        <service
+            android:name="com.fclglucolink.app.sensor.ble.BleConnectionService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice"
+            android:stopWithTask="false" />
+
+        <!--
+             03/08/2026 (editor, ronde 28) — zie ConnectionWatchdog.kt's kdoc:
+             ontvangt de zelf-herplannende AlarmManager-tik en herstart
+             BleConnectionService onvoorwaardelijk veilig. Bewust
+             exported="false" — alleen deze app zelf plant dit alarm in.
+        -->
+        <receiver
+            android:name="com.fclglucolink.app.sensor.ble.ConnectionWatchdogReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!--
+             04/08/2026 (editor, ronde 36) — zie PredictiveReconnectAlarm.kt's
+             kdoc: ontvangt de precies-getimede AlarmManager-wekker die de
+             kale coroutine-delay() in CareSensAirDriver.kt's
+             scheduleScanAttempt() vervangt (was Doze-kwetsbaar, vermoedelijk
+             de oorzaak van het trimodale vertragingspatroon uit ronde 35).
+             Bewust exported="false", net als de watchdog hierboven.
+        -->
+        <receiver
+            android:name="com.fclglucolink.app.sensor.ble.PredictiveReconnectAlarmReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!--
+             03/08/2026 (editor, ronde 28) — mirror van Juggluco's `.NumAlarm`:
+             herstart de koppeling automatisch na een telefoon-herstart,
+             i.p.v. stil te blijven staan totdat de gebruiker de app zelf
+             weer opent. exported="true" nodig omdat BOOT_COMPLETED een
+             systeem-breed verstuurde broadcast is (net als in Juggluco's
+             eigen manifest).
+        -->
+        <receiver
+            android:name="com.fclglucolink.app.sensor.ble.BootReceiver"
+            android:enabled="true"
+            android:exported="true" >
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!--
+        This activity is an invisible delegate activity to start scanner activity
+        and receive result, so it's unnecessary to support screen orientation and
+        we can avoid any side effect from activity recreation in any case.
+        -->
+        <activity
+            android:name="com.google.mlkit.vision.codescanner.internal.GmsBarcodeScanningDelegateActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" >
+        </activity>
+
+        <service
+            android:name="com.google.mlkit.common.internal.MlKitComponentDiscoveryService"
+            android:directBootAware="true"
+            android:exported="false" >
+            <meta-data
+                android:name="com.google.firebase.components:com.google.mlkit.vision.common.internal.VisionCommonRegistrar"
+                android:value="com.google.firebase.components.ComponentRegistrar" />
+            <meta-data
+                android:name="com.google.firebase.components:com.google.mlkit.common.internal.CommonComponentRegistrar"
+                android:value="com.google.firebase.components.ComponentRegistrar" />
+        </service>
+
+        <provider
+            android:name="com.google.mlkit.common.internal.MlKitInitProvider"
+            android:authorities="com.fclglucolink.app.mlkitinitprovider"
+            android:exported="false"
+            android:initOrder="99" />
+
+        <activity
+            android:name="com.google.android.gms.common.api.GoogleApiActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <meta-data
+            android:name="com.google.android.gms.version"
+            android:value="@integer/google_play_services_version" />
+
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="com.fclglucolink.app.androidx-startup"
+            android:exported="false" >
+            <meta-data
+                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+                android:value="androidx.startup" />
+            <meta-data
+                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+                android:value="androidx.startup" />
+            <meta-data
+                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+                android:value="androidx.startup" />
+        </provider>
+
+        <service
+            android:name="androidx.room.MultiInstanceInvalidationService"
+            android:directBootAware="true"
+            android:exported="false" />
+        <service
+            android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
+            android:exported="false" >
+            <meta-data
+                android:name="backend:com.google.android.datatransport.cct.CctBackendFactory"
+                android:value="cct" />
+        </service>
+        <service
+            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" >
+        </service>
+
+        <receiver
+            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver"
+            android:exported="false" />
+        <receiver
+            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+            android:directBootAware="false"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.DUMP" >
+            <intent-filter>
+                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+            </intent-filter>
+        </receiver>
+    </application>
+
+</manifest>
