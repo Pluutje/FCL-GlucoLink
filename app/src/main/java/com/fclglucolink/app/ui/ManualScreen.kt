@@ -496,9 +496,13 @@ enum class ManualTopic(
             ManualSection(
                 "Available now: CareSens Air, Dexcom G6, and Dexcom G7 / ONE+",
                 "CareSens Air: scan the QR code printed on the sensor " +
-                    "packaging and the app finds and pairs with it over " +
-                    "Bluetooth automatically — no manual device list to " +
-                    "search through. Dexcom G6: enter the transmitter ID " +
+                    "packaging, then pick it from the Bluetooth list. " +
+                    "Android will then ask for a Bluetooth pairing PIN — " +
+                    "use the PIN code shown on the scan-result screen (also " +
+                    "printed on the sensor packaging as \"PINCODE\"/\"CODE " +
+                    "PIN\"), not whatever Android itself suggests (e.g. " +
+                    "\"try 0000 or 1234\") — that's just a generic guess " +
+                    "and won't work. Dexcom G6: enter the transmitter ID " +
                     "printed on the transmitter itself; FCLGlucoLink then " +
                     "connects directly to that transmitter. Dexcom G7 / " +
                     "ONE+: enter the 4-digit pairing code printed on the " +

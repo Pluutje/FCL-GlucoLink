@@ -576,7 +576,12 @@ class BleConnectionService : Service() {
                     // opslag/UI voor deze slot raakt.
                     readingStore.record(smoothedReading)
                     if (settings.getAapsActiveSlotOnce() == slot) {
-                        XDripBroadcaster.broadcast(this@BleConnectionService, smoothedReading)
+                        // 20/08/2026 (editor, RONDE 115) — zie
+                        // XDripBroadcaster.kt's kdoc bij sourceInfo(): AAN ->
+                        // dezelfde AAPS-v3+v4-vertrouwde code voor elke
+                        // sensor, UIT -> de bestaande per-sensor omschrijving.
+                        val universalSourceCode = settings.isXdripUniversalSourceCodeEnabledOnce()
+                        XDripBroadcaster.broadcast(this@BleConnectionService, smoothedReading, universalSourceCode)
                     }
                     // 06/08/2026 (editor, RONDE 53) — zie
                     // refreshNotification()'s kdoc verderop: laat de

@@ -13,10 +13,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -43,6 +47,7 @@ import com.fclglucolink.app.sensor.ConnectionState
 import com.fclglucolink.app.sensor.SensorRegistry
 import com.fclglucolink.app.sensor.SensorSlot
 import com.fclglucolink.app.sensor.SensorType
+import com.fclglucolink.app.sensor.caresensair.CareSensAirScanResult
 import com.fclglucolink.app.startBleConnectionService
 import kotlinx.coroutines.launch
 
@@ -88,6 +93,23 @@ fun PairingScreen(
     var showAllDevices by remember { mutableStateOf(false) }
     LaunchedEffect(sensorType) {
         pairingFilter = driver.buildPairingListFilter(context)
+    }
+
+    // 20/08/2026 (editor, RONDE 116, na live-melding — een tester typte de
+    // PIN die Android's EIGEN Bluetooth-koppelscherm suggereerde ("probeer
+    // 0000 of 1234") i.p.v. de echte, op de sensorverpakking afgedrukte PIN
+    // uit de barcode-scan, waardoor het koppelen meermaals mislukte) — hier,
+    // vlak vóór het tikken op een apparaat de OS-koppeldialoog daadwerkelijk
+    // opent, nogmaals expliciet de juiste PIN tonen. Alleen relevant voor
+    // CareSens Air (de enige sensor hier die een barcode-gescande PIN heeft
+    // — zie CareSensAirScanScreen.kt's zelfde waarschuwing, één stap eerder
+    // in de flow). `null` als er (nog) geen scanresultaat is voor deze slot
+    // (bv. via CareSensAirChooseScreen.kt's "already running"-pad, dat
+    // bewust geen scan opslaat — zie FclGlucoLinkNavHost.kt's kdoc daar).
+    val careSensAirPin: CareSensAirScanResult? by if (sensorType == SensorType.CARESENS_AIR) {
+        settings.careSensAirScan(slot).collectAsState(initial = null)
+    } else {
+        remember { mutableStateOf<CareSensAirScanResult?>(null) }
     }
     val displayedDevices = if (showAllDevices || pairingFilter == null) {
         foundDevices
@@ -148,6 +170,60 @@ fun PairingScreen(
 
             Button(onClick = { startScan() }) {
                 Text(if (scanning) "Search again" else "Search for sensor")
+            }
+
+            // 20/08/2026 (editor, RONDE 116) — zie kdoc hierboven bij
+            // careSensAirPin. Tapt de gebruiker zo dadelijk op een apparaat
+            // hieronder, dan opent Android's EIGEN Bluetooth-koppelscherm —
+            // dat scherm zelf kunnen we niet aanpassen (systeem-UI), dus
+            // hier nogmaals expliciet de juiste PIN vlak vóór dat moment.
+            //
+            // 20/08/2026 (editor, RONDE 117, op verzoek) — zelfde
+            // opvallende-kaart-behandeling als CareSensAirScanScreen.kt's
+            // PIN-kdoc hierboven beschrijft: was hier gewone kleine
+            // secondary-tekst, nu een tertiaryContainer-kaart met icoon en
+            // grote cijfers zodat de PIN opvalt vlak vóórdat Android's eigen
+            // koppeldialoog (met zijn eigen, verkeerde suggestie) verschijnt.
+            if (careSensAirPin != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.Top
+                    ) {
+                        Icon(
+                            Icons.Filled.VpnKey,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                "Bluetooth pairing PIN",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                            Text(
+                                careSensAirPin!!.pin,
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                            Text(
+                                "Use this when Android asks, after you tap a " +
+                                    "device below — not Android's own " +
+                                    "suggestion (e.g. \"try 0000 or 1234\"), " +
+                                    "that's just a generic guess and won't work.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        }
+                    }
+                }
             }
 
             if (pairingFilter != null) {

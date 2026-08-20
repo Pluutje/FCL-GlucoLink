@@ -7089,4 +7089,134 @@ Gewijzigd: `ui/SettingsScreen.kt`.
 
 versionCode 126, versionName "0.9.27c-smoothing-heading-order".
 
+## Ronde 115 (20/08/2026) — universele, AAPS v3+v4-vertrouwde xDrip-broncode
+
+**Verzoek + melding.** "Ik ben de app nu bij meer mensen aan het testen. Wat
+nu opvalt is dat bij de v3 gebruikers de smb always niet werkt. Ik zit nu
+zelf te denken om bij de settings een knop in te voeren die bij ingeschakeld
+iedere sensor (ook de virtuele) een universele code mee geeft die zowel in
+aaps 3 als 4 werkt (mag wat mij betreft gewoon een vertrouwde G6 code/
+omschrijving zijn) en als hij is uitgeschakeld dan mag gewoon de best
+kloppende omschrijving worden mee gestuurd." — met de aangeleverde
+`uploads/XdripSourcePlugin AAPS V3.4.zip` en `... V4 dev.zip` (elk met
+SourceSensor.kt, XdripSourcePlugin.kt, SafetyPlugin.kt, ConstraintsChecker.kt
+e.a. — geen aannames, alle bestanden volledig gelezen) als bronmateriaal.
+
+**Analyse.** "SMB Always" (`isAdvancedFilteringEnabled`) wordt in V3 en V4
+op FUNDAMENTEEL verschillende manieren bepaald: V3's SafetyPlugin vraagt
+`activePlugin.activeBgSource.advancedFilteringSupported()` op — bij
+XdripSourcePlugin een gecachte boolean, gezet door `detectSource()` tegen
+een hardcoded array in dat bestand zelf. V4's SafetyPlugin vraagt in plaats
+daarvan `persistenceLayer.isAdvancedFilteringSupported()` op (V4's
+XdripSourcePlugin heeft die gecachte boolean niet eens meer) — een
+databank-brede check die de nieuwe, losstaande extensiefunctie
+`SourceSensor.advancedFilteringSupported()` uit SourceSensorExtensions.kt
+moet gebruiken. Ondanks dat mechanische verschil gaat het ons alleen om
+WELKE `SourceSensor.text`-strings vertrouwd zijn: V3's hardcoded array
+(AAPS-Dexcom/AAPS-DexcomG6/AAPS-DexcomG7/G6 Native/G7 Native/G7/Libre2/
+Libre2 Native/Libre3) is een strikte deelverzameling van V4's set — dezelfde
+negen, plus (nieuw) Syai Tag en Random.
+
+Dat verklaart de melding exact: CareSens Air stuurde "Random" — in V4 sinds
+kort wél vertrouwd, in V3 nooit, vandaar "random niet werkt" bij V3-
+gebruikers. Accu-Chek/Simulator stuurden strings die in GEEN ENKELE
+AAPS-versie een SourceSensor matchen (altijd UNKNOWN, nooit vertrouwd).
+Alleen Dexcom G6 ("AAPS-Dexcom") en G7 ("G7") gebruikten al een waarde uit
+de doorsnede van beide whitelists.
+
+**Gekozen universele waarde: "AAPS-Dexcom".** Zit in de doorsnede van beide
+whitelists, én is de enige van de negen kandidaten die al eerder live op een
+toestel getest is en bevestigd werkte (RONDE 88) — een echte meting weegt
+zwaarder dan de statische code-analyse alleen ("G6 Native" zag er op papier
+ook goed uit maar gaf destijds op het toestel tóch "Unknown").
+
+**Implementatie.** Nieuwe, app-brede Settings-schakelaar "Universal trusted
+source code" in de Connection-kaart: AAN -> elke sensor (ook de simulator)
+stuurt "AAPS-Dexcom"; UIT (default) -> ongewijzigd de bestaande, per-
+sensortype best-passende omschrijving.
+
+**Gewijzigd:**
+- `data/AppSettings.kt` — nieuwe toggle `xdripUniversalSourceCodeEnabled`
+  (`Keys.XDRIP_UNIVERSAL_SOURCE_CODE_ENABLED`).
+- `broadcast/XDripBroadcaster.kt` — `sourceInfo()` krijgt een
+  `universalSourceCode`-parameter, `broadcast()`/`buildBundle()` geven 'm
+  door.
+- `sensor/ble/BleConnectionService.kt` — leest de instelling en geeft 'm mee
+  aan `XDripBroadcaster.broadcast()`.
+- `ui/SettingsScreen.kt` — nieuwe schakelaar in de Connection-kaart, zelfde
+  kopje/toelichting/switch-volgorde als RONDE 114c.
+
+**Verificatie.** Balance-checker op alle gewijzigde bestanden. Nog niet
+live getest tegen een echte AAPS v3.4-installatie — dat is aan de gebruiker
+om te bevestigen bij de volgende testronde.
+
+Gewijzigd: `data/AppSettings.kt`, `broadcast/XDripBroadcaster.kt`,
+`sensor/ble/BleConnectionService.kt`, `ui/SettingsScreen.kt`.
+
+versionCode 127, versionName "0.9.28-xdrip-universal-source-code".
+
+## Ronde 116 (20/08/2026) — duidelijke PIN-tekst bij CareSens Air-koppeling
+
+**Melding.** Een tester (via de gebruiker doorgestuurde WhatsApp-schermen)
+liep vast bij het koppelen van een nieuwe CareSens Air-sensor: Android's
+EIGEN Bluetooth-koppelscherm suggereerde "probeer 0000 of 1234" als PIN,
+maar dat is slechts een generieke gok van het besturingssysteem — de
+daadwerkelijke PIN staat afgedrukt op de sensorverpakking ("PINCODE"/"CODE
+PIN"). Meerdere mislukte pogingen, gevolgd door een deselecteer/opnieuw-
+koppelen-cyclus, eindigden in een crash (nog niet gereproduceerd/opgelost,
+apart traject — hier alleen de tekst-verduidelijking, letterlijk verzoek:
+"pas in ieder geval de tekst maar aan dat die duidelijk naar de pincode op
+de verpakking wijst").
+
+**Bevinding.** De juiste PIN werd al uit de barcode gehaald bij het scannen
+(`CareSensAirBarcode.kt`, AI 240) en opgeslagen in Settings
+(`AppSettings.saveCareSensAirScan`) — maar nergens in de UI ooit getoond.
+De gebruiker moest 'm dus zelf van het fysieke etiket aflezen, met alle
+verwarring van dien tussen de PIN, de sensorcode en het serienummer die
+allemaal op hetzelfde etiket staan.
+
+**Fix (drie plekken, geen logica gewijzigd):**
+- `ui/CareSensAirScanScreen.kt` — na een geslaagde scan wordt de PIN nu
+  gewoon getoond (nieuwe "PIN code"-regel naast Sensor code/Serial/
+  Expires), met een tekst die expliciet zegt: gebruik DEZE waarde in de
+  komende stap, niet wat Android zelf voorstelt.
+- `ui/PairingScreen.kt` — dezelfde herinnering verschijnt nogmaals vlak
+  vóór de apparatenlijst, op het moment dat een tik op een apparaat
+  Android's eigen koppeldialoog daadwerkelijk opent (alleen zichtbaar voor
+  CareSens Air, alleen als er een scanresultaat voor deze slot bekend is).
+- `ui/ManualScreen.kt` — de CareSens Air-alinea benoemt nu expliciet de
+  PIN-stap en dezelfde waarschuwing.
+
+**Verificatie.** Balance-checker op alle gewijzigde bestanden. De crash die
+in dezelfde melding werd gerapporteerd is NIET onderdeel van deze ronde —
+daarvoor is een stacktrace/logbestand van de tester nodig, nog niet
+ontvangen.
+
+Gewijzigd: `ui/CareSensAirScanScreen.kt`, `ui/PairingScreen.kt`,
+`ui/ManualScreen.kt`.
+
+versionCode 128, versionName "0.9.29-caresens-pin-clarity".
+
+## Ronde 117 (20/08/2026) — opvallende PIN-kaart bij CareSens Air-koppeling
+
+**Aanleiding.** De gebruiker kon de Ronde 116-tekst zelf niet testen (geen
+nieuwe sensor voorhanden om te koppelen). Op verzoek eerst een mockup
+getoond (huidige stand vs. een opvallender alternatief) — de gebruiker koos
+voor het alternatief, op beide schermen.
+
+**Fix.** De PIN stond in Ronde 116 als gewone tekstregel tussen de andere
+velden (`CareSensAirScanScreen.kt`) resp. als kleine secondary-tekst boven
+de apparatenlijst (`PairingScreen.kt`) — makkelijk over het hoofd te zien.
+Beide plekken tonen de PIN nu in een eigen `tertiaryContainer`-kaart
+(Material3's "let op dit"-kleur, past zich automatisch aan het dark theme
+aan) met een sleutel-icoon en de PIN in `headlineSmall`-grootte, gevolgd
+door dezelfde waarschuwingstekst als voorheen. Geen logica gewijzigd, puur
+visuele nadruk.
+
+**Verificatie.** Balance-checker op beide gewijzigde bestanden.
+
+Gewijzigd: `ui/CareSensAirScanScreen.kt`, `ui/PairingScreen.kt`.
+
+versionCode 129, versionName "0.9.30-caresens-pin-card".
+
 versionCode 117, versionName `0.9.20-alarm-alert-mode-fix`.

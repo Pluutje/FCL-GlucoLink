@@ -153,6 +153,16 @@ class AppSettings(private val context: Context) {
         // blunte aan/uit-schakelaar zonder bronkeuze). "A"/"B"/afwezig=null.
         val AAPS_ACTIVE_SLOT = stringPreferencesKey("aaps_active_slot")
 
+        // 20/08/2026 (editor, RONDE 115, op verzoek: "een knop in te voeren
+        // die bij ingeschakeld iedere sensor (ook de virtuele) een
+        // universele code mee geeft die zowel in aaps 3 als 4 werkt") — zie
+        // XDripBroadcaster.kt's kdoc bij [XDripBroadcaster.sourceInfo] voor
+        // de volledige analyse (AAPS v3.4 vs v4-dev SourceSensor-whitelists)
+        // die tot de gekozen waarde leidde. Bewust GLOBAAL (net als
+        // AAPS_ACTIVE_SLOT hierboven), niet per-slot — geldt voor elke
+        // sensor die naar AAPS zendt.
+        val XDRIP_UNIVERSAL_SOURCE_CODE_ENABLED = booleanPreferencesKey("xdrip_universal_source_code_enabled")
+
         // 10/08/2026 (editor, RONDE 79) — bewaakt dat migrateLegacySingleSlotDataOnce()
         // precies één keer draait, zie die functie's kdoc.
         val MIGRATION_DUAL_SLOT_DONE = booleanPreferencesKey("migration_dual_slot_done")
@@ -257,6 +267,22 @@ class AppSettings(private val context: Context) {
 
     private fun parseSlotOrNull(raw: String?): SensorSlot? =
         raw?.let { runCatching { SensorSlot.valueOf(it) }.getOrNull() }
+
+    /** RONDE 115 — zie [Keys.XDRIP_UNIVERSAL_SOURCE_CODE_ENABLED]'s kdoc en
+     *  XDripBroadcaster.kt's kdoc bij [XDripBroadcaster.sourceInfo]. Default
+     *  UIT: net als de andere togglegs in dit bestand een bewuste opt-in,
+     *  geen gedragswijziging voor bestaande gebruikers die niemand gevraagd
+     *  heeft. */
+    val xdripUniversalSourceCodeEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.XDRIP_UNIVERSAL_SOURCE_CODE_ENABLED] ?: false
+    }
+
+    suspend fun setXdripUniversalSourceCodeEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[Keys.XDRIP_UNIVERSAL_SOURCE_CODE_ENABLED] = enabled }
+    }
+
+    suspend fun isXdripUniversalSourceCodeEnabledOnce(): Boolean =
+        context.dataStore.data.first()[Keys.XDRIP_UNIVERSAL_SOURCE_CODE_ENABLED] ?: false
 
     // ============================================================
     // Niet-slot-gebonden (app-breed, ongewijzigd t.o.v. vóór RONDE 79)

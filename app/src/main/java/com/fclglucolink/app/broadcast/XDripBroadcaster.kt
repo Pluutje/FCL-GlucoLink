@@ -99,12 +99,70 @@ object XDripBroadcaster {
     // maar wie later in AAPS/Nightscout naar de broncode-naam kijkt ziet dus
     // "AAPS-Dexcom" i.p.v. een naam die verwijst naar xDrip/FCLGlucoLink.
     // Gebruiker heeft dit zelf getest en bevonden dat het werkt — aangehouden.
-    private fun sourceInfo(sensorType: SensorType): String = when (sensorType) {
-        SensorType.CARESENS_AIR -> "Random"
-        SensorType.DEXCOM_G6 -> "AAPS-Dexcom"
-        SensorType.DEXCOM_G7 -> "G7"
-        SensorType.ACCUCHEK_SMARTGUIDE -> "AccuChek"
-        SensorType.SIMULATOR -> "FCLGlucoLinkSimulator"
+    //
+    // 20/08/2026 (editor, RONDE 115, op verzoek: "bij de v3 gebruikers de
+    // smb always niet werkt [...] een knop [...] die bij ingeschakeld iedere
+    // sensor (ook de virtuele) een universele code mee geeft die zowel in
+    // aaps 3 als 4 werkt [...] ik had zelf al bemerkt dat random niet
+    // werkt") — VOLLEDIGE analyse tegen de aangeleverde AAPS-broncode
+    // (`uploads/XdripSourcePlugin AAPS V3.4.zip` en `... V4 dev.zip`, elk
+    // met SourceSensor.kt, XdripSourcePlugin.kt, SafetyPlugin.kt,
+    // ConstraintsChecker.kt e.a. — geen aannames, alle bestanden gelezen):
+    //
+    // 1) "SMB Always" (`isAdvancedFilteringEnabled`) wordt in V3 en V4 op
+    //    FUNDAMENTEEL verschillende manieren bepaald: V3's SafetyPlugin
+    //    vraagt `activePlugin.activeBgSource.advancedFilteringSupported()`
+    //    op — bij XdripSourcePlugin een gecachte boolean die alleen gezet
+    //    wordt door `detectSource()` tegen een HARDCODED array in dat
+    //    bestand zelf. V4's SafetyPlugin vraagt in plaats daarvan
+    //    `persistenceLayer.isAdvancedFilteringSupported()` op — een
+    //    databank-brede check (implementatie niet aangeleverd, maar V4's
+    //    XdripSourcePlugin heeft de oude `detectSource()`/gecachte boolean
+    //    niet eens meer, dus dit moet de nieuwe, losstaande extensie-functie
+    //    `SourceSensor.advancedFilteringSupported()` uit
+    //    SourceSensorExtensions.kt gebruiken).
+    // 2) Ondanks dat mechanische verschil is wat er ONS aangaat identiek:
+    //    WELKE `SourceSensor.text`-strings als "vertrouwd" gelden. V3's
+    //    hardcoded array (DEXCOM_NATIVE_UNKNOWN, DEXCOM_G6_NATIVE,
+    //    DEXCOM_G7_NATIVE, DEXCOM_G6_NATIVE_XDRIP, DEXCOM_G7_NATIVE_XDRIP,
+    //    DEXCOM_G7_XDRIP, LIBRE_2, LIBRE_2_NATIVE, LIBRE_3) is een STRIKTE
+    //    deelverzameling van V4's ADVANCED_FILTERING_SENSORS-set (dezelfde
+    //    negen, PLUS SYAI_TAG en — nieuw — RANDOM).
+    // 3) Dat verklaart de melding EXACT: CareSens Air stuurt "Random"
+    //    (RANDOM-waarde) — in V4 sinds kort wél vertrouwd, in V3 NOOIT. Vandaar
+    //    "random niet werkt" bij (in ieder geval) V3-gebruikers. Accu-Chek/
+    //    Simulator sturen strings die in GEEN ENKELE AAPS-versie een
+    //    SourceSensor matchen (komen altijd op UNKNOWN uit, nooit vertrouwd).
+    //    Alleen Dexcom G6 ("AAPS-Dexcom") en G7 ("G7") gebruikten al een
+    //    waarde die in BEIDE whitelists zit.
+    // 4) Doorsnede van beide whitelists (dus gegarandeerd werkend op zowel
+    //    V3 als V4-dev): AAPS-Dexcom/AAPS-DexcomG6/AAPS-DexcomG7/G6 Native/
+    //    G7 Native/G7/Libre2/Libre2 Native/Libre3. Voor de nieuwe universele
+    //    code is "AAPS-Dexcom" gekozen (i.p.v. bv. "G6 Native"): naast dat
+    //    'ie in de doorsnede zit, is dit de ENIGE van de negen die de
+    //    gebruiker zelf al live op een toestel getest heeft en bevestigd zag
+    //    werken (RONDE 88 hierboven) — een echte meting weegt zwaarder dan
+    //    de statische code-analyse alleen (zie RONDE 88's eigen kanttekening
+    //    dat "G6 Native" er op papier ook goed uitzag maar op het toestel
+    //    tóch "Unknown" gaf).
+    //
+    // [universalSourceCode] (AppSettings.xdripUniversalSourceCodeEnabled,
+    // door de aanroeper gelezen — zie SlotRuntime/BleConnectionService.kt,
+    // zelfde "buiten deze klasse gelezen, hier alleen het kale resultaat
+    // binnenkrijgen"-patroon als smoothing/KalmanSmoother.kt's
+    // breakInDecayFactor/strength): AAN -> "AAPS-Dexcom" voor ELKE
+    // sensortype, ook de simulator (letterlijk verzoek: "ook de virtuele").
+    // UIT (default) -> de bestaande, per-sensortype "best kloppende"
+    // omschrijving hieronder, ongewijzigd.
+    private fun sourceInfo(sensorType: SensorType, universalSourceCode: Boolean): String {
+        if (universalSourceCode) return "AAPS-Dexcom"
+        return when (sensorType) {
+            SensorType.CARESENS_AIR -> "Random"
+            SensorType.DEXCOM_G6 -> "AAPS-Dexcom"
+            SensorType.DEXCOM_G7 -> "G7"
+            SensorType.ACCUCHEK_SMARTGUIDE -> "AccuChek"
+            SensorType.SIMULATOR -> "FCLGlucoLinkSimulator"
+        }
     }
 
     /** 05/08/2026 (editor, RONDE 41 — op verzoek, "richtingspijl toont
@@ -125,7 +183,7 @@ object XDripBroadcaster {
         else -> "DoubleUp"
     }
 
-    private fun buildBundle(reading: GlucoseReading): Bundle = Bundle().apply {
+    private fun buildBundle(reading: GlucoseReading, universalSourceCode: Boolean): Bundle = Bundle().apply {
         putDouble(EXTRA_BG_ESTIMATE, reading.glucoseMgdl)
         putString(EXTRA_BG_SLOPE_NAME, trendName(reading.trendMgdlPerMin))
         // xDrip verwacht de slope in mg/dL PER MILLISECONDE (vandaar /60000,
@@ -133,7 +191,7 @@ object XDripBroadcaster {
         putDouble(EXTRA_BG_SLOPE, reading.trendMgdlPerMin.toDouble() / 60000.0)
         putLong(EXTRA_TIMESTAMP, reading.timestampMs)
         putLong(EXTRA_SENSOR_STARTED_AT, reading.sensorStartedAtMs)
-        putString(EXTRA_DATA_SOURCE_INFO, sourceInfo(reading.sensorType))
+        putString(EXTRA_DATA_SOURCE_INFO, sourceInfo(reading.sensorType, universalSourceCode))
     }
 
     /** Cache van pakketnamen met een geregistreerde ontvanger — ververst bij
@@ -160,13 +218,17 @@ object XDripBroadcaster {
         return resolveInfos.mapNotNull { it.activityInfo?.packageName }.distinct()
     }
 
-    fun broadcast(context: Context, reading: GlucoseReading) {
+    // 20/08/2026 (editor, RONDE 115) — nieuwe parameter [universalSourceCode],
+    // zie [sourceInfo]'s kdoc. Default `false` zodat bestaande aanroepen
+    // (als die er ooit los van BleConnectionService.kt zouden zijn)
+    // ongewijzigd blijven werken.
+    fun broadcast(context: Context, reading: GlucoseReading, universalSourceCode: Boolean = false) {
         val packages = resolveReceiverPackages(context)
         if (packages.isEmpty()) {
             Log.w(TAG, "Geen enkele app met een xDrip-broadcast-ontvanger gevonden — draait AAPS?")
             return
         }
-        val bundle = buildBundle(reading)
+        val bundle = buildBundle(reading, universalSourceCode)
         for (packageName in packages) {
             val intent = Intent(ACTION).apply {
                 putExtras(bundle)

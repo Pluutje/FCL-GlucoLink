@@ -11,8 +11,8 @@
       "type": "SINGLE",
       "filters": [],
       "attributes": [],
-      "versionCode": 126,
-      "versionName": "0.9.27c-smoothing-heading-order",
+      "versionCode": 129,
+      "versionName": "0.9.30-caresens-pin-card",
       "outputFile": "AndroidManifest.xml"
     }
   ],

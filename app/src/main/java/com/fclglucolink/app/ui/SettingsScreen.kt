@@ -70,6 +70,9 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit) {
     // oude, globale broadcastEnabled aan/uit-schakelaar: zie
     // AAPS-slotkiezer's kdoc verderop in dit bestand.
     val aapsActiveSlot by settings.aapsActiveSlot.collectAsState(initial = null)
+    // 20/08/2026 (editor, RONDE 115) — zie XDripBroadcaster.kt's kdoc bij
+    // sourceInfo().
+    val xdripUniversalSourceCodeEnabled by settings.xdripUniversalSourceCodeEnabled.collectAsState(initial = false)
     // 13/08/2026 (editor, RONDE 104, Fase 1) — zie ui/Units.kt's
     // [GlucoseUnit]-kdoc.
     val displayUnit by settings.displayUnit.collectAsState(initial = GlucoseUnit.MMOL)
@@ -177,6 +180,44 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit) {
                             onClick = { scope.launch { settings.setAapsActiveSlot(null) } },
                             shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3)
                         ) { Text("Off") }
+                    }
+
+                    HorizontalDivider()
+
+                    // 20/08/2026 (editor, RONDE 115, op verzoek: "een knop [...]
+                    // die bij ingeschakeld iedere sensor (ook de virtuele)
+                    // een universele code mee geeft die zowel in aaps 3 als
+                    // 4 werkt [...] en als hij is uitgeschakeld dan mag
+                    // gewoon de best kloppende omschrijving worden
+                    // meegestuurd") — zie XDripBroadcaster.kt's kdoc bij
+                    // sourceInfo() voor de volledige AAPS v3-vs-v4-analyse
+                    // die tot "AAPS-Dexcom" als universele waarde leidde.
+                    // Zelfde kopje/toelichting/switch-volgorde als de
+                    // Smoothing-kaart (RONDE 114c).
+                    Text(
+                        "Universal trusted source code",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Send every sensor (including the simulator) as a " +
+                            "single source description that's trusted for " +
+                            "\"SMB Always\" on both AAPS 3 and AAPS 4 — at " +
+                            "the cost of AAPS/Nightscout showing a generic " +
+                            "Dexcom label instead of the actual sensor. Off " +
+                            "sends the best-matching description per sensor " +
+                            "instead, which may not enable SMB Always on " +
+                            "every AAPS version.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        Switch(
+                            checked = xdripUniversalSourceCodeEnabled,
+                            onCheckedChange = { enabled ->
+                                scope.launch { settings.setXdripUniversalSourceCodeEnabled(enabled) }
+                            }
+                        )
                     }
                 }
             }

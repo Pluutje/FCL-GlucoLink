@@ -26,7 +26,7 @@ import kotlinx.coroutines.runBlocking
  * suspend, dus via een korte gelanceerde coroutine — de paar milliseconden
  * vóórdat dit doorkomt zijn nooit een probleem, er gebeurt toch nog niets
  * BLE-gerelateerds zo vroeg in de app-start.
- *  -----
+ *
  */
 class FclGlucoLinkApp : Application() {
     override fun onCreate() {

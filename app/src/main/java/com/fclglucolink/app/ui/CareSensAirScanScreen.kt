@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -237,6 +238,58 @@ fun CareSensAirScanScreen(onBack: () -> Unit, onScanned: (CareSensAirScanResult)
                             InfoRow("Sensor code", state.result.sensorCode)
                             InfoRow("Serial", state.result.serial)
                             InfoRow("Expires", expiryText)
+                        }
+                    }
+                    // 20/08/2026 (editor, RONDE 117, op verzoek na Ronde 116 —
+                    // de PIN stond daar als gewone InfoRow-tekstregel tussen
+                    // de andere velden en de waarschuwing eronder in klein
+                    // grijs, wat volgens een schermmockup makkelijk over het
+                    // hoofd te zien was. De PIN krijgt nu een eigen opvallende
+                    // kaart (tertiaryContainer — dezelfde "let op dit"-kleur
+                    // die Material3 daarvoor heeft, past zich vanzelf aan het
+                    // dark theme aan net als de rest van het scherm) met
+                    // icoon en grote cijfers, in plaats van één regel tussen
+                    // de rest.
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                        ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = androidx.compose.ui.Alignment.Top
+                        ) {
+                            Icon(
+                                Icons.Filled.VpnKey,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    "Bluetooth pairing PIN",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                                Text(
+                                    state.result.pin,
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                                Text(
+                                    "Use this when your phone asks for a " +
+                                        "Bluetooth pairing PIN in the next step " +
+                                        "(also printed on the sensor packaging " +
+                                        "as \"PINCODE\" / \"CODE PIN\") — not " +
+                                        "whatever Android itself suggests (e.g. " +
+                                        "\"try 0000 or 1234\"), that's just a " +
+                                        "generic guess and won't work.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                            }
                         }
                     }
                     Button(onClick = { onScanned(state.result) }, modifier = Modifier.fillMaxWidth()) {
