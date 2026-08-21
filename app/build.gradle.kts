@@ -29,8 +29,8 @@ android {
         applicationId = "com.fclglucolink.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 129
-        versionName = "0.9.30-caresens-pin-card"
+        versionCode = 131
+        versionName = "0.9.32-calibrated-column-fix"
 
         // 01/08/2026 (editor) — alleen arm64-v8a: libCALCULATION.so (in
         // app/src/main/jniLibs/arm64-v8a/) is alleen voor die ABI

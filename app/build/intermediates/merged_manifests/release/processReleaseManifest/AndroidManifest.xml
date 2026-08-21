@@ -12,8 +12,8 @@
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.fclglucolink.app"
-    android:versionCode="129"
-    android:versionName="0.9.30-caresens-pin-card" >
+    android:versionCode="131"
+    android:versionName="0.9.32-calibrated-column-fix" >
 
     <uses-sdk
         android:minSdkVersion="26"

@@ -72,3 +72,35 @@ generate_cxx_metadata
   [gap of 65ms]
 generate_cxx_metadata completed in 2200ms
 
+# C/C++ build system timings
+generate_cxx_metadata
+  [gap of 43ms]
+  create-invalidation-state 94ms
+  execute-generate-process
+    exec-configure 507ms
+    [gap of 98ms]
+  execute-generate-process completed in 607ms
+  [gap of 123ms]
+  write-metadata-json-to-file 14ms
+generate_cxx_metadata completed in 887ms
+
+# C/C++ build system timings
+generate_cxx_metadata
+  execute-generate-process
+    exec-configure 2236ms
+    [gap of 95ms]
+  execute-generate-process completed in 2339ms
+  [gap of 103ms]
+generate_cxx_metadata completed in 2468ms
+
+# C/C++ build system timings
+generate_cxx_metadata
+  [gap of 44ms]
+  create-invalidation-state 117ms
+  execute-generate-process
+    exec-configure 306ms
+    [gap of 87ms]
+  execute-generate-process completed in 395ms
+  [gap of 103ms]
+generate_cxx_metadata completed in 665ms
+

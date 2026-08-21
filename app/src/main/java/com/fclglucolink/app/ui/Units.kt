@@ -61,6 +61,24 @@ fun Double.formatForDisplayWithUnit(unit: GlucoseUnit): String =
     "${this.formatForDisplay(unit)} ${unit.suffix}"
 
 /**
+ * 21/08/2026 (editor, RONDE 118, op verzoek — na de vraag waarom Raw/
+ * Calibrated/Filtered op StatusScreen.kt's pipeline-rij (PipelineValuesRow)
+ * continu gelijk lijken) — die rij bestaat juist om de STAPPEN in de
+ * pijplijn te kunnen onderscheiden, dus heeft eerder MEER precisie nodig
+ * dan de hoofdcirkel (die bewust afgerond is op 1 decimaal/hele getallen
+ * voor leesbaarheid). Bij mmol/L is 1 decimaal ≈ 1,8 mg/dL per stap — kleiner
+ * dan dat verschilt het Kalman-filter vaak wél degelijk, maar was het na
+ * afronding onzichtbaar. Losse functie i.p.v. [formatForDisplay] zelf een
+ * precisie-parameter geven: de hoofdweergave (cirkel, grafiek, overal
+ * elders) moet overal in de app exact hetzelfde blijven afronden, dit is
+ * uitsluitend voor die ene diagnostische rij.
+ */
+fun Double.formatForDisplayPrecise(unit: GlucoseUnit): String = when (unit) {
+    GlucoseUnit.MGDL -> "%.1f".format(this)
+    GlucoseUnit.MMOL -> "%.2f".format(this.mgdlToMmol())
+}
+
+/**
  * Omgekeerde richting voor invoervelden (fingerstick, simulator/handmatige
  * BG-invoer): de gebruiker typt een getal in [unit], dit levert de mg/dL-
  * waarde op die intern/voor opslag gebruikt wordt. `null` bij een leeg/

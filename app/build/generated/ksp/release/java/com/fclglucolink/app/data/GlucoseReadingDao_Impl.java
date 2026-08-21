@@ -46,7 +46,7 @@ public final class GlucoseReadingDao_Impl implements GlucoseReadingDao {
       @Override
       @NonNull
       protected String createQuery() {
-        return "INSERT OR ABORT INTO `glucose_readings` (`id`,`glucoseMgdl`,`trendMgdlPerMin`,`timestampMs`,`sensorStartedAtMs`,`sensorType`,`rawSensorMgdl`) VALUES (nullif(?, 0),?,?,?,?,?,?)";
+        return "INSERT OR ABORT INTO `glucose_readings` (`id`,`glucoseMgdl`,`trendMgdlPerMin`,`timestampMs`,`sensorStartedAtMs`,`sensorType`,`rawSensorMgdl`,`calibratedMgdl`) VALUES (nullif(?, 0),?,?,?,?,?,?,?)";
       }
 
       @Override
@@ -62,6 +62,11 @@ public final class GlucoseReadingDao_Impl implements GlucoseReadingDao {
           statement.bindNull(7);
         } else {
           statement.bindDouble(7, entity.getRawSensorMgdl());
+        }
+        if (entity.getCalibratedMgdl() == null) {
+          statement.bindNull(8);
+        } else {
+          statement.bindDouble(8, entity.getCalibratedMgdl());
         }
       }
     };
@@ -207,6 +212,7 @@ public final class GlucoseReadingDao_Impl implements GlucoseReadingDao {
           final int _cursorIndexOfSensorStartedAtMs = CursorUtil.getColumnIndexOrThrow(_cursor, "sensorStartedAtMs");
           final int _cursorIndexOfSensorType = CursorUtil.getColumnIndexOrThrow(_cursor, "sensorType");
           final int _cursorIndexOfRawSensorMgdl = CursorUtil.getColumnIndexOrThrow(_cursor, "rawSensorMgdl");
+          final int _cursorIndexOfCalibratedMgdl = CursorUtil.getColumnIndexOrThrow(_cursor, "calibratedMgdl");
           final List<GlucoseReadingEntity> _result = new ArrayList<GlucoseReadingEntity>(_cursor.getCount());
           while (_cursor.moveToNext()) {
             final GlucoseReadingEntity _item;
@@ -228,7 +234,13 @@ public final class GlucoseReadingDao_Impl implements GlucoseReadingDao {
             } else {
               _tmpRawSensorMgdl = _cursor.getDouble(_cursorIndexOfRawSensorMgdl);
             }
-            _item = new GlucoseReadingEntity(_tmpId,_tmpGlucoseMgdl,_tmpTrendMgdlPerMin,_tmpTimestampMs,_tmpSensorStartedAtMs,_tmpSensorType,_tmpRawSensorMgdl);
+            final Double _tmpCalibratedMgdl;
+            if (_cursor.isNull(_cursorIndexOfCalibratedMgdl)) {
+              _tmpCalibratedMgdl = null;
+            } else {
+              _tmpCalibratedMgdl = _cursor.getDouble(_cursorIndexOfCalibratedMgdl);
+            }
+            _item = new GlucoseReadingEntity(_tmpId,_tmpGlucoseMgdl,_tmpTrendMgdlPerMin,_tmpTimestampMs,_tmpSensorStartedAtMs,_tmpSensorType,_tmpRawSensorMgdl,_tmpCalibratedMgdl);
             _result.add(_item);
           }
           return _result;
@@ -261,6 +273,7 @@ public final class GlucoseReadingDao_Impl implements GlucoseReadingDao {
           final int _cursorIndexOfSensorStartedAtMs = CursorUtil.getColumnIndexOrThrow(_cursor, "sensorStartedAtMs");
           final int _cursorIndexOfSensorType = CursorUtil.getColumnIndexOrThrow(_cursor, "sensorType");
           final int _cursorIndexOfRawSensorMgdl = CursorUtil.getColumnIndexOrThrow(_cursor, "rawSensorMgdl");
+          final int _cursorIndexOfCalibratedMgdl = CursorUtil.getColumnIndexOrThrow(_cursor, "calibratedMgdl");
           final GlucoseReadingEntity _result;
           if (_cursor.moveToFirst()) {
             final long _tmpId;
@@ -281,7 +294,13 @@ public final class GlucoseReadingDao_Impl implements GlucoseReadingDao {
             } else {
               _tmpRawSensorMgdl = _cursor.getDouble(_cursorIndexOfRawSensorMgdl);
             }
-            _result = new GlucoseReadingEntity(_tmpId,_tmpGlucoseMgdl,_tmpTrendMgdlPerMin,_tmpTimestampMs,_tmpSensorStartedAtMs,_tmpSensorType,_tmpRawSensorMgdl);
+            final Double _tmpCalibratedMgdl;
+            if (_cursor.isNull(_cursorIndexOfCalibratedMgdl)) {
+              _tmpCalibratedMgdl = null;
+            } else {
+              _tmpCalibratedMgdl = _cursor.getDouble(_cursorIndexOfCalibratedMgdl);
+            }
+            _result = new GlucoseReadingEntity(_tmpId,_tmpGlucoseMgdl,_tmpTrendMgdlPerMin,_tmpTimestampMs,_tmpSensorStartedAtMs,_tmpSensorType,_tmpRawSensorMgdl,_tmpCalibratedMgdl);
           } else {
             _result = null;
           }
@@ -320,6 +339,7 @@ public final class GlucoseReadingDao_Impl implements GlucoseReadingDao {
           final int _cursorIndexOfSensorStartedAtMs = CursorUtil.getColumnIndexOrThrow(_cursor, "sensorStartedAtMs");
           final int _cursorIndexOfSensorType = CursorUtil.getColumnIndexOrThrow(_cursor, "sensorType");
           final int _cursorIndexOfRawSensorMgdl = CursorUtil.getColumnIndexOrThrow(_cursor, "rawSensorMgdl");
+          final int _cursorIndexOfCalibratedMgdl = CursorUtil.getColumnIndexOrThrow(_cursor, "calibratedMgdl");
           final List<GlucoseReadingEntity> _result = new ArrayList<GlucoseReadingEntity>(_cursor.getCount());
           while (_cursor.moveToNext()) {
             final GlucoseReadingEntity _item;
@@ -341,7 +361,13 @@ public final class GlucoseReadingDao_Impl implements GlucoseReadingDao {
             } else {
               _tmpRawSensorMgdl = _cursor.getDouble(_cursorIndexOfRawSensorMgdl);
             }
-            _item = new GlucoseReadingEntity(_tmpId,_tmpGlucoseMgdl,_tmpTrendMgdlPerMin,_tmpTimestampMs,_tmpSensorStartedAtMs,_tmpSensorType,_tmpRawSensorMgdl);
+            final Double _tmpCalibratedMgdl;
+            if (_cursor.isNull(_cursorIndexOfCalibratedMgdl)) {
+              _tmpCalibratedMgdl = null;
+            } else {
+              _tmpCalibratedMgdl = _cursor.getDouble(_cursorIndexOfCalibratedMgdl);
+            }
+            _item = new GlucoseReadingEntity(_tmpId,_tmpGlucoseMgdl,_tmpTrendMgdlPerMin,_tmpTimestampMs,_tmpSensorStartedAtMs,_tmpSensorType,_tmpRawSensorMgdl,_tmpCalibratedMgdl);
             _result.add(_item);
           }
           return _result;
@@ -376,6 +402,7 @@ public final class GlucoseReadingDao_Impl implements GlucoseReadingDao {
           final int _cursorIndexOfSensorStartedAtMs = CursorUtil.getColumnIndexOrThrow(_cursor, "sensorStartedAtMs");
           final int _cursorIndexOfSensorType = CursorUtil.getColumnIndexOrThrow(_cursor, "sensorType");
           final int _cursorIndexOfRawSensorMgdl = CursorUtil.getColumnIndexOrThrow(_cursor, "rawSensorMgdl");
+          final int _cursorIndexOfCalibratedMgdl = CursorUtil.getColumnIndexOrThrow(_cursor, "calibratedMgdl");
           final GlucoseReadingEntity _result;
           if (_cursor.moveToFirst()) {
             final long _tmpId;
@@ -396,7 +423,13 @@ public final class GlucoseReadingDao_Impl implements GlucoseReadingDao {
             } else {
               _tmpRawSensorMgdl = _cursor.getDouble(_cursorIndexOfRawSensorMgdl);
             }
-            _result = new GlucoseReadingEntity(_tmpId,_tmpGlucoseMgdl,_tmpTrendMgdlPerMin,_tmpTimestampMs,_tmpSensorStartedAtMs,_tmpSensorType,_tmpRawSensorMgdl);
+            final Double _tmpCalibratedMgdl;
+            if (_cursor.isNull(_cursorIndexOfCalibratedMgdl)) {
+              _tmpCalibratedMgdl = null;
+            } else {
+              _tmpCalibratedMgdl = _cursor.getDouble(_cursorIndexOfCalibratedMgdl);
+            }
+            _result = new GlucoseReadingEntity(_tmpId,_tmpGlucoseMgdl,_tmpTrendMgdlPerMin,_tmpTimestampMs,_tmpSensorStartedAtMs,_tmpSensorType,_tmpRawSensorMgdl,_tmpCalibratedMgdl);
           } else {
             _result = null;
           }

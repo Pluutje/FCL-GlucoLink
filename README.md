@@ -7219,4 +7219,66 @@ Gewijzigd: `ui/CareSensAirScanScreen.kt`, `ui/PairingScreen.kt`.
 
 versionCode 129, versionName "0.9.30-caresens-pin-card".
 
+## Ronde 118 (21/08/2026) — 2 decimalen op de pijplijn-rij
+
+**Aanleiding.** Op de nieuwe telefoon viel op dat Raw/Calibrated/Filtered op
+de pijplijn-rij (Ronde 113) continu identiek leken, terwijl de sensor
+(bijna aan het einde van zijn levensduur) toch behoorlijk springt. Kalibratie
+staat wel aan, maar zonder nieuwe vingerprik sinds herstart is Raw=Calibrated
+inderdaad verwacht — de vraag ging over Calibrated vs. Filtered.
+
+**Analyse.** Bij mmol/L is 1 decimaal ≈ 1,8 mg/dL per stap. Het Kalman-filter
+corrigeert vaak in kleinere stappen dan dat, zeker bij "Medium" sterkte — het
+verschil is er dus wellicht wél, maar wordt na afronding op 1 decimaal
+onzichtbaar. Genoemd, maar vermoedelijk niet de hoofdoorzaak: de "sensor
+gestart op"-tijdstempel voor het inloop-filter (Ronde 111) is na de
+telefoonwissel gereset, waardoor die de laatste uren juist harder had moeten
+dempen (het tegenovergestelde effect van "gelijk aan elkaar").
+
+**Fix.** Nieuwe `Double.formatForDisplayPrecise()` in `ui/Units.kt`
+(mg/dL: 1 decimaal, mmol/L: 2 decimalen) — uitsluitend gebruikt door
+`StatusScreen.kt`'s `PipelineValueColumn`, de hoofdcirkel/grafiek/rest van de
+app blijven op de bestaande, bewust afgeronde weergave.
+
+**Verificatie.** Balance-checker op beide gewijzigde bestanden.
+
+Gewijzigd: `ui/Units.kt`, `ui/StatusScreen.kt`.
+
+versionCode 130, versionName "0.9.31-pipeline-precision".
+
+## Ronde 119 (21/08/2026) — BUGFIX: "Calibrated" op de pijplijn-rij was in werkelijkheid altijd Filtered
+
+**Melding.** Zelfs met 2 decimalen (Ronde 118) bleven Calibrated en Filtered
+tot op de honderdste identiek, terwijl kalibratie aanstond. Screenshots van
+het Calibration-scherm bevestigden: 0 vingerprik-entries, handmatige offset
++0,00 — kalibratie is in dit geval dus terecht een no-op (Calibrated hoort
+gelijk te zijn aan Raw, niet aan Filtered).
+
+**Root cause.** `GlucoseReading.calibratedMgdl` (Ronde 113) werd nooit
+opgeslagen: `GlucoseReadingEntity` had er simpelweg geen kolom voor.
+`GlucoseReadingStore` schrijft/leest élke weergegeven meting via Room (ook
+"de laatste meting" op het startscherm) — bij het terugbouwen viel
+`toReading()` daardoor steeds terug op `GlucoseReading`'s klasse-default
+(`calibratedMgdl = glucoseMgdl`, oftewel de FINALE, al-gesmoothde waarde).
+De "Calibrated"-kolom liet dus bij elke lezing gewoon Filtered nogmaals
+zien onder het verkeerde label — vandaar dat ze nooit uit elkaar liepen,
+ongeacht wat kalibratie/smoothing werkelijk deden. Het zichtbare verschil
+tussen Raw en die kolom was in werkelijkheid het Raw-vs-Filtered-verschil
+(dus door smoothing, niet door kalibratie).
+
+**Fix.** Nieuwe nullable `calibratedMgdl`-kolom op `glucose_readings`
+(`GlucoseReadingEntity.kt`, MIGRATION_6_7 in `FclGlucoLinkDatabase.kt`,
+databaseversie 6 → 7 — zelfde "ALTER TABLE i.p.v. destructive migration"-
+patroon als de eerdere migraties). `toEntity()`/`toReading()` geven het veld
+nu door; bestaande rijen van vóór deze ronde krijgen `null` en vallen terug
+op `glucoseMgdl` (functioneel identiek aan "geen kalibratie toegepast",
+wat voor die oude rijen sowieso niet meer te reconstrueren was).
+
+**Verificatie.** Balance-checker op beide gewijzigde bestanden. Room-DAO's
+gebruiken overal `SELECT *`, dus geen query-wijzigingen nodig.
+
+Gewijzigd: `data/GlucoseReadingEntity.kt`, `data/FclGlucoLinkDatabase.kt`.
+
+versionCode 131, versionName "0.9.32-calibrated-column-fix".
+
 versionCode 117, versionName `0.9.20-alarm-alert-mode-fix`.

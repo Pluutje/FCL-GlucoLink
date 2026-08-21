@@ -1,5 +1,5 @@
 # ninja log v5
-1	972	8089221496532869	CMakeFiles/caresensair_bridge.dir/caresensair_bridge.cpp.o	21a078771bd0f3fc
-976	1088	8089221497738653	D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v8.1-WV/app/build/intermediates/cxx/RelWithDebInfo/6r2p5g44/obj/arm64-v8a/libcaresensair_bridge.so	5abe1c11da0f3f2c
-8	768	8089233785532576	CMakeFiles/caresensair_bridge.dir/caresensair_bridge.cpp.o	21a078771bd0f3fc
-768	921	8089233787217327	D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v8.1-WV/app/build/intermediates/cxx/RelWithDebInfo/6r2p5g44/obj/arm64-v8a/libcaresensair_bridge.so	5abe1c11da0f3f2c
+1	1057	8090293018802972	CMakeFiles/caresensair_bridge.dir/caresensair_bridge.cpp.o	372c5ac7037ff079
+1063	1235	8090293020824717	D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v8.2-WV/app/build/intermediates/cxx/RelWithDebInfo/6r2p5g44/obj/arm64-v8a/libcaresensair_bridge.so	db64e405a64c2176
+5	827	8090312650893182	CMakeFiles/caresensair_bridge.dir/caresensair_bridge.cpp.o	372c5ac7037ff079
+828	1001	8090312652723967	D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v8.2-WV/app/build/intermediates/cxx/RelWithDebInfo/6r2p5g44/obj/arm64-v8a/libcaresensair_bridge.so	db64e405a64c2176

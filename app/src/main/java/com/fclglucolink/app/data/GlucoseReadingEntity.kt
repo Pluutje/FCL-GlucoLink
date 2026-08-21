@@ -27,7 +27,22 @@ data class GlucoseReadingEntity(
     // krijgen gewoon null, en de UI valt dan terug op glucoseMgdl zelf (zie
     // toReading()) — functioneel identiek aan "geen kalibratie toegepast",
     // wat voor die oude rijen ook gewoon waar is.
-    val rawSensorMgdl: Double? = null
+    val rawSensorMgdl: Double? = null,
+    // 21/08/2026 (editor, RONDE 119 — BUGFIX na live-melding: "Calibrated en
+    // Filtered zijn continu gelijk") — [GlucoseReading.calibratedMgdl]
+    // (Ronde 113) werd HELEMAAL NIET opgeslagen: deze kolom ontbrak
+    // volledig, dus toReading() hieronder viel steeds terug op de klasse-
+    // default (`= glucoseMgdl`, oftewel de FINALE, al-gesmoothde waarde).
+    // StatusScreen.kt's "Calibrated"-kolom toonde zo bij elke lezing die via
+    // GlucoseReadingStore ging (dus ALTIJD, ook de "laatste meting" op het
+    // startscherm) in werkelijkheid gewoon de Filtered-waarde nogmaals,
+    // onder het verkeerde label — vandaar dat ze nooit uit elkaar liepen.
+    // Zelfde nullable-zonder-default-patroon als [rawSensorMgdl] hierboven:
+    // bestaande rijen (van vóór deze ronde) krijgen null, UI valt terug op
+    // glucoseMgdl — functioneel identiek aan "geen kalibratie toegepast",
+    // wat voor die oude rijen (waar dit veld sowieso al verloren was) niet
+    // meer te reconstrueren is.
+    val calibratedMgdl: Double? = null
 )
 
 fun GlucoseReading.toEntity(): GlucoseReadingEntity = GlucoseReadingEntity(
@@ -36,7 +51,8 @@ fun GlucoseReading.toEntity(): GlucoseReadingEntity = GlucoseReadingEntity(
     timestampMs = timestampMs,
     sensorStartedAtMs = sensorStartedAtMs,
     sensorType = sensorType.name,
-    rawSensorMgdl = rawSensorMgdl
+    rawSensorMgdl = rawSensorMgdl,
+    calibratedMgdl = calibratedMgdl
 )
 
 fun GlucoseReadingEntity.toReading(): GlucoseReading = GlucoseReading(
@@ -45,5 +61,6 @@ fun GlucoseReadingEntity.toReading(): GlucoseReading = GlucoseReading(
     timestampMs = timestampMs,
     sensorStartedAtMs = sensorStartedAtMs,
     sensorType = runCatching { SensorType.valueOf(sensorType) }.getOrDefault(SensorType.CARESENS_AIR),
-    rawSensorMgdl = rawSensorMgdl ?: glucoseMgdl
+    rawSensorMgdl = rawSensorMgdl ?: glucoseMgdl,
+    calibratedMgdl = calibratedMgdl ?: glucoseMgdl
 )

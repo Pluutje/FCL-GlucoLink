@@ -39,7 +39,7 @@
 				{
 					"directoryIndex" : 0,
 					"id" : "caresensair_bridge::@6890427a1f51a3e7e1df",
-					"jsonFile" : "target-caresensair_bridge-RelWithDebInfo-930d0e465c88b9dae225.json",
+					"jsonFile" : "target-caresensair_bridge-RelWithDebInfo-5818ab38fac592523393.json",
 					"name" : "caresensair_bridge",
 					"projectIndex" : 0
 				}
@@ -49,8 +49,8 @@
 	"kind" : "codemodel",
 	"paths" : 
 	{
-		"build" : "D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v8.1-WV/app/.cxx/RelWithDebInfo/6r2p5g44/arm64-v8a",
-		"source" : "D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v8.1-WV/app/src/main/cpp"
+		"build" : "D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v8.2-WV/app/.cxx/RelWithDebInfo/6r2p5g44/arm64-v8a",
+		"source" : "D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v8.2-WV/app/src/main/cpp"
 	},
 	"version" : 
 	{

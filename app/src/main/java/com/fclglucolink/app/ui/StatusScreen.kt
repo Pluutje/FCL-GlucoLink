@@ -715,8 +715,11 @@ private fun PipelineValueColumn(label: String, value: Double, unit: GlucoseUnit)
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.secondary
         )
+        // 21/08/2026 (editor, RONDE 118) — formatForDisplayPrecise() i.p.v.
+        // formatForDisplay(): zie Units.kt's kdoc daar. Alleen hier, deze rij
+        // bestaat om de pijplijnstappen te kunnen onderscheiden.
         Text(
-            value.formatForDisplay(unit),
+            value.formatForDisplayPrecise(unit),
             style = MaterialTheme.typography.bodyMedium
         )
     }

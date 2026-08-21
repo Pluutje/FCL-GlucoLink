@@ -6,7 +6,7 @@
 		},
 		{
 			"isGenerated" : true,
-			"path" : "D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v8.1-WV/app/.cxx/RelWithDebInfo/6r2p5g44/arm64-v8a/CMakeFiles/3.22.1-g37088a8-dirty/CMakeSystem.cmake"
+			"path" : "D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v8.2-WV/app/.cxx/Debug/70425w2u/arm64-v8a/CMakeFiles/3.22.1-g37088a8-dirty/CMakeSystem.cmake"
 		},
 		{
 			"isExternal" : true,
@@ -36,11 +36,11 @@
 		},
 		{
 			"isGenerated" : true,
-			"path" : "D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v8.1-WV/app/.cxx/RelWithDebInfo/6r2p5g44/arm64-v8a/CMakeFiles/3.22.1-g37088a8-dirty/CMakeCCompiler.cmake"
+			"path" : "D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v8.2-WV/app/.cxx/Debug/70425w2u/arm64-v8a/CMakeFiles/3.22.1-g37088a8-dirty/CMakeCCompiler.cmake"
 		},
 		{
 			"isGenerated" : true,
-			"path" : "D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v8.1-WV/app/.cxx/RelWithDebInfo/6r2p5g44/arm64-v8a/CMakeFiles/3.22.1-g37088a8-dirty/CMakeCXXCompiler.cmake"
+			"path" : "D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v8.2-WV/app/.cxx/Debug/70425w2u/arm64-v8a/CMakeFiles/3.22.1-g37088a8-dirty/CMakeCXXCompiler.cmake"
 		},
 		{
 			"isCMake" : true,
@@ -173,8 +173,8 @@
 	"kind" : "cmakeFiles",
 	"paths" : 
 	{
-		"build" : "D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v8.1-WV/app/.cxx/RelWithDebInfo/6r2p5g44/arm64-v8a",
-		"source" : "D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v8.1-WV/app/src/main/cpp"
+		"build" : "D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v8.2-WV/app/.cxx/Debug/70425w2u/arm64-v8a",
+		"source" : "D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v8.2-WV/app/src/main/cpp"
 	},
 	"version" : 
 	{

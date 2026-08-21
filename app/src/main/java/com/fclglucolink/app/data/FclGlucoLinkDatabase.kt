@@ -90,9 +90,22 @@ private val MIGRATION_5_6 = object : Migration(5, 6) {
     }
 }
 
+/** 21/08/2026 (editor, RONDE 119 — BUGFIX) — versie 6 -> 7: nieuwe nullable
+ *  `calibratedMgdl`-kolom op `glucose_readings`, zie GlucoseReadingEntity.kt's
+ *  kdoc bij dat veld voor de volledige aanleiding (het veld ontbrak
+ *  volledig, waardoor StatusScreen.kt's pijplijn-rij "Calibrated" in
+ *  werkelijkheid altijd gewoon Filtered nogmaals liet zien). Zelfde
+ *  "ALTER TABLE i.p.v. destructive migration"-redenering als de eerdere
+ *  migraties hierboven. */
+private val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `glucose_readings` ADD COLUMN `calibratedMgdl` REAL")
+    }
+}
+
 @Database(
     entities = [GlucoseReadingEntity::class, CalibrationEntryEntity::class, SensorSwitchEventEntity::class],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class FclGlucoLinkDatabase : RoomDatabase() {
@@ -110,7 +123,7 @@ abstract class FclGlucoLinkDatabase : RoomDatabase() {
                     context.applicationContext,
                     FclGlucoLinkDatabase::class.java,
                     "fclglucolink.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7).build().also { instance = it }
             }
     }
 }

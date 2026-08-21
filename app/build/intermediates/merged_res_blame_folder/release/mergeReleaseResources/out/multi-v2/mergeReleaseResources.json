@@ -7557,23 +7557,6 @@
                     }
                 },
                 {
-                    "source": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v8.1-WV\\app\\src\\main\\res\\values\\strings.xml",
-                    "from": {
-                        "startLines": "1",
-                        "startColumns": "4",
-                        "startOffsets": "16",
-                        "endColumns": "49",
-                        "endOffsets": "61"
-                    },
-                    "to": {
-                        "startLines": "110",
-                        "startColumns": "4",
-                        "startOffsets": "6873",
-                        "endColumns": "49",
-                        "endOffsets": "6918"
-                    }
-                },
-                {
                     "source": "C:\\Users\\palap\\.gradle\\caches\\transforms-4\\07feeaf8e10d4191454c9a7f406bdfc8\\transformed\\savedstate-1.2.1\\res\\values\\values.xml",
                     "from": {
                         "startLines": "2",
@@ -7624,6 +7607,23 @@
                         "endLines": "83,249,492,495",
                         "endColumns": "52,24,24,24",
                         "endOffsets": "5419,17123,27308,27423"
+                    }
+                },
+                {
+                    "source": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v8.2-WV\\app\\src\\main\\res\\values\\strings.xml",
+                    "from": {
+                        "startLines": "1",
+                        "startColumns": "4",
+                        "startOffsets": "16",
+                        "endColumns": "49",
+                        "endOffsets": "61"
+                    },
+                    "to": {
+                        "startLines": "110",
+                        "startColumns": "4",
+                        "startOffsets": "6873",
+                        "endColumns": "49",
+                        "endOffsets": "6918"
                     }
                 },
                 {
@@ -7790,7 +7790,7 @@
                     }
                 },
                 {
-                    "source": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v8.1-WV\\app\\src\\main\\res\\values\\themes.xml",
+                    "source": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v8.2-WV\\app\\src\\main\\res\\values\\themes.xml",
                     "from": {
                         "startLines": "4",
                         "startColumns": "4",
