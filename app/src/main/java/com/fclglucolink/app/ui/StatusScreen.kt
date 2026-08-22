@@ -824,6 +824,20 @@ private fun CompactSensorSummary(
             // aftelling toont als het volle statusscherm, i.p.v. daar zonder
             // aftelling te blijven hangen.
             val typicalSensorDays by settings.dexcomG6TypicalSensorDays(slot).collectAsState(initial = null)
+            // 22/08/2026 (editor, RONDE 124, CRITICAL FIX — op verzoek na
+            // live-melding: "de info die terug komt klopt niet", dit
+            // kaartje toonde het generieke "no response from the
+            // transmitter (timeout)" terwijl het volle statusscherm
+            // gelijktijdig de ECHTE reden ("invalid") toonde) — deze drie
+            // Ronde-120-parameters ontbraken hier sinds hun introductie:
+            // dexcomG6StatusText() valt zonder ze terug op de timeout-tekst,
+            // ongeacht de daadwerkelijke infoCode. Zie
+            // DexcomG6StatusScreen.kt's identieke collectAsState-aanroepen
+            // voor dezelfde drie velden.
+            val lastSessionStartInfoCode by settings.dexcomG6LastSessionStartInfoCode(slot).collectAsState(initial = null)
+            val lastSessionStartAttemptAtMs by settings.dexcomG6LastSessionStartAttemptAtMs(slot).collectAsState(initial = null)
+            val readingStoreForStatus = remember { GlucoseReadingStore(context) }
+            val lastRealReadingForStatus by readingStoreForStatus.latestReading(SensorType.DEXCOM_G6).collectAsState(initial = null)
             val text = dexcomG6StatusText(
                 connectionState = connectionState,
                 lastConnectedAtMs = lastConnectedAtMs,
@@ -833,7 +847,10 @@ private fun CompactSensorSummary(
                 warmupSeconds = warmupSeconds,
                 nowMs = nowMs,
                 sessionStartFailCount = sessionStartFailCount,
-                typicalSensorDays = typicalSensorDays
+                typicalSensorDays = typicalSensorDays,
+                lastSessionStartInfoCode = lastSessionStartInfoCode,
+                lastSessionStartAttemptAtMs = lastSessionStartAttemptAtMs,
+                lastRealReadingAtMs = lastRealReadingForStatus?.timestampMs
             )
             // Looptijd = sinds de bevestigde sessionStart (zelfde moment als
             // de "Started"-rij op DexcomG6StatusScreen.kt), niet sinds de

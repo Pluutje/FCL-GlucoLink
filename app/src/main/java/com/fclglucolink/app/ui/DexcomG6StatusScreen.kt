@@ -33,10 +33,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.fclglucolink.app.data.AppSettings
+import com.fclglucolink.app.data.GlucoseReadingStore
 import com.fclglucolink.app.sensor.ConnectionState
 import com.fclglucolink.app.sensor.SensorSlot
+import com.fclglucolink.app.sensor.SensorType
 import com.fclglucolink.app.sensor.ble.ConnectionStatusBridge
 import com.fclglucolink.app.sensor.dexcomg6.DexcomG6CalibrationState
+import com.fclglucolink.app.sensor.dexcomg6.DexcomG6Protocol
 import com.fclglucolink.app.sensor.dexcomg6.dexcomG6FallbackWarmupSeconds
 import com.fclglucolink.app.startBleConnectionService
 import com.fclglucolink.app.stopBleConnectionService
@@ -120,6 +123,26 @@ fun DexcomG6StatusScreen(
     // een vastgelopen "Sending sensor start…" na een paar mislukkingen
     // duidelijk zien dat er iets misgaat.
     val sessionStartFailCount by settings.dexcomG6SessionStartFailCount(slot).collectAsState(initial = 0)
+    // 22/08/2026 (editor, RONDE 120) — zie dexcomG6StatusText()'s kdoc bij
+    // deze drie parameters voor de volledige aanleiding ("blackbox"-klacht +
+    // een verkeerde, hardcoded afwijzingsreden).
+    val lastSessionStartInfoCode by settings.dexcomG6LastSessionStartInfoCode(slot).collectAsState(initial = null)
+    val lastSessionStartAttemptAtMs by settings.dexcomG6LastSessionStartAttemptAtMs(slot).collectAsState(initial = null)
+    // 22/08/2026 (editor, RONDE 121) — zie dexcomG6StatusText()'s kdoc bij
+    // deze parameter: onderscheidt "bezig met automatisch stoppen" van het
+    // generieke "Sending sensor start…".
+    val lastAutoStopAtMs by settings.dexcomG6LastAutoStopAtMs(slot).collectAsState(initial = null)
+    // 22/08/2026 (editor, RONDE 124, op verzoek — "als de starttijd niet
+    // terug komt uit de transmitter dan moeten we gewoon de starttijd [...]
+    // van het invoeren van de sensorcode gebruiken") — zie
+    // AppSettings.setDexcomG6PendingNewSensorCode()'s kdoc: alleen gebruikt
+    // als WEERGAVE-terugvaloptie hieronder bij startedText/endText, nooit
+    // voor de warmup-aftelling/het inloopfilter (die blijven uitsluitend op
+    // [sessionStartConfirmedAtMs] varen — een niet-bevestigde gok mag geen
+    // harde-tijd-berekening aansturen).
+    val pendingCodeQueuedAtMs by settings.dexcomG6PendingNewSensorCodeQueuedAtMs(slot).collectAsState(initial = null)
+    val readingStore = remember { GlucoseReadingStore(context) }
+    val lastRealReading by readingStore.latestReading(SensorType.DEXCOM_G6).collectAsState(initial = null)
 
     // 09/08/2026 (editor, RONDE 65) — zie dexcomG6StatusText()'s kdoc: de
     // "Xh Ym warmup remaining"-aftelling moet blijven doortikken zolang dit
@@ -141,7 +164,11 @@ fun DexcomG6StatusScreen(
         warmupSeconds = warmupSeconds,
         typicalSensorDays = typicalSensorDays,
         nowMs = nowTickMs,
-        sessionStartFailCount = sessionStartFailCount
+        sessionStartFailCount = sessionStartFailCount,
+        lastSessionStartInfoCode = lastSessionStartInfoCode,
+        lastSessionStartAttemptAtMs = lastSessionStartAttemptAtMs,
+        lastRealReadingAtMs = lastRealReading?.timestampMs,
+        lastAutoStopAtMs = lastAutoStopAtMs
     )
 
     Scaffold(
@@ -198,19 +225,55 @@ fun DexcomG6StatusScreen(
                 }
             }
 
-            // "Started" = het moment dat de app zelf een bevestigde sessie-
-            // start ontving (settings.dexcomG6SessionStartConfirmedAtMs, zie
-            // ronde 65's kdoc) — geen apart van-de-transmitter-opgevraagd
-            // dex-tijdstip nodig, dit wall-clock-moment is exact genoeg.
+            // "Started" = settings.dexcomG6SessionStartConfirmedAtMs (ronde
+            // 65's kdoc) — TOT ronde 121 alleen gezet als de app zelf een
+            // bevestigde SessionStart ontving. 22/08/2026 (editor, RONDE
+            // 121, op verzoek — "of uit de transmitter ook het start
+            // tijdstip valt af te leiden") — DexcomG6Driver.kt's
+            // runControlSequence() vult dit veld nu OOK via een
+            // onafhankelijke TransmitterTime-aanvraag (opcode 0x24/0x25) als
+            // dit veld nog leeg is, ONGEACHT of onze eigen SessionStart ooit
+            // bevestigd werd — zie die functie's kdoc. Dus "Started" kan nu
+            // twee bronnen hebben: een eigen bevestigde start (ms-precies)
+            // of een door de transmitter zelf gerapporteerd moment
+            // (seconde-precies, teruggerekend uit het verschil tussen zijn
+            // huidige klok en zijn sessie-startklok). Beide worden hier
+            // identiek getoond — het onderscheid is voor de gebruiker niet
+            // relevant, de datum/tijd zelf is wat telt.
             // "End (est.)" = Started + de ECHTE, opgevraagde sensor-
             // levensduur (typicalSensorDays, VersionRequest2) — alleen
             // getoond zodra BEIDE bekend zijn, anders "—" i.p.v. een gok.
-            // "Code" = settings.dexcomG6LastConfirmedSensorCode (ronde 69,
-            // nieuw — blijft staan nadat de pending-code al gewist is).
+            // "Code" = settings.dexcomG6LastConfirmedSensorCode (ronde 69) —
+            // blijft "—" als de app zelf nooit een geslaagde SessionStart
+            // met deze sensor deed: de transmitter echoot de 4-cijferige
+            // sensorcode nooit terug, dus die kan NIET via TransmitterTime
+            // (of enige andere aanvraag) achterhaald worden — alleen de
+            // TIJD, niet de CODE.
+            //
+            // 22/08/2026 (editor, RONDE 124, op verzoek — "als de starttijd
+            // niet terug komt uit de transmitter dan moeten we gewoon de
+            // starttijd [...] van het invoeren van de sensorcode gebruiken")
+            // — [effectiveStartedAtMs]: ontbreekt een ECHTE (transmitter-
+            // bevestigde) starttijd, maar staat er nog een nieuwe-sensor-
+            // code klaar te wachten, val dan terug op het moment waarop die
+            // code is ingevoerd (zie AppSettings.setDexcomG6PendingNewSensorCode()'s
+            // kdoc). Duidelijk gelabeld als "(est., unconfirmed)" — dit is
+            // GEEN transmitter-bevestiging, puur een indicatie zodat het
+            // veld niet eindeloos "—" blijft tonen als de transmitter de
+            // start blijft afwijzen (zie de infoCode=3 "Invalid"-afwijzingen,
+            // Ronde 120/121's kdoc's elders in dit bestand). Bewust NIET
+            // gebruikt voor de warmup-aftelling/inloopfilter elders — die
+            // blijven op de echte, bevestigde waarde varen.
+            val effectiveStartedAtMs = sessionStartConfirmedAtMs
+                ?: (if (pendingSensorStartCode != null) pendingCodeQueuedAtMs else null)
+            val startedIsEstimate = sessionStartConfirmedAtMs == null && effectiveStartedAtMs != null
             val dateFormat = SimpleDateFormat("dd-MM HH:mm", Locale.getDefault())
-            val startedText = sessionStartConfirmedAtMs?.let { dateFormat.format(Date(it)) } ?: "—"
-            val endText = if (sessionStartConfirmedAtMs != null && typicalSensorDays != null) {
-                dateFormat.format(Date(sessionStartConfirmedAtMs!! + typicalSensorDays!!.toLong() * 24 * 60 * 60 * 1000))
+            val startedText = effectiveStartedAtMs?.let {
+                dateFormat.format(Date(it)) + if (startedIsEstimate) " (est., unconfirmed)" else ""
+            } ?: "—"
+            val endText = if (effectiveStartedAtMs != null && typicalSensorDays != null) {
+                dateFormat.format(Date(effectiveStartedAtMs + typicalSensorDays!!.toLong() * 24 * 60 * 60 * 1000)) +
+                    if (startedIsEstimate) " (est.)" else ""
             } else {
                 "—"
             }
@@ -305,7 +368,18 @@ fun DexcomG6StatusScreen(
             // stop-actie (destructief, dus met bevestiging) — voor de
             // gebruiker die zeker wil weten dat de sensor daadwerkelijk
             // gestopt is vóórdat ze de transmitter fysiek loskoppelen.
-            OutlinedButton(
+            //
+            // 22/08/2026 (editor, RONDE 121, op verzoek — "of de stop knop
+            // niet gewoon minder opvallend kan") — sinds deze ronde stopt
+            // "Start new sensor" zelf al automatisch een nog lopende sessie
+            // (zie DexcomG6Driver.kt's runControlSequence()-kdoc), dus deze
+            // losstaande knop is alleen nog nodig voor het uitzonderlijke
+            // geval hierboven beschreven (fysiek loskoppelen zonder meteen
+            // een nieuwe sensor te starten) — niet meer voor het normale
+            // "nieuwe sensor starten"-pad. Van OutlinedButton naar
+            // TextButton: minder visueel gewicht, past bij een actie die nu
+            // vooral nog een noodgreep is i.p.v. een standaardstap.
+            TextButton(
                 onClick = { showStopSensorConfirm = true },
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -470,7 +544,38 @@ fun dexcomG6StatusText(
     // dexcomG6FallbackWarmupSeconds() in DexcomG6CalibrationState.kt).
     // Default `null` houdt bestaande aanroepen werkend (dan simpelweg geen
     // fallback-schatting mogelijk, exact het oude gedrag).
-    typicalSensorDays: Int? = null
+    typicalSensorDays: Int? = null,
+    // 22/08/2026 (editor, RONDE 120, op verzoek — "kun je kijken wat er fout
+    // gaat en dan bij de status in ieder ook wat meer info tonen [...] het
+    // is nu een beetje een blackbox") — drie nieuwe, optionele parameters
+    // (default `null` houdt StatusScreen.kt's/CareSensAirStatusScreen.kt's
+    // bestaande aanroepen werkend):
+    //  - [lastSessionStartInfoCode]: de RAUWE infoCode van de laatst
+    //    mislukte poging, zie AppSettings.kt's kdoc — vervangt de oude,
+    //    hardcoded "transmitter may still see the old sensor as active"
+    //    (die feitelijk onjuist bleek: een live-test kreeg info=3
+    //    "Invalid", niet info=2 "already active").
+    //  - [lastSessionStartAttemptAtMs]: voor "last tried HH:mm".
+    //  - [lastRealReadingAtMs]: het tijdstip van de laatst ONTVANGEN ECHTE
+    //    glucosewaarde (StatusScreen.kt's GlucoseReadingStore, sensortype
+    //    DEXCOM_G6) — als die NA de laatste startpoging binnenkwam, loopt de
+    //    transmitter kennelijk gewoon door met metingen ondanks de
+    //    vastgelopen "Sensor start"-poging (precies de live-melding "er komt
+    //    data binnen terwijl hij nog sending sensor start toont") — dat is
+    //    geen tegenstrijdigheid in de app, maar een kenmerk van deze
+    //    transmitter die z'n eigen sessie kennelijk niet (volledig) opgeeft
+    //    ondanks de stop/start-commando's; expliciet benoemen i.p.v. de
+    //    gebruiker te laten gissen.
+    lastSessionStartInfoCode: Int? = null,
+    lastSessionStartAttemptAtMs: Long? = null,
+    lastRealReadingAtMs: Long? = null,
+    // 22/08/2026 (editor, RONDE 121) — zie
+    // AppSettings.setDexcomG6LastAutoStopAtMs()'s kdoc: het tijdstip van de
+    // laatste automatische SessionStop die de app zelf verstuurde omdat de
+    // transmitter een nog lopende sessie meldde, terwijl er een nieuwe-
+    // sensor-code klaarstaat. Default `null` houdt bestaande aanroepen
+    // werkend.
+    lastAutoStopAtMs: Long? = null
 ): String {
     val calibrationState = lastCalibrationStateRaw?.let { DexcomG6CalibrationState.fromRaw(it) }
     // 09/08/2026 (editor, RONDE 70) — `warmupSeconds > 0` erbij: zie de
@@ -500,9 +605,52 @@ fun dexcomG6StatusText(
         // wordt niet zomaar gewacht, er wordt herhaaldelijk geprobeerd én
         // afgewezen (meestal omdat de transmitter een vorige sessie nog als
         // actief beschouwt). Concrete suggestie i.p.v. stille herhaling.
-        pendingSensorStartCode != null && sessionStartFailCount >= 2 ->
-            "Sensor start rejected ${sessionStartFailCount}× (transmitter may still see the old sensor as active) — try \"Stop sensor\", wait a bit, then retry"
-        pendingSensorStartCode != null -> "Sending sensor start…"
+        // 22/08/2026 (editor, RONDE 120) — zie de kdoc bij
+        // [lastSessionStartInfoCode] hierboven: de reden komt nu van de
+        // WERKELIJK ontvangen infoCode i.p.v. een vaste aanname, plus
+        // "last tried HH:mm" en, indien van toepassing, een expliciete
+        // melding dat er ondanks de vastgelopen poging toch al metingen
+        // binnenkomen (i.p.v. dat stilzwijgend tegenstrijdig te laten
+        // lijken).
+        pendingSensorStartCode != null && sessionStartFailCount >= 2 -> {
+            val reason = lastSessionStartInfoCode?.let { DexcomG6Protocol.sessionStartInfoMessage(it) }
+                ?: "no response from the transmitter (timeout)"
+            val triedSuffix = lastSessionStartAttemptAtMs?.let {
+                " · last tried " + SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(it))
+            } ?: ""
+            val stillReceivingSuffix = if (
+                lastRealReadingAtMs != null && lastSessionStartAttemptAtMs != null &&
+                lastRealReadingAtMs > lastSessionStartAttemptAtMs
+            ) {
+                " · readings are still coming in from the transmitter's current session"
+            } else ""
+            "Sensor start rejected ${sessionStartFailCount}× ($reason)$triedSuffix — try \"Stop sensor\", wait a bit, then retry$stillReceivingSuffix"
+        }
+        // 22/08/2026 (editor, RONDE 121, op verzoek — het nieuwe, in twee
+        // aparte verbindcycli gesplitste stop/start-gedrag, zie
+        // DexcomG6Driver.kt's runControlSequence()-kdoc) — direct na een
+        // automatische stop is er nog GEEN start verstuurd (die volgt pas
+        // bij de eerstvolgende, ~5 minuten latere cyclus); "Sending sensor
+        // start…" zou hier misleidend zijn. Alleen getoond zolang de laatste
+        // auto-stop RECENTER is dan de laatste daadwerkelijke start-poging
+        // (of er nog geen start-poging is geweest) — zodra de eerstvolgende
+        // cyclus wél een Start verstuurt, wint de generieke tak hieronder
+        // vanzelf weer (lastSessionStartAttemptAtMs wordt dan recenter).
+        pendingSensorStartCode != null && lastAutoStopAtMs != null &&
+            (lastSessionStartAttemptAtMs == null || lastAutoStopAtMs > lastSessionStartAttemptAtMs) -> {
+            val stoppedSuffix = " (stopped " +
+                SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(lastAutoStopAtMs)) + ")"
+            "Automatically stopping the previous sensor session$stoppedSuffix — the new sensor starts on the next connection (~5 min)"
+        }
+        pendingSensorStartCode != null -> {
+            val stillReceivingSuffix = if (
+                lastRealReadingAtMs != null && lastSessionStartAttemptAtMs != null &&
+                lastRealReadingAtMs > lastSessionStartAttemptAtMs
+            ) {
+                " · readings are still coming in from the transmitter's current session"
+            } else ""
+            "Sending sensor start…$stillReceivingSuffix"
+        }
         calibrationState != null && calibrationState.sensorFailed() -> calibrationState.shortUserText()!!
         calibrationState != null && !calibrationState.warmingUp() && calibrationState.shortUserText() != null ->
             calibrationState.shortUserText()!!

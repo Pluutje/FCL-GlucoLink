@@ -703,10 +703,20 @@ class BleConnectionService : Service() {
      * `glucoseMgdl` hieronder, maar dit veld overleeft de daaropvolgende
      * applySmoothingIfEnabled()-stap ongewijzigd, zodat StatusScreen.kt's
      * pipeline-regel raw/gekalibreerd/gefilterd alle drie tegelijk kan tonen.
+     *
+     * 22/08/2026 (editor, RONDE 122, CRITICAL FIX — na live-melding: "de
+     * calibratie curve van de vorige sensor nog steeds actief was nadat
+     * deze was gestart") — [sinceMs] komt nu van AppSettings.
+     * effectiveSensorSessionStartedAtMs() i.p.v. de generieke, NOOIT-per-
+     * fysieke-sensor-herziene getOrInitSensorStartedAtMs() — zie die
+     * functie's kdoc voor de volledige root-cause-analyse. Zonder deze fix
+     * bleven vingerprik-entries (en dus de fit-curve) van een VORIGE
+     * fysieke sensor van hetzelfde type gewoon meewegen na het starten van
+     * een nieuwe.
      */
     private suspend fun applyCalibrationIfEnabled(reading: GlucoseReading, sensorType: SensorType, slot: SensorSlot): GlucoseReading {
         if (!settings.isCalibrationEnabled()) return reading
-        val sinceMs = settings.getOrInitSensorStartedAtMs(slot)
+        val sinceMs = settings.effectiveSensorSessionStartedAtMs(slot, sensorType)
         val entries = calibrationStore.entriesOnce(sensorType, sinceMs)
         val mode = settings.getCalibrationModeOnce(slot)
         val manualOffsetMgdl = settings.getCalibrationManualOffsetMmolOnce(slot).mmolToMgdl()
@@ -781,18 +791,19 @@ class BleConnectionService : Service() {
      * `setSelectedSensor()`'s kdoc), dus voor eenzelfde type is 'ie voor dit
      * doel minder precies, vandaar de voorkeur voor de type-specifieke
      * waarde waar die bestaat.
+     *
+     * 22/08/2026 (editor, RONDE 122) — deze voorkeursvolgorde is nu
+     * gecentraliseerd in AppSettings.effectiveSensorSessionStartedAtMs()
+     * (ook gebruikt door applyCalibrationIfEnabled() hierboven, zie die
+     * functie's Ronde-122-kdoc voor de aanleiding) — deze functie roept 'm
+     * nu aan i.p.v. de logica hier zelf te dupliceren.
      */
     private suspend fun computeBreakInDecayFactor(nowMs: Long, slot: SensorSlot, sensorType: SensorType): Double {
         if (!settings.isBreakInFilterEnabledOnce()) return 0.0
         val durationHours = settings.getBreakInFilterDurationHoursOnce()
         if (durationHours <= 0.0) return 0.0
 
-        val typeSpecificStartedAtMs = when (sensorType) {
-            SensorType.CARESENS_AIR -> settings.careSensAirSensorStartedAtMs(slot).first()
-            SensorType.DEXCOM_G6 -> settings.dexcomG6SessionStartConfirmedAtMs(slot).first()
-            else -> null
-        }
-        val startedAtMs = typeSpecificStartedAtMs ?: settings.getOrInitSensorStartedAtMs(slot)
+        val startedAtMs = settings.effectiveSensorSessionStartedAtMs(slot, sensorType)
 
         val hoursSinceStart = (nowMs - startedAtMs) / 3_600_000.0
         if (hoursSinceStart < 0.0) return 1.0 // klok-scheefstand: veiligst aannemen dat de sensor net gestart is.

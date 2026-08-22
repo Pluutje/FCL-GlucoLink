@@ -255,6 +255,26 @@ object DexcomG6Protocol {
     }
 
     /**
+     * 22/08/2026 (editor, RONDE 121, op verzoek — "of uit de transmitter ook
+     * het start tijdstip valt af te leiden") — opcode 0x24 (xDrip+'s
+     * `TransmitterTimeTxMessage`, `uploads/xDrip-2026.08.08.zip`), 3 bytes:
+     * opcode+CRC, zelfde eenvoudige vorm als [buildGlucoseRequest]/
+     * [buildBatteryInfoRequest]. Vraagt de transmitter's HUIDIGE klok + het
+     * (eventueel) actieve sessie-startmoment op — ONAFHANKELIJK van of WIJ
+     * ooit zelf een geslaagde SessionStart (opcode 0x26/0x27) bevestigd
+     * kregen. Dat is precies wat xDrip+ zelf gebruikt om
+     * `DexSessionKeeper`'s starttijd te herstellen (`Ob1G5StateMachine.
+     * java`, regel ~945: `DexSessionKeeper.setStart(txtime.
+     * getRealSessionStartTime())`) — zie [TransmitterTimeRx]/
+     * [parseTransmitterTime] hieronder en DexcomG6Driver.kt's toepassing.
+     */
+    fun buildTransmitterTimeRequest(): ByteArray {
+        val buf = ByteBuffer.allocate(3).order(ByteOrder.LITTLE_ENDIAN)
+        buf.put(0x24)
+        return appendCrc(buf)
+    }
+
+    /**
      * 09/08/2026 (editor, RONDE 66, op verzoek — "een anubis transmitter
      * [...] klopt dat niet [de aanname van 2 uur opwarmtijd] [...] xdrip
      * heild hier rekening mee") — opcode 0x52 (xDrip+'s
@@ -453,6 +473,32 @@ object DexcomG6Protocol {
         return SessionStartRx(ok, info, requestedStartTime, sessionStartTime, transmitterTime)
     }
 
+    /**
+     * 22/08/2026 (editor, RONDE 120, BUGFIX na live-melding) — tot deze ronde
+     * toonde DexcomG6StatusScreen.kt's "Sensor start rejected"-tekst altijd
+     * dezelfde, hardcoded reden ("transmitter may still see the old sensor
+     * as active" — info 0x02), ONGEACHT de daadwerkelijk ontvangen infoCode.
+     * Een live-test tegen een Anubis-kloon-transmitter kreeg bij ELKE
+     * poging info=0x03 terug, niet 0x02 — dus de getoonde reden was voor dit
+     * geval feitelijk onjuist. xDrip+'s eigen `SessionStartRxMessage.
+     * message()` (`uploads/xDrip-2026.08.08.zip`) kent alle zes betekenissen
+     * — deze functie levert dezelfde indeling, zodat de UI de ECHTE reden
+     * kan tonen i.p.v. een vaste aanname. info 0x03 ("Invalid") betekent
+     * volgens xDrip+ zelf niet "already active" maar dat de transmitter het
+     * VERZOEK zelf afwijst — in de praktijk vaak omdat er nog te weinig
+     * echte tijd zat tussen de stop en de nieuwe start (zie
+     * DexcomG6Driver.kt's runControlSequence()'s 1500ms-pauze, mogelijk
+     * te kort voor deze transmitter) of, minder waarschijnlijk, een
+     * verkeerde/niet-herkende sensor-code.
+     */
+    fun sessionStartInfoMessage(infoCode: Int): String = when (infoCode) {
+        0x01, 0x05, 0x06 -> "OK"
+        0x02 -> "the transmitter reports a sensor session is already active"
+        0x03 -> "the transmitter rejected the request as invalid (often: too soon after a stop, or an unrecognized sensor code)"
+        0x04 -> "the transmitter reports a clock/sync error"
+        else -> "the transmitter returned an unrecognized code ($infoCode)"
+    }
+
     data class SessionStopRx(
         val ok: Boolean,
         val sessionStartTime: Int,
@@ -574,5 +620,67 @@ object DexcomG6Protocol {
         val runtime = if (packet.size == 10) -1 else runtimeRaw
         val temperature = buf.get().toInt() // signed, mirror van xDrip+'s eigen onzekerheid hierover
         return BatteryInfoRx(status, voltageA, voltageB, resistance, runtime, temperature)
+    }
+
+    /**
+     * 22/08/2026 (editor, RONDE 121) — antwoord op [buildTransmitterTimeRequest]
+     * (opcode 0x25). [currentTime]/[sessionStartTime] zijn beide
+     * transmitter-relatieve dex-tijd-secondentellers (net als elders in dit
+     * bestand: géén absolute epoch, alleen onderling vergelijkbaar) — het
+     * VERSCHIL ertussen is precies wat we nodig hebben, we hoeven de
+     * transmitter's eigen epoch niet te kennen (zie [realSessionStartAtMs]).
+     * `sessionStartTime == -1` betekent: nog nooit een sessie gestart sinds
+     * de transmitter zelf actief is; is [sessionStartTime] wél gezet maar
+     * gelijk aan [currentTime], dan is de sessie zojuist gestopt/nog niet
+     * gestart — vandaar de `!=`-check in plaats van puur `!= -1`, mirror van
+     * xDrip+'s `TransmitterTimeRxMessage.sessionInProgress()`.
+     */
+    data class TransmitterTimeRx(
+        val currentTime: Int,
+        val sessionStartTime: Int
+    ) {
+        /**
+         * 22/08/2026 (editor, RONDE 123, CRITICAL FIX — na live-melding: al
+         * 25+ minuten alleen "Sending sensor start…" met elke ~6-10s een
+         * nieuwe (mislukte) reconnect-poging, logcat toonde
+         * `TransmitterTimeRx(currentTime=1159280, sessionStartTime=0)` op
+         * ELKE cyclus, ook meteen NA een bevestigd geslaagde SessionStop)
+         * — was `sessionStartTime != -1`: xDrip+'s eigen bron gebruikt -1
+         * als "geen sessie"-sentinel, maar deze Anubis-kloon-transmitter
+         * rapporteert kennelijk **0**, niet -1, zodra er geen sessie loopt.
+         * Met de oude check werd 0 gelezen als "sessie gestart op
+         * transmitter-tijdstip 0" — altijd ongelijk aan de (grote,
+         * oplopende) huidige transmitter-tijd, dus `sessionInProgress`
+         * bleef voor eeuwig `true`, ook vlak na een bevestigde stop. Nu:
+         * `sessionStartTime > 0` — sluit zowel -1 als 0 uit als "geen
+         * sessie"-waarden. Nog niet geverifieerd of dit specifieke
+         * transmitter-model ooit een zinvolle, positieve sessionStartTime
+         * teruggeeft wanneer er WEL een sessie loopt (dat vereist een
+         * volgende live-test); als dat niet zo is, gedraagt de auto-stop-
+         * detectie (runControlSequence()) zich onschadelijk als "nooit een
+         * sessie gedetecteerd" — geen valse stops, alleen een niet-werkende
+         * detectie, geen risico.
+         */
+        val sessionInProgress: Boolean get() = sessionStartTime > 0 && currentTime != sessionStartTime
+
+        /** Wall-clock-milliseconden waarop de sessie is gestart, teruggerekend
+         *  vanaf [nowMs] (het moment waarop DIT antwoord binnenkwam) — `null`
+         *  als er volgens de transmitter geen sessie loopt. Dit is de
+         *  ONAFHANKELIJKE bron die "Started"/"End (est.)" op het G6-
+         *  statusscherm kan vullen, ook als onze eigen SessionStart-poging
+         *  nooit bevestigd werd (zie DexcomG6StatusScreen.kt). */
+        fun realSessionStartAtMs(nowMs: Long): Long? =
+            if (sessionInProgress) nowMs - (currentTime - sessionStartTime).toLong() * 1000L else null
+    }
+
+    /** Zelfde CRC-/opcode-validatie als [parseSessionStart]/[parseSessionStop]
+     *  (in tegenstelling tot [parseBatteryInfo], die er bewust geen heeft —
+     *  xDrip+'s eigen `TransmitterTimeRxMessage` doet wél een CRC-check). */
+    fun parseTransmitterTime(packet: ByteArray): TransmitterTimeRx? {
+        if (packet.size < 10 || packet[0] != 0x25.toByte() || !checkCrc(packet)) return null
+        val buf = ByteBuffer.wrap(packet).order(ByteOrder.LITTLE_ENDIAN)
+        val currentTime = buf.getInt(2)
+        val sessionStartTime = buf.getInt(6)
+        return TransmitterTimeRx(currentTime, sessionStartTime)
     }
 }

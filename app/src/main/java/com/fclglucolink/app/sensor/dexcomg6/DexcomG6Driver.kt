@@ -194,6 +194,11 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
     // runControlSequence()'s kdoc.
     private var pendingSessionStopDeferred: CompletableDeferred<DexcomG6Protocol.SessionStopRx?>? = null
     private var pendingVersionRequest2Deferred: CompletableDeferred<DexcomG6Protocol.VersionRequest2Rx?>? = null
+    // 22/08/2026 (editor, RONDE 121) — zelfde patroon, voor de nieuwe
+    // TransmitterTime-aanvraag (opcode 0x24/0x25) — zie
+    // DexcomG6Protocol.TransmitterTimeRx's kdoc en runControlSequence()'s
+    // nieuwe pendingCode-afhandeling hieronder.
+    private var pendingTransmitterTimeDeferred: CompletableDeferred<DexcomG6Protocol.TransmitterTimeRx?>? = null
 
     companion object {
         // 10/08/2026 (editor, RONDE 85 — op verzoek, na live-log-analyse:
@@ -247,6 +252,11 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
         // sessie-start hierboven.
         private const val SESSION_STOP_TIMEOUT_MS = 15_000L
         private const val VERSION_REQUEST2_TIMEOUT_MS = 10_000L
+        // 22/08/2026 (editor, RONDE 121) — zelfde soort timeout als de
+        // andere Control-aanvragen hierboven; TransmitterTime is een
+        // triviaal, kort antwoord (net als VersionRequest2), dus dezelfde
+        // 10s-marge.
+        private const val TRANSMITTER_TIME_TIMEOUT_MS = 10_000L
         // 09/08/2026 (editor, RONDE 66, VERKORT IN RONDE 68) — als een
         // transmitter/firmware dit verzoek simpelweg niet beantwoordt, moet
         // dat niet elke ~5 minuten opnieuw geprobeerd worden. Was 8 uur
@@ -401,11 +411,13 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
         pendingGlucoseDeferred?.complete(null)
         pendingSessionStopDeferred?.complete(null)
         pendingVersionRequest2Deferred?.complete(null)
+        pendingTransmitterTimeDeferred?.complete(null)
         pendingSessionStartDeferred = null
         pendingBatteryDeferred = null
         pendingGlucoseDeferred = null
         pendingSessionStopDeferred = null
         pendingVersionRequest2Deferred = null
+        pendingTransmitterTimeDeferred = null
     }
 
     override fun disconnect() {
@@ -929,53 +941,160 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
             }
 
             val pendingCode = settings.getDexcomG6PendingNewSensorCodeOnce(slot)
-            if (pendingCode != null) {
-                // 09/08/2026 (editor, RONDE 66, op verzoek — "moet er een
-                // waarschuwing komen of je de oude wel wilt stoppen") —
-                // mirror van xDrip+'s eigen handmatige procedure
-                // ("Restarting a Dexcom G6 Sensor": eerst STOP SENSOR,
-                // wachten tot de queue leeg is, dan pas START SENSOR) — hier
-                // binnen ÉÉN verbindcyclus afgehandeld i.p.v. de gebruiker
-                // 5 minuten te laten wachten. Het vlaggetje is al vooraf
-                // gezet door DexcomG6NewSensorScreen.kt (ná de "er loopt al
-                // een sessie"-waarschuwing) — hier alleen consumeren en
-                // uitvoeren. Bewust "best effort": als de stop mislukt/
-                // timeout, gaat de code hieronder gewoon door — komt de
-                // transmitter dan terug met infoCode 0x02 ("already
-                // started", zie SessionStartRx.alreadyStarted), dan blijft
-                // de code simpelweg staan voor een volgende poging (zie de
-                // "mislukking"-afhandeling verderop) i.p.v. dat de app ten
-                // onrechte "Sensor started" toont voor een sessie die niet
-                // daadwerkelijk vernieuwd is.
-                if (settings.consumeDexcomG6PendingStopBeforeStart(slot)) {
-                    val stopDeferred = CompletableDeferred<DexcomG6Protocol.SessionStopRx?>()
-                    pendingSessionStopDeferred = stopDeferred
-                    // dexTime=0: zelfde bewuste vereenvoudiging als de
-                    // sessie-start hieronder (die ook al langer met
-                    // dexTime=0 werkt) — een striktere, transmitter-relatieve
-                    // dex-tijd wordt hier evenmin apart bijgehouden.
-                    writeCharacteristic(gatt, controlChar, DexcomG6Protocol.buildSessionStop(0))
-                    val stopResult = withTimeoutOrNull(SESSION_STOP_TIMEOUT_MS) { stopDeferred.await() }
-                    pendingSessionStopDeferred = null
-                    DiagnosticFileLogger.log("DexcomG6: stop-before-new-sensor result=$stopResult")
-                    // 09/08/2026 (editor, RONDE 71, na live-test — "Sending
-                    // sensor start" bleef 10+ minuten hangen) — kleine,
-                    // bewuste pauze VOORDAT de SessionStart hieronder
-                    // verstuurd wordt: de transmitter bevestigt de stop op
-                    // BLE-niveau (dit 0x29-antwoord) mogelijk vóórdat de
-                    // eigen interne statusmachine 'm volledig verwerkt heeft
-                    // — een SessionStart die daar vlak bovenop komt kan dan
-                    // nog steeds op "already started" stuiten. 1500 ms is een
-                    // bewuste, willekeurige-maar-royale marge (geen officiële
-                    // Dexcom-timing bekend), goedkoop genoeg om altijd te
-                    // nemen zonder de gebruiker merkbaar te laten wachten.
-                    delay(1500L)
-                }
 
+            // 22/08/2026 (editor, RONDE 121, herontwerp op verzoek — "de
+            // start sensor knop die eerst checkt of er een actieve sensor
+            // is [...] dan zelf automatisch het stop commando zend. en bij
+            // de volgende cycles 5 minuten later het start commando" +
+            // "of uit de transmitter ook het start tijdstip valt af te
+            // leiden") — VERVANGT de oude "stop-before-start"-combo (Ronde
+            // 66/71, t/m Ronde 120 in gebruik): die stuurde Stop ÉN Start
+            // binnen DEZELFDE BLE-verbindcyclus, met maar een willekeurige
+            // 1500ms-pauze ertussen als marge voor de transmitter om de
+            // stop intern te verwerken — de meest waarschijnlijke verklaring
+            // voor de herhaalde infoCode=3 "Invalid"-afwijzingen die de
+            // gebruiker bleef zien (zie
+            // DexcomG6Protocol.sessionStartInfoMessage()'s Ronde-120-kdoc).
+            //
+            // Nu: ÉÉN TransmitterTime-aanvraag (opcode 0x24/0x25, zie
+            // DexcomG6Protocol.TransmitterTimeRx's kdoc) per cyclus, ONAF-
+            // HANKELIJK van of WIJ zelf ooit een SessionStart bevestigd
+            // kregen — precies de bron die xDrip+ zelf gebruikt om een
+            // sessie-starttijd te herstellen (Ob1G5StateMachine.java). Twee
+            // doelen tegelijk:
+            //  (A) staat er een nieuwe-sensor-code klaar (`pendingCode`) én
+            //      meldt de transmitter een lopende sessie: stuur ALLEEN de
+            //      Stop, verstuur BEWUST geen Start meer in deze cyclus, en
+            //      verbreek de verbinding — pas bij de eerstvolgende,
+            //      natuurlijke ~5-minuten-herverbinding (SENSOR_PERIOD_MS)
+            //      komt de code hier opnieuw langs, vraagt dan opnieuw
+            //      TransmitterTime op, en stuurt pas de Start zodra de
+            //      transmitter zelf bevestigt dat er geen sessie meer loopt.
+            //      Zelf-corrigerend elke cyclus, geen apart "moet ik nog
+            //      stoppen?"-vlaggetje meer nodig (de oude
+            //      PendingStopBeforeStart-vlag/-methodes in AppSettings.kt
+            //      blijven bewust ongewijzigd staan — nog in gebruik door de
+            //      losstaande "Stop sensor"-bevestiging in
+            //      DexcomG6StatusScreen.kt om klaarstaande status op te
+            //      ruimen — alleen niet meer HIER gelezen/gezet).
+            //  (B) ongeacht een pendingCode: is er GEEN lokaal bevestigde
+            //      sessiestart bekend (sessionStartConfirmedAtMs == null —
+            //      "Started"/"End (est.)" staan dan op "—", zie
+            //      DexcomG6StatusScreen.kt), vraag dan éénmalig dezelfde
+            //      TransmitterTime op om die alsnog te kunnen tonen, ook als
+            //      onze eigen SessionStart-poging nooit bevestigd werd. De
+            //      sensor-CODE zelf kan hier niet uit afgeleid worden — de
+            //      transmitter echoot die nooit terug — dat blijft dus "—"
+            //      totdat een geslaagde SessionStart 'm bevestigt.
+            //
+            // Antwoordt de transmitter niet op de aanvraag (txTime == null,
+            // bijv. een firmware die 'm niet kent) dan valt (A) terug op
+            // gewoon meteen een Start proberen zonder stop — het gedrag van
+            // vóór Ronde 66's stop-voor-start-combo — en blijft (B) simpelweg
+            // "—" tonen, precies zoals nu.
+            val sessionStartConfirmedAtMsOnceEarly = settings.getDexcomG6SessionStartConfirmedAtMsOnce(slot)
+            val needsTransmitterTimeQuery = pendingCode != null || sessionStartConfirmedAtMsOnceEarly == null
+            var txTime: DexcomG6Protocol.TransmitterTimeRx? = null
+            if (needsTransmitterTimeQuery) {
+                val timeDeferred = CompletableDeferred<DexcomG6Protocol.TransmitterTimeRx?>()
+                pendingTransmitterTimeDeferred = timeDeferred
+                writeCharacteristic(gatt, controlChar, DexcomG6Protocol.buildTransmitterTimeRequest())
+                txTime = withTimeoutOrNull(TRANSMITTER_TIME_TIMEOUT_MS) { timeDeferred.await() }
+                pendingTransmitterTimeDeferred = null
+                DiagnosticFileLogger.log("DexcomG6: transmitterTime query result=$txTime")
+                if (txTime != null) {
+                    val realStart = txTime.realSessionStartAtMs(System.currentTimeMillis())
+                    if (realStart != null) {
+                        settings.setDexcomG6SessionStartConfirmedAtMs(slot, realStart)
+                    } else if (sessionStartConfirmedAtMsOnceEarly != null) {
+                        // Transmitter meldt GEEN lopende sessie (meer),
+                        // terwijl wij nog een bevestigde start hadden staan
+                        // — die is dus stale (bijv. extern gestopt); wissen
+                        // voorkomt een verouderde "Started"/"End" voor een
+                        // sessie die niet meer bestaat.
+                        settings.clearDexcomG6SessionStartConfirmedAtMs(slot)
+                    }
+                }
+            }
+
+            if (pendingCode != null && txTime != null && txTime.sessionInProgress) {
+                val stopDeferred = CompletableDeferred<DexcomG6Protocol.SessionStopRx?>()
+                pendingSessionStopDeferred = stopDeferred
+                // dexTime=0: zelfde bewuste vereenvoudiging als de
+                // sessie-start hieronder (die ook al langer met dexTime=0
+                // werkt) — een striktere, transmitter-relatieve dex-tijd
+                // wordt hier evenmin apart bijgehouden.
+                writeCharacteristic(gatt, controlChar, DexcomG6Protocol.buildSessionStop(0))
+                val stopResult = withTimeoutOrNull(SESSION_STOP_TIMEOUT_MS) { stopDeferred.await() }
+                pendingSessionStopDeferred = null
+                DiagnosticFileLogger.log("DexcomG6: new-sensor auto-stop-active-session result=$stopResult")
+                if (stopResult?.ok == true) {
+                    settings.clearDexcomG6SessionStartConfirmedAtMs(slot)
+                }
+                // 22/08/2026 (editor, RONDE 121) — zie
+                // AppSettings.setDexcomG6LastAutoStopAtMs()'s kdoc: voor de
+                // "bezig met automatisch stoppen"-status in
+                // dexcomG6StatusText(), i.p.v. het generieke "Sending
+                // sensor start…" te tonen tijdens dit tussenmoment.
+                settings.setDexcomG6LastAutoStopAtMs(slot, System.currentTimeMillis())
+                // 22/08/2026 (editor, RONDE 123, CRITICAL FIX — zie
+                // TransmitterTimeRx.sessionInProgress's kdoc voor de eerste
+                // helft van dezelfde live-melding) — deze cyclus keert hier
+                // terug ZONDER ooit de verplichte glucose-aanvraag verderop
+                // in deze functie te bereiken, dus zonder deze regel bleef
+                // `lastSuccessfulConnectionAtMs` op zijn oude (of `null`)
+                // waarde staan. `onConnectionStateChange`'s STATE_DISCONNECTED-
+                // tak leest die waarde om te bepalen of dit een "geslaagde
+                // cyclus" was (voorspellende ~5-minuten-cooldown,
+                // computeReconnectCooldownMs()) of een "mislukking"
+                // (oplopende foutenbackoff, 1-10s) — zonder deze regel werd
+                // een BEWUSTE, geslaagde auto-stop dus steeds als mislukking
+                // behandeld, wat een reconnect-storm gaf van elke ~6-10s
+                // i.p.v. de bedoelde ~5 minuten. Deze regel markeert de
+                // cyclus als geslaagd, exact zoals handleGlucoseResult() dat
+                // ook doet (inclusief dezelfde cadenceAnchorAtMs-init, voor
+                // het geval dit toevallig de allereerste geslaagde cyclus
+                // ooit is).
+                val nowMsAutoStop = System.currentTimeMillis()
+                lastSuccessfulConnectionAtMs = nowMsAutoStop
+                if (cadenceAnchorAtMs == null) cadenceAnchorAtMs = nowMsAutoStop
+                // pendingCode blijft bewust STAAN (niet gewist) — de
+                // volgende, APARTE verbindcyclus pakt 'm hierboven gewoon
+                // weer op en stuurt dan (na een verse TransmitterTime-check)
+                // pas de daadwerkelijke Start.
+                runCatching { gatt.disconnect() }
+                return
+            }
+
+            if (pendingCode != null) {
                 val deferred = CompletableDeferred<DexcomG6Protocol.SessionStartRx?>()
                 pendingSessionStartDeferred = deferred
                 val nowSec = (System.currentTimeMillis() / 1000L).toInt()
-                val message = runCatching { DexcomG6Protocol.buildSessionStart(0, nowSec, pendingCode) }
+                // 22/08/2026 (editor, RONDE 124, poging — op verzoek na
+                // live-melding: "de starttijd komt niet [...] de info die
+                // terug komt klopt niet", logcat toonde infoCode=3 "Invalid"
+                // OOK op een compleet verse poging, zónder dat er in
+                // diezelfde cyclus net gestopt was — dat ondermijnt de
+                // eerdere "te snel na een stop"-hypothese, zie de kdoc bij
+                // sessionStartInfoMessage() in DexcomG6Protocol.kt) — was
+                // hardcoded `0` voor dexTime (transmitter-relatieve tijd,
+                // NIET Unix-tijd, zie buildSessionStart()'s eigen kdoc:
+                // "seconden sinds transmitter-activatie"). Deze transmitter
+                // loopt inmiddels >1,1 miljoen seconden (~13 dagen); een
+                // dexTime van 0 zou dan een sessie "vanaf transmitter-
+                // activatie" claimen, ver in het (transmitter-interne)
+                // verleden — een plausibele reden voor "Invalid". Nu we
+                // sowieso al een TransmitterTime opvragen vóór elke
+                // SessionStart-poging (zie hierboven), is de ECHTE
+                // transmitter-relatieve tijd (`txTime.currentTime`)
+                // beschikbaar zonder extra BLE-round-trip — dat gebruiken
+                // i.p.v. de vaste 0. Nog NIET bevestigd dat dit de
+                // daadwerkelijke oorzaak is (kan ook iets anders zijn) —
+                // eerstvolgende live-poging moet dit uitwijzen; bij een
+                // ontbrekende TransmitterTime-respons blijft `0` de
+                // terugval (identiek oud gedrag, geen regressie).
+                val dexTime = txTime?.currentTime ?: 0
+                val message = runCatching { DexcomG6Protocol.buildSessionStart(dexTime, nowSec, pendingCode) }
                     .onFailure { DiagnosticFileLogger.log("DexcomG6: invalid pending sensor code, dropping it: $it") }
                     .getOrNull()
                 if (message == null) {
@@ -985,6 +1104,14 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
                     val result = withTimeoutOrNull(SESSION_START_TIMEOUT_MS) { deferred.await() }
                     pendingSessionStartDeferred = null
                     DiagnosticFileLogger.log("DexcomG6: new-sensor session start result=$result")
+                    // 22/08/2026 (editor, RONDE 120) — zie AppSettings.kt's
+                    // dexcomG6LastSessionStartInfoCode/AttemptAtMs kdoc: laat
+                    // dexcomG6StatusText() de ECHTE afwijzingsreden tonen
+                    // i.p.v. een vaste aanname, en "voor het laatst geprobeerd
+                    // om HH:mm" — vóór de ok/mislukking-tak hieronder, zodat
+                    // het tijdstip er ook staat als result null is (timeout,
+                    // geen respons).
+                    settings.setDexcomG6LastSessionStartAttemptAtMs(slot, System.currentTimeMillis())
                     if (result?.ok == true) {
                         settings.clearDexcomG6PendingNewSensorCode(slot)
                         // 09/08/2026 (editor, RONDE 65, op verzoek — xDrip-
@@ -1008,30 +1135,24 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
                         // wissen): bij een getypfout kan de gebruiker 'm zo
                         // gewoon herzien via hetzelfde scherm.
                         //
-                        // 09/08/2026 (editor, RONDE 71, CORRECTIE — na live-
-                        // test: "Sending sensor start" bleef 10+ minuten
-                        // onveranderd staan) — TOT DEZE RONDE bleef het hier
-                        // bij: het "stop-before-start"-vlaggetje was al
-                        // hierboven geconsumeerd (get-and-clear, éénmalig),
-                        // dus een `alreadyStarted`-mislukking hier betekende
-                        // dat ELKE volgende verbindpoging alleen nog een KALE
-                        // SessionStart probeerde — zonder ooit weer eerst te
-                        // stoppen. Als de transmitter dan structureel bleef
-                        // melden dat de sessie al actief was (bijv. omdat de
-                        // eerste stop simpelweg niet aankwam/verwerkt werd),
-                        // faalde dat voor altijd, met een eeuwige "Sending
-                        // sensor start…" in de UI tot gevolg — precies wat
-                        // gerapporteerd werd. Fix: bij ELKE mislukking het
-                        // stop-before-start-vlaggetje opnieuw zetten, zodat
-                        // de VOLGENDE poging automatisch weer eerst stopt in
-                        // plaats van blind te blijven herhalen. Samen met de
-                        // nieuwe faalteller (DEXCOM_G6_SESSION_START_FAIL_COUNT)
-                        // kan dexcomG6StatusText() (DexcomG6StatusScreen.kt)
-                        // na een paar mislukkingen ook duidelijk maken dat er
-                        // iets misgaat, i.p.v. stilzwijgend te blijven
-                        // "Sending sensor start…" tonen.
-                        settings.setDexcomG6PendingStopBeforeStart(slot, true)
+                        // 22/08/2026 (editor, RONDE 121, VERVALT — zie de
+                        // grote kdoc bovenaan dit blok) — t/m Ronde 120 werd
+                        // hier het "stop-before-start"-vlaggetje opnieuw
+                        // gezet zodat de VOLGENDE poging automatisch weer
+                        // eerst stopte; dat is nu overbodig, want elke
+                        // cyclus vraagt TransmitterTime zelf al opnieuw op
+                        // (zie boven) i.p.v. op een lokaal vlaggetje te
+                        // vertrouwen dat maar één keer geraadpleegd wordt.
                         settings.incrementDexcomG6SessionStartFailCount(slot)
+                        // 22/08/2026 (editor, RONDE 120) — de RAUWE infoCode
+                        // (null bij een timeout/geen respons) voor
+                        // dexcomG6StatusText()'s nieuwe, code-gebaseerde
+                        // reden — zie DexcomG6Protocol.sessionStartInfoMessage()'s
+                        // kdoc voor de aanleiding (deze transmitter gaf keer
+                        // op keer info=3 "Invalid" terug, niet info=2
+                        // "already active" zoals de oude, vaste tekst
+                        // aannam).
+                        settings.setDexcomG6LastSessionStartInfoCode(slot, result?.infoCode)
                     }
                 }
             }
@@ -1154,6 +1275,10 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
                     )
                     pendingVersionRequest2Deferred?.complete(DexcomG6Protocol.parseVersionRequest2(value))
                 }
+                // 22/08/2026 (editor, RONDE 121) — antwoord op
+                // buildTransmitterTimeRequest(), zie
+                // DexcomG6Protocol.TransmitterTimeRx's kdoc.
+                0x25 -> pendingTransmitterTimeDeferred?.complete(DexcomG6Protocol.parseTransmitterTime(value))
                 else -> DiagnosticFileLogger.log("DexcomG6: unhandled Control opcode=$opcode bytes=${value.joinToString(",")}")
             }
         }

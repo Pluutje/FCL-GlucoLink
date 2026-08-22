@@ -97,10 +97,21 @@ import kotlin.math.roundToInt
  * rechtstreeks in de Composable) — en bewust ÉÉN scherm voor zowel lineair
  * als spline (geen twee losse schermen/plugins), met een modus-schakelaar
  * bovenin die precies bepaalt welke van CalibrationEngine's twee paden
- * gebruikt wordt. Geen "Log sensor change"-knop (op expliciet verzoek) — de
- * kalibratiedata van de vorige sensor wordt al automatisch gewist zodra een
- * nieuwe sensor-sessie start, zie BleConnectionService.kt's aanroep van
- * CalibrationStore.clearAll().
+ * gebruikt wordt. Geen "Log sensor change"-knop (op expliciet verzoek).
+ *
+ * 11/08/2026 (editor, RONDE 90, CORRECTIE op de kdoc-zin hierboven die tot
+ * deze ronde nog stond) — de kalibratiedata van de vorige sensor wordt NIET
+ * meer automatisch GEWIST bij een nieuwe sensor-sessie (CalibrationStore.
+ * clearAll() wordt sindsdien nergens meer automatisch aangeroepen, zie dat
+ * bestand's eigen Ronde-90-kdoc) — in plaats daarvan wordt oudere data
+ * simpelweg niet meer OPGEHAALD voor de nieuwe sessie, via [sinceMs]
+ * hieronder (blijft intact voor eventuele toekomstige historie/de andere
+ * slot). 22/08/2026 (editor, RONDE 122) — zie
+ * AppSettings.effectiveSensorSessionStartedAtMs()'s kdoc voor een kritieke
+ * fix van [sinceMs] zelf: tot die ronde gebruikte dit scherm de generieke,
+ * NOOIT-per-fysieke-sensor-herziene getOrInitSensorStartedAtMs(), waardoor
+ * vingerprikken van een VORIGE fysieke sensor (van hetzelfde type) na een
+ * nieuwe-sensor-start gewoon bleven meetellen.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -123,13 +134,21 @@ fun CalibrationScreen(onBack: () -> Unit, slot: SensorSlot = SensorSlot.A) {
     // sensoren moeten uiteraard alleen die vingerprikken getoond worden die
     // kwa tijd na de sensor start liggen" — deze sessie's eigen sensor-
     // start-tijd, opgehaald zodra [sensorType] verandert (dus ook bij het
-    // eerste tekenen van dit scherm). `getOrInitSensorStartedAtMs` is hier
-    // veilig als suspend-aanroep: dit scherm is alleen bereikbaar vanuit een
-    // tab MET een actieve sensor (zie de bestaande kdoc's hieronder), dus er
-    // bestaat altijd een sessie om op te vragen/initialiseren.
+    // eerste tekenen van dit scherm).
+    //
+    // 22/08/2026 (editor, RONDE 122, CRITICAL FIX — zie
+    // AppSettings.effectiveSensorSessionStartedAtMs()'s kdoc) — was
+    // `settings.getOrInitSensorStartedAtMs(slot)`: de generieke sleutel die
+    // alleen bij een sensor-TYPE-wissel gewist wordt, niet bij een nieuwe
+    // FYSIEKE sensor van hetzelfde type. `effectiveSensorSessionStartedAtMs`
+    // geeft voorrang aan de sensortype-specifieke, wél-per-fysieke-sensor
+    // herziene waarde (Dexcom G6/CareSens Air), en valt alleen terug op de
+    // generieke sleutel voor types zonder eigen tracking — nog steeds veilig
+    // als suspend-aanroep, om dezelfde reden als voorheen (dit scherm is
+    // alleen bereikbaar vanuit een tab MET een actieve sensor).
     var sinceMs by remember { mutableStateOf(0L) }
     LaunchedEffect(sensorType) {
-        sinceMs = sensorType?.let { settings.getOrInitSensorStartedAtMs(slot) } ?: 0L
+        sinceMs = sensorType?.let { settings.effectiveSensorSessionStartedAtMs(slot, it) } ?: 0L
     }
 
     // remember() geeft één stabiele Flow-referentie i.p.v. bij elke

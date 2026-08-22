@@ -12,8 +12,8 @@
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.fclglucolink.app"
-    android:versionCode="131"
-    android:versionName="0.9.32-calibrated-column-fix" >
+    android:versionCode="136"
+    android:versionName="0.9.37-g6-dextime-and-started-fallback" >
 
     <uses-sdk
         android:minSdkVersion="26"

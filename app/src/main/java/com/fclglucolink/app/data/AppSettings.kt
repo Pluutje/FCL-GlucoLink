@@ -20,7 +20,9 @@ import com.fclglucolink.app.sensor.simulator.PersistedSimulatorMode
 import com.fclglucolink.app.smoothing.SmoothingStrength
 import com.fclglucolink.app.ui.GlucoseUnit
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 /**
@@ -596,6 +598,56 @@ class AppSettings(private val context: Context) {
     fun sensorStartedAtMsFlow(slot: SensorSlot): Flow<Long?> =
         context.dataStore.data.map { prefs -> prefs[slotLong("sensor_started_at_ms", slot)] }
 
+    /** Sensortype-specifieke, ECHT bij elke NIEUWE fysieke sensor herziene
+     *  starttijd (CareSens Air/Dexcom G6) — `null` voor types zonder eigen
+     *  sessie-tracking (simulator, Dexcom G7 nog niet), zie
+     *  [effectiveSensorSessionStartedAtMs]'s kdoc voor de aanleiding. */
+    private fun typeSpecificSensorStartedAtMsFlow(slot: SensorSlot, sensorType: SensorType): Flow<Long?> =
+        when (sensorType) {
+            SensorType.CARESENS_AIR -> careSensAirSensorStartedAtMs(slot)
+            SensorType.DEXCOM_G6 -> dexcomG6SessionStartConfirmedAtMs(slot)
+            else -> flowOf(null)
+        }
+
+    /**
+     * 22/08/2026 (editor, RONDE 122, CRITICAL FIX — op verzoek na live-
+     * melding: "het viel me op dat de calibratie curve van de vorige sensor
+     * nog steeds actief was nadat deze was gestart") — het EFFECTIEVE,
+     * sensortype-bewuste sessie-startmoment voor deze slot: gebruikt bij
+     * voorkeur de sensortype-specifieke, ECHT bij elke NIEUWE fysieke
+     * sensor herziene starttijd (CareSens Air's [careSensAirSensorStartedAtMs]/
+     * Dexcom G6's [dexcomG6SessionStartConfirmedAtMs] — die worden
+     * daadwerkelijk opnieuw gezet bij elke stop/start-cyclus, zie hun eigen
+     * aanroepsites in CareSensAirDriver.kt/DexcomG6Driver.kt), met
+     * [getOrInitSensorStartedAtMs] als vangnet voor sensortypes zonder eigen
+     * sessie-tracking (simulator, Dexcom G7 nog niet).
+     *
+     * Dit is EXACT dezelfde voorkeursvolgorde die
+     * BleConnectionService.kt's computeBreakInDecayFactor() (Ronde 111) al
+     * gebruikte voor het inloopfilter — nu hier gecentraliseerd en OOK
+     * gebruikt door de kalibratie-toepassing zelf. Root cause van de
+     * melding: `applyCalibrationIfEnabled()` (en CalibrationScreen.kt's
+     * `sinceMs`) gebruikten tot deze ronde ALLEEN de generieke
+     * [getOrInitSensorStartedAtMs] — die sleutel wordt uitsluitend bij een
+     * sensor-TYPE-wissel gewist (zie [setSelectedSensor]'s kdoc), NIET bij
+     * het starten van een NIEUWE FYSIEKE sensor van hetzelfde type. Gevolg:
+     * vingerprik-entries (en dus de fit-curve) van een VORIGE fysieke
+     * sensor bleven na een nieuwe-sensor-start gewoon meewegen, precies de
+     * gemelde bug.
+     */
+    suspend fun effectiveSensorSessionStartedAtMs(slot: SensorSlot, sensorType: SensorType): Long =
+        typeSpecificSensorStartedAtMsFlow(slot, sensorType).first() ?: getOrInitSensorStartedAtMs(slot)
+
+    /** Passieve, NIET-initialiserende Flow-variant van
+     *  [effectiveSensorSessionStartedAtMs] — voor weergave-only contexten
+     *  (CombiScreen.kt's fingerprik-markers), zelfde reden als
+     *  [sensorStartedAtMsFlow]'s kdoc: `null` als er nog geen sessie is,
+     *  geen bijwerking. */
+    fun effectiveSensorSessionStartedAtMsFlow(slot: SensorSlot, sensorType: SensorType): Flow<Long?> =
+        combine(typeSpecificSensorStartedAtMsFlow(slot, sensorType), sensorStartedAtMsFlow(slot)) { typeSpecific, generic ->
+            typeSpecific ?: generic
+        }
+
     // ============================================================
     // CareSens Air — per slot
     // ============================================================
@@ -680,6 +732,22 @@ class AppSettings(private val context: Context) {
             prefs[slotString("dexcom_g6_pending_new_sensor_code", slot)] = code
             prefs.remove(slotLong("dexcom_g6_session_start_confirmed_at_ms", slot))
             prefs.remove(slotInt("dexcom_g6_session_start_fail_count", slot))
+            // 22/08/2026 (editor, RONDE 124, op verzoek — "als de starttijd
+            // niet terug komt uit de transmitter dan moeten we gewoon de
+            // starttijd [...] van het invoeren van de sensorcode
+            // gebruiken") — bewaart het moment waarop DEZE code klaargezet
+            // is, als terugvaloptie voor de "Started"/"End (est.)"-weergave
+            // (DexcomG6StatusScreen.kt) wanneer de transmitter zelf nooit
+            // een bevestigde start teruggeeft (bijv. de aanhoudende
+            // infoCode=3 "Invalid"-afwijzingen). Bewust een APART veld i.p.v.
+            // hergebruik van dexcom_g6_session_start_confirmed_at_ms: dat
+            // laatste veld betekent overal elders in de app "ECHT door de
+            // transmitter bevestigd" (warmup-aftelling, inloopfilter, zie
+            // AppSettings.effectiveSensorSessionStartedAtMs()'s kdoc) — dat
+            // zou ten onrechte een niet-bevestigde gok als harde waarheid
+            // laten doorwerken in die berekeningen. Dit veld voedt UITSLUITEND
+            // de "Started"/"End"-WEERGAVE, duidelijk gelabeld als schatting.
+            prefs[slotLong("dexcom_g6_pending_new_sensor_code_queued_at_ms", slot)] = System.currentTimeMillis()
         }
     }
 
@@ -691,7 +759,17 @@ class AppSettings(private val context: Context) {
         context.dataStore.data.first()[slotString("dexcom_g6_pending_new_sensor_code", slot)]
 
     suspend fun clearDexcomG6PendingNewSensorCode(slot: SensorSlot) {
-        context.dataStore.edit { prefs -> prefs.remove(slotString("dexcom_g6_pending_new_sensor_code", slot)) }
+        context.dataStore.edit { prefs ->
+            prefs.remove(slotString("dexcom_g6_pending_new_sensor_code", slot))
+            prefs.remove(slotLong("dexcom_g6_pending_new_sensor_code_queued_at_ms", slot))
+        }
+    }
+
+    /** 22/08/2026 (editor, RONDE 124) — zie setDexcomG6PendingNewSensorCode()'s
+     *  kdoc: het moment waarop de klaarstaande code is ingevoerd, puur als
+     *  weergave-terugvaloptie. */
+    fun dexcomG6PendingNewSensorCodeQueuedAtMs(slot: SensorSlot): Flow<Long?> = context.dataStore.data.map { prefs ->
+        prefs[slotLong("dexcom_g6_pending_new_sensor_code_queued_at_ms", slot)]
     }
 
     suspend fun setDexcomG6SessionStartConfirmedAtMs(slot: SensorSlot, value: Long) {
@@ -725,11 +803,73 @@ class AppSettings(private val context: Context) {
     }
 
     suspend fun resetDexcomG6SessionStartFailCount(slot: SensorSlot) {
-        context.dataStore.edit { prefs -> prefs.remove(slotInt("dexcom_g6_session_start_fail_count", slot)) }
+        context.dataStore.edit { prefs ->
+            prefs.remove(slotInt("dexcom_g6_session_start_fail_count", slot))
+            // 22/08/2026 (editor, RONDE 120) — de laatst-getoonde afwijzings-
+            // reden hoort niet te blijven staan na een geslaagde start, zie
+            // dexcomG6LastSessionStartInfoCode's kdoc hieronder.
+            prefs.remove(slotInt("dexcom_g6_last_session_start_info_code", slot))
+        }
     }
 
     fun dexcomG6SessionStartFailCount(slot: SensorSlot): Flow<Int> = context.dataStore.data.map { prefs ->
         prefs[slotInt("dexcom_g6_session_start_fail_count", slot)] ?: 0
+    }
+
+    /**
+     * 22/08/2026 (editor, RONDE 120, op verzoek — "kun je kijken wat er fout
+     * gaat en dan bij de status in ieder ook wat meer info tonen [...] het
+     * is nu een beetje een blackbox") — de RAUWE infoCode van de laatst
+     * MISLUKTE SessionStart-poging (zie DexcomG6Protocol.kt's
+     * `SessionStartRx.infoCode` en het nieuwe `sessionStartInfoMessage()`
+     * dat 'm naar leesbare tekst vertaalt). Tot deze ronde toonde
+     * DexcomG6StatusScreen.kt altijd dezelfde, hardcoded reden ("transmitter
+     * may still see the old sensor as active", info 0x02) — een live-test
+     * liet zien dat de transmitter in werkelijkheid info 0x03 ("Invalid")
+     * teruggaf, een ANDERE betekenis. `null` = geen respons ontvangen
+     * (timeout) i.p.v. een expliciete afwijzing — ook dat onderscheid is nu
+     * zichtbaar te maken.
+     */
+    suspend fun setDexcomG6LastSessionStartInfoCode(slot: SensorSlot, infoCode: Int?) {
+        context.dataStore.edit { prefs ->
+            val key = slotInt("dexcom_g6_last_session_start_info_code", slot)
+            if (infoCode == null) prefs.remove(key) else prefs[key] = infoCode
+        }
+    }
+
+    fun dexcomG6LastSessionStartInfoCode(slot: SensorSlot): Flow<Int?> = context.dataStore.data.map { prefs ->
+        prefs[slotInt("dexcom_g6_last_session_start_info_code", slot)]
+    }
+
+    /** 22/08/2026 (editor, RONDE 120) — tijdstip van de laatste (mislukte óf
+     *  geslaagde) SessionStart-poging, voor "last tried HH:mm" in de UI —
+     *  zie dexcomG6LastSessionStartInfoCode's kdoc hierboven voor de
+     *  aanleiding. Bewust NIET gewist bij succes (in tegenstelling tot de
+     *  infoCode) — "wanneer voor het laatst geprobeerd" blijft zinvolle
+     *  info, ook na een geslaagde start. */
+    suspend fun setDexcomG6LastSessionStartAttemptAtMs(slot: SensorSlot, value: Long) {
+        context.dataStore.edit { prefs -> prefs[slotLong("dexcom_g6_last_session_start_attempt_at_ms", slot)] = value }
+    }
+
+    fun dexcomG6LastSessionStartAttemptAtMs(slot: SensorSlot): Flow<Long?> = context.dataStore.data.map { prefs ->
+        prefs[slotLong("dexcom_g6_last_session_start_attempt_at_ms", slot)]
+    }
+
+    /** 22/08/2026 (editor, RONDE 121) — tijdstip waarop de app, tijdens een
+     *  klaarstaande nieuwe-sensor-poging, zelf automatisch een SessionStop
+     *  verstuurde omdat de transmitter (via TransmitterTime, zie
+     *  DexcomG6Driver.kt's runControlSequence()-kdoc) een nog lopende sessie
+     *  meldde. Vergeleken met [dexcomG6LastSessionStartAttemptAtMs] in
+     *  dexcomG6StatusText() (DexcomG6StatusScreen.kt) om te kunnen tonen
+     *  "bezig met automatisch stoppen, start volgt bij de volgende
+     *  verbinding" i.p.v. het generieke "Sending sensor start…" tijdens
+     *  precies dát tussenmoment. */
+    suspend fun setDexcomG6LastAutoStopAtMs(slot: SensorSlot, value: Long) {
+        context.dataStore.edit { prefs -> prefs[slotLong("dexcom_g6_last_auto_stop_at_ms", slot)] = value }
+    }
+
+    fun dexcomG6LastAutoStopAtMs(slot: SensorSlot): Flow<Long?> = context.dataStore.data.map { prefs ->
+        prefs[slotLong("dexcom_g6_last_auto_stop_at_ms", slot)]
     }
 
     suspend fun setDexcomG6LastCalibrationState(slot: SensorSlot, raw: Int) {

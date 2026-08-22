@@ -7281,4 +7281,279 @@ Gewijzigd: `data/GlucoseReadingEntity.kt`, `data/FclGlucoLinkDatabase.kt`.
 
 versionCode 131, versionName "0.9.32-calibrated-column-fix".
 
+## Ronde 120 (22/08/2026) — G6 "Start new sensor" blijft mislukken: verkeerde reden getoond + "blackbox"-klacht
+
+**Melding.** "Start new sensor" op een Anubis-kloon-transmitter bleef
+mislukken: telkens "Sensor already active?" → stop → "Sending sensor
+start…" → na 2 pogingen weer de rejected-melding, twee keer herhaald zonder
+succes. Verzoek: uitzoeken wat er misgaat, EN sowieso meer status-info
+tonen ("het is nu een beetje een blackbox"). Later bleek ook: er kwamen
+gewoon glucosewaarden binnen terwijl het scherm nog "Sending sensor
+start…" toonde — verwarrend, leek tegenstrijdig.
+
+**Bevinding 1 — de getoonde reden was feitelijk onjuist.** De vaste tekst
+"transmitter may still see the old sensor as active" gaat uit van infoCode
+0x02. Het meegestuurde logbestand liet zien dat de transmitter bij ELKE
+poging infoCode **3** teruggaf. Geverifieerd tegen xDrip+'s eigen
+`SessionStartRxMessage.message()` (`uploads/xDrip-2026.08.08.zip`): info
+0x03 betekent **"Invalid"**, niet "already active" — een andere, tot nu toe
+onvertaalde betekenis. Vermoedelijke praktische verklaring (niet 100%
+zeker): de vaste 1500ms-pauze tussen stop en start (Ronde 71, getuned op
+een andere transmitter) is voor deze Anubis-kloon te kort — het log laat
+zien dat de transmitter, zonder ooit een geslaagde nieuwe start te
+bevestigen, na verloop van tijd gewoon weer op eigen houtje metingen ging
+rapporteren (mogelijk van de OUDE, nooit volledig afgesloten sessie).
+
+**Bevinding 2 — "blackbox".** `runControlSequence()` vraagt ALTIJD een
+glucosewaarde op, los van of de sessie-start-substap net gelukt/mislukt
+is (zie DexcomG6Driver.kt's eigen kdoc: "...dan ALTIJD een glucosewaarde
+opvragen"). Vandaar dat er data kan binnenkomen terwijl de "Sensor
+start"-substap intern nog vastzit — geen tegenstrijdigheid, maar tot deze
+ronde ook nergens zichtbaar gemaakt.
+
+**Fix (geen wijziging aan de retry-timing zelf — te veel giswerk zonder
+harder bewijs, wél alle beschikbare info zichtbaar):**
+- `sensor/dexcomg6/DexcomG6Protocol.kt` — nieuwe `sessionStartInfoMessage(infoCode)`,
+  dezelfde indeling als xDrip+'s `message()`.
+- `data/AppSettings.kt` — nieuwe per-slot `dexcomG6LastSessionStartInfoCode`
+  (gewist bij succes) en `dexcomG6LastSessionStartAttemptAtMs` (blijft
+  staan, ook na succes).
+- `sensor/dexcomg6/DexcomG6Driver.kt` — `runControlSequence()` schrijft nu
+  bij elke sessie-start-poging (geslaagd of niet) het tijdstip weg, en bij
+  een mislukking de rauwe infoCode.
+- `ui/DexcomG6StatusScreen.kt` — `dexcomG6StatusText()` toont nu de ECHTE
+  reden (via `sessionStartInfoMessage()`) + "last tried HH:mm", en — als
+  van toepassing — "readings are still coming in from the transmitter's
+  current session" wanneer er ná de laatste startpoging alsnog een echte
+  meting binnenkwam (leest `GlucoseReadingStore.latestReading()`, nieuw
+  hier gebruikt).
+
+**Verificatie.** Balance-checker op alle vier gewijzigde bestanden.
+
+Gewijzigd: `sensor/dexcomg6/DexcomG6Protocol.kt`, `data/AppSettings.kt`,
+`sensor/dexcomg6/DexcomG6Driver.kt`, `ui/DexcomG6StatusScreen.kt`.
+
+versionCode 132, versionName "0.9.33-g6-sensor-start-diagnostics".
+
+## Ronde 121 (22/08/2026) — G6 stop/start opgesplitst in aparte verbindcycli + sessie-starttijd via de transmitter zelf
+
+**Verzoek.** Twee vragen n.a.v. Ronde 120: (1) "of de stop knop niet
+gewoon minder opvallend kan en dat we alleen een start sensor knop
+gebruiken die gewoon eerst checkt of er een actieve sensor is [...] dan
+zelf automatisch het stop commando zend. en bij de volgende cycles 5
+minuten later het start commando"; (2) "of uit de transmitter ook het
+start tijdstip valt af te leiden want dat staat nu weer [...] leeg".
+
+**Onderzoek.** xDrip+'s eigen bronbestanden (`uploads/xDrip-2026.08.08.zip`)
+kennen een derde, onafhankelijke opcode naast SessionStart/-Stop:
+`TransmitterTimeTxMessage`/`-RxMessage` (0x24/0x25) — een simpele
+klok-aanvraag die naast de HUIDIGE transmittertijd ook het startmoment van
+een eventuele lopende sessie teruggeeft, LOS van of de vragende app die
+sessie zelf ooit bevestigd kreeg. `Ob1G5StateMachine.java` gebruikt precies
+dit mechanisme (`DexSessionKeeper.setStart(txtime.getRealSessionStartTime())`)
+om een sessie-starttijd te herstellen — dezelfde, bewezen aanpak hier
+overgenomen.
+
+**Root cause (nu wél concreet, met bewijs).** De oude "stop-before-start"-
+combo (Ronde 66/71/120) stuurde Stop ÉN Start binnen DEZELFDE BLE-
+verbindcyclus met maar een willekeurige 1500ms-pauze ertussen — de meest
+waarschijnlijke verklaring voor de herhaalde infoCode=3 "Invalid"-
+afwijzingen op de Anubis-kloon-transmitter van de gebruiker.
+
+**Fix.**
+- `sensor/dexcomg6/DexcomG6Protocol.kt` — nieuw: `buildTransmitterTimeRequest()`
+  (opcode 0x24), `TransmitterTimeRx` (met `sessionInProgress`/
+  `realSessionStartAtMs()`) en `parseTransmitterTime()` (opcode 0x25).
+- `sensor/dexcomg6/DexcomG6Driver.kt` — `runControlSequence()`
+  herontworpen: vraagt nu, zodra een nieuwe-sensor-code klaarstaat ÓF de
+  lokale sessie-starttijd nog onbekend is, ÉÉN TransmitterTime op per
+  cyclus. Meldt de transmitter een lopende sessie: stuurt ALLEEN de Stop,
+  verbreekt de verbinding, en verstuurt de Start BEWUST pas bij de
+  eerstvolgende, natuurlijke ~5-minuten-herverbinding (zelf-corrigerend elke
+  cyclus — geen los "moet ik nog stoppen?"-vlaggetje meer nodig, de oude
+  PendingStopBeforeStart-mechaniek in AppSettings.kt blijft ongebruikt
+  staan voor deze flow). Vult `sessionStartConfirmedAtMs` nu ook vanuit de
+  transmitter's eigen klok, ongeacht of een eigen SessionStart ooit
+  bevestigd werd — en wist 'm als de transmitter juist meldt dat er niets
+  (meer) loopt (stale-detectie).
+- `ui/DexcomG6NewSensorScreen.kt` — de handmatige "Sensor already
+  active?"-bevestigingsdialoog is vervallen: de app checkt en stopt nu
+  zelf automatisch, geen aparte gebruikersbevestiging meer nodig.
+- `ui/DexcomG6StatusScreen.kt` — "Stop sensor" van `OutlinedButton` naar
+  `TextButton` (minder opvallend — nu vooral een noodgreep, niet meer het
+  normale pad om een nieuwe sensor te starten). Nieuwe tussenstatus
+  "Automatically stopping the previous sensor session (stopped HH:mm) —
+  the new sensor starts on the next connection (~5 min)" i.p.v. het
+  misleidende "Sending sensor start…" tijdens dat tussenmoment (nieuw
+  per-slot veld `dexcomG6LastAutoStopAtMs` in `data/AppSettings.kt`).
+  "Started"/"End (est.)" op het sensor-infotabelletje profiteren
+  automatisch mee van de rijkere `sessionStartConfirmedAtMs` — geen aparte
+  UI-wijziging nodig. "Code" blijft bewust "—" zonder een geslaagde eigen
+  SessionStart: de transmitter echoot de sensorcode nooit terug, dat is
+  met geen enkele aanvraag te achterhalen.
+
+**Verificatie.** Balance-checker op alle vijf gewijzigde bestanden.
+
+Gewijzigd: `sensor/dexcomg6/DexcomG6Protocol.kt`, `sensor/dexcomg6/DexcomG6Driver.kt`,
+`data/AppSettings.kt`, `ui/DexcomG6NewSensorScreen.kt`, `ui/DexcomG6StatusScreen.kt`.
+
+versionCode 133, versionName "0.9.34-g6-transmitter-time-split-start".
+
+## Ronde 122 (22/08/2026) — CRITICAL: kalibratie-curve van de vorige sensor bleef actief na een nieuwe-sensor-start
+
+**Melding.** "Het viel me op dat de calibratie curve van de vorige sensor
+nog steeds actief was nadat deze was gestart. Wordt de calibratie wel
+gereset na een stop en/of start van een nieuwe sensor?"
+
+**Root cause.** `applyCalibrationIfEnabled()` (BleConnectionService.kt, de
+LIVE pipeline die daadwerkelijk elke meting kalibreert) en
+CalibrationScreen.kt's `sinceMs` gebruikten allebei
+`settings.getOrInitSensorStartedAtMs(slot)` om te bepalen welke
+vingerprikken meetellen voor de fit-curve. Die sleutel wordt echter
+UITSLUITEND gewist bij een sensor-TYPE-wissel (bijv. CareSens Air → Dexcom
+G6, zie `setSelectedSensor()`'s kdoc) — NIET bij het starten van een
+nieuwe FYSIEKE sensor van hetzelfde type. Gevolg: na het stoppen van de
+oude en starten van een nieuwe G6-sensor bleven vingerprikken (en dus de
+fit-curve) van de VORIGE sensor gewoon meewegen — precies de gemelde bug.
+Interessant genoeg had het inloopfilter (Ronde 111,
+`computeBreakInDecayFactor()`) dit al wél goed: die gebruikte al bij
+voorkeur de sensortype-specifieke, wél-per-fysieke-sensor herziene
+starttijden (Dexcom G6's `dexcomG6SessionStartConfirmedAtMs`, CareSens
+Air's `careSensAirSensorStartedAtMs`) — de kalibratie-toepassing zelf volgde
+dat patroon alleen nooit.
+
+**Fix.** Die voorkeursvolgorde gecentraliseerd in één nieuwe
+`AppSettings.effectiveSensorSessionStartedAtMs(slot, sensorType)` (suspend)
++ `effectiveSensorSessionStartedAtMsFlow(slot, sensorType)` (passieve
+Flow-variant): sensortype-specifieke starttijd als die bestaat (Dexcom
+G6/CareSens Air), anders de generieke `getOrInitSensorStartedAtMs`-vangnet
+(simulator, Dexcom G7 heeft nog geen eigen tracking). Gebruikt nu door:
+- `sensor/ble/BleConnectionService.kt` — `applyCalibrationIfEnabled()`
+  (de eigenlijke bugfix) én `computeBreakInDecayFactor()` (nu ontdubbeld
+  i.p.v. de eigen inline-kopie van dezelfde logica).
+- `ui/CalibrationScreen.kt` — `sinceMs` (zodat de rijlijst/fit-grafiek die
+  de gebruiker ziet altijd matcht met wat er live wordt toegepast). Ook de
+  verouderde kdoc gecorrigeerd die nog beweerde dat kalibratiedata
+  automatisch gewist wordt bij een nieuwe sessie — dat is sinds Ronde 90
+  niet meer zo (filteren op `sinceMs` i.p.v. wissen).
+- `ui/CombiScreen.kt` — de fingerstick-markers op de combi-grafiek van
+  beide slots, voor consistentie met de andere twee.
+
+**Verificatie.** Balance-checker op alle vier gewijzigde bestanden.
+
+Gewijzigd: `data/AppSettings.kt`, `sensor/ble/BleConnectionService.kt`,
+`ui/CalibrationScreen.kt`, `ui/CombiScreen.kt`.
+
+versionCode 134, versionName "0.9.35-calibration-stale-sensor-fix".
+
+## Ronde 123 (22/08/2026) — CRITICAL: G6 auto-stop-detectie liep vast in een oneindige reconnect-storm
+
+**Melding.** Direct na het uitbrengen van Ronde 121 (automatische stop/
+start-detectie via TransmitterTime): "Ik kan niet zien wat er gebeurt,
+maar werken doet het niet. [...] er komt nu al meer dan 25 minuten alleen
+sending sensor start op het hoofdscherm en iedere keer [...] een stopped
+tijd." Meegestuurde logcat (19:53:35–19:54:11) liet ELKE ~6-10 seconden
+een volledige connect→auth→TransmitterTime→SessionStop→disconnect-cyclus
+zien, telkens met `TransmitterTimeRx(currentTime=1159280..1159310,
+sessionStartTime=0)` — ook meteen NA een bevestigd geslaagde
+`SessionStopRx(ok=true, ...)`.
+
+**Root cause 1.** `TransmitterTimeRx.sessionInProgress` (Ronde 121) gebruikte
+`sessionStartTime != -1`, gekopieerd van xDrip+'s eigen `-1`-sentinel voor
+"geen sessie". Deze specifieke Anubis-kloon-transmitter rapporteert echter
+kennelijk **0**, niet -1, zodra er geen sessie loopt — met de oude check
+werd dat gelezen als "sessie gestart op transmitter-tijdstip 0", altijd
+ongelijk aan de grote, oplopende huidige transmitter-tijd, dus
+`sessionInProgress` bleef voor eeuwig `true`. Gevolg: elke cyclus concludeerde
+opnieuw "er loopt nog een sessie", stuurde opnieuw een Stop, en verbrak de
+verbinding — ook al was de vorige sessie allang gestopt.
+
+**Root cause 2 (versterkend).** De auto-stop-en-verbreek-tak keert terug
+zonder ooit de verplichte glucose-aanvraag verderop in `runControlSequence()`
+te bereiken, dus `lastSuccessfulConnectionAtMs` werd nooit bijgewerkt.
+`onConnectionStateChange()`'s STATE_DISCONNECTED-afhandeling gebruikt die
+waarde om te bepalen of de zojuist afgesloten cyclus een "succes"
+(voorspellende ~5-minuten-cooldown) of een "mislukking" (oplopende
+foutenbackoff, 1–10s) was — zonder de fix hieronder werd een BEWUSTE,
+geslaagde auto-stop dus altijd als mislukking behandeld, wat de
+waargenomen ~6-10s-reconnect-storm gaf i.p.v. de bedoelde ~5 minuten.
+
+**Fix.**
+- `sensor/dexcomg6/DexcomG6Protocol.kt` — `sessionInProgress` nu
+  `sessionStartTime > 0 && currentTime != sessionStartTime` (sluit zowel
+  -1 als 0 uit). Nog NIET geverifieerd of deze transmitter een zinvolle,
+  positieve sessionStartTime teruggeeft wanneer er WEL een sessie loopt —
+  dat vereist een volgende live-test met een daadwerkelijk actieve sessie.
+  Als dat niet zo blijkt: onschadelijk gedrag (detectie werkt dan simpelweg
+  niet, geen valse stops).
+- `sensor/dexcomg6/DexcomG6Driver.kt` — de auto-stop-tak zet nu zelf
+  `lastSuccessfulConnectionAtMs`/`cadenceAnchorAtMs` (exact zoals
+  `handleGlucoseResult()` dat al deed), zodat zo'n cyclus als geslaagd
+  meetelt voor de reconnect-cooldown i.p.v. als mislukking.
+
+**Verificatie.** Balance-checker op beide gewijzigde bestanden. Root cause
+1 is met hoge zekerheid vastgesteld uit de logcat (sessionStartTime=0 op
+ELKE cyclus, ook direct na een bevestigde stop — kan onmogelijk een echte
+sessie-start zijn); root cause 2 is afgeleid uit `onConnectionStateChange()`/
+`computeReconnectCooldownMs()`'s eigen, hierboven aangehaalde logica.
+
+Gewijzigd: `sensor/dexcomg6/DexcomG6Protocol.kt`, `sensor/dexcomg6/DexcomG6Driver.kt`.
+
+versionCode 135, versionName "0.9.36-g6-transmitter-time-zero-fix".
+
+## Ronde 124 (22/08/2026) — G6: inconsistente statusteksten gefixt + Started/End-terugval + poging dexTime-fix
+
+**Melding.** Na Ronde 123's fix liep de reconnect-cadans weer normaal
+(bevestigd: `computeReconnectCooldownMs: [...] cooldownMs=240193`), maar
+de daadwerkelijke SessionStart bleef falen met infoCode=3 "Invalid" — nu
+zelfs op een verse poging, ZONDER dat er in diezelfde cyclus net een stop
+gebeurd was (TransmitterTime meldde al vooraf "geen sessie"). Daarnaast:
+"de info die terug komt klopt niet" — het compacte statuskaartje op
+StatusScreen.kt toonde "no response from the transmitter (timeout)"
+terwijl het volle G6-statusscherm gelijktijdig de ECHTE reden ("invalid")
+toonde. En het expliciete verzoek: als de starttijd niet uit de
+transmitter komt, gebruik dan de starttijd (en bijbehorende eindtijd) van
+het moment waarop de sensorcode is ingevoerd.
+
+**Bevinding 1 — inconsistente statusteksten, bug uit Ronde 120.** StatusScreen.kt's
+compacte kaartje (`CompactSensorSummary`) miste de drie in Ronde 120
+toegevoegde parameters (`lastSessionStartInfoCode`/
+`lastSessionStartAttemptAtMs`/`lastRealReadingAtMs`) bij zijn eigen
+`dexcomG6StatusText()`-aanroep — die vielen terug op hun `null`-default,
+dus toonde dit kaartje altijd de generieke "timeout"-tekst, ongeacht de
+ECHTE infoCode. Gefixt: dezelfde drie parameters nu ook hier doorgegeven
+(mirror van DexcomG6StatusScreen.kt's eigen aanroep).
+
+**Bevinding 2 — Started/End-terugval.** Nieuw: `AppSettings.
+dexcomG6PendingNewSensorCodeQueuedAtMs` (per slot, gezet zodra een nieuwe
+code klaargezet wordt, gewist bij succes/handmatig stoppen). DexcomG6StatusScreen.kt's
+"Started"/"End (est.)" vallen nu op dit moment terug wanneer er nog geen
+ECHTE (transmitter-bevestigde) starttijd is — duidelijk gelabeld
+"(est., unconfirmed)". Bewust NIET gebruikt voor de warmup-aftelling of
+het inloopfilter (die blijven op de bevestigde waarde varen, zie
+DexcomG6StatusScreen.kt's kdoc voor de volledige afweging: een ongeldige
+schatting mag geen harde tijdsberekening aansturen, vooral omdat de
+onderliggende meetdata bij een mislukte start feitelijk nog van de OUDE
+sensor komt).
+
+**Bevinding 3 — mogelijke ECHTE oorzaak van infoCode=3, POGING (nog niet
+bevestigd).** `buildSessionStart()`'s `dexTime`-parameter (transmitter-
+relatieve tijd sinds activatie, NIET Unix-tijd) stond al sinds de
+oorspronkelijke implementatie hardcoded op `0`. Deze transmitter loopt
+inmiddels >1,1 miljoen seconden (~13 dagen) — een dexTime van 0 claimt dan
+een sessie "vanaf transmitter-activatie", ver in het (transmitter-interne)
+verleden, wat een plausibele verklaring is voor "Invalid". Omdat er
+sowieso al een TransmitterTime-aanvraag vooraf gaat (Ronde 121), is de
+ECHTE transmitter-relatieve tijd nu al beschikbaar zonder extra BLE-
+round-trip — die wordt nu gebruikt i.p.v. de vaste 0 (terugval blijft 0 als
+TransmitterTime geen antwoord geeft, geen regressie). Expliciet NIET als
+zekere oplossing gepresenteerd — vereist een volgende live-test.
+
+**Verificatie.** Balance-checker op alle vier gewijzigde bestanden.
+
+Gewijzigd: `ui/StatusScreen.kt`, `data/AppSettings.kt`,
+`ui/DexcomG6StatusScreen.kt`, `sensor/dexcomg6/DexcomG6Driver.kt`.
+
+versionCode 136, versionName "0.9.37-g6-dextime-and-started-fallback".
+
 versionCode 117, versionName `0.9.20-alarm-alert-mode-fix`.

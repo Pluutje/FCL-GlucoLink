@@ -53,10 +53,10 @@ com.fclglucolink.app-navigation-compose-2.7.7-51 C:\Users\palap\.gradle\caches\t
 com.fclglucolink.app-lifecycle-livedata-core-2.8.2-52 C:\Users\palap\.gradle\caches\transforms-4\fb71b79c945c8fd807d56cc501f5c293\transformed\lifecycle-livedata-core-2.8.2\res
 com.fclglucolink.app-lifecycle-livedata-2.8.2-53 C:\Users\palap\.gradle\caches\transforms-4\fbe2e9f263af01fd3fdb16bb968aa580\transformed\lifecycle-livedata-2.8.2\res
 com.fclglucolink.app-customview-poolingcontainer-1.0.0-54 C:\Users\palap\.gradle\caches\transforms-4\fbee37c0587655b4e4264b27cffe3cdb\transformed\customview-poolingcontainer-1.0.0\res
-com.fclglucolink.app-pngs-55 D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v8.2-WV\app\build\generated\res\pngs\release
-com.fclglucolink.app-resValues-56 D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v8.2-WV\app\build\generated\res\resValues\release
-com.fclglucolink.app-packageReleaseResources-57 D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v8.2-WV\app\build\intermediates\incremental\release\packageReleaseResources\merged.dir
-com.fclglucolink.app-packageReleaseResources-58 D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v8.2-WV\app\build\intermediates\incremental\release\packageReleaseResources\stripped.dir
-com.fclglucolink.app-release-59 D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v8.2-WV\app\build\intermediates\merged_res\release\mergeReleaseResources
-com.fclglucolink.app-main-60 D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v8.2-WV\app\src\main\res
-com.fclglucolink.app-release-61 D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v8.2-WV\app\src\release\res
+com.fclglucolink.app-pngs-55 D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v8.3-WV\app\build\generated\res\pngs\release
+com.fclglucolink.app-resValues-56 D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v8.3-WV\app\build\generated\res\resValues\release
+com.fclglucolink.app-packageReleaseResources-57 D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v8.3-WV\app\build\intermediates\incremental\release\packageReleaseResources\merged.dir
+com.fclglucolink.app-packageReleaseResources-58 D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v8.3-WV\app\build\intermediates\incremental\release\packageReleaseResources\stripped.dir
+com.fclglucolink.app-release-59 D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v8.3-WV\app\build\intermediates\merged_res\release\mergeReleaseResources
+com.fclglucolink.app-main-60 D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v8.3-WV\app\src\main\res
+com.fclglucolink.app-release-61 D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v8.3-WV\app\src\release\res

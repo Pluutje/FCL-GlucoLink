@@ -390,8 +390,21 @@ private fun CombiTabContent(
     // tijdstip). [sensorStartedAtMsFlow] i.p.v. de initialiserende
     // [getOrInitSensorStartedAtMs] — dit scherm is puur weergave, ook als
     // (nog) geen van beide slots ooit een sensor-sessie had.
-    val sinceMsA by remember(settings) { settings.sensorStartedAtMsFlow(SensorSlot.A) }.collectAsState(initial = null)
-    val sinceMsB by remember(settings) { settings.sensorStartedAtMsFlow(SensorSlot.B) }.collectAsState(initial = null)
+    //
+    // 22/08/2026 (editor, RONDE 122, CRITICAL FIX — zie
+    // AppSettings.effectiveSensorSessionStartedAtMs()'s kdoc) — was
+    // `settings.sensorStartedAtMsFlow(...)`: de generieke, NOOIT-per-
+    // fysieke-sensor-herziene sleutel, waardoor deze combi-grafiek na een
+    // nieuwe-sensor-start fingerstick-markers van een VORIGE fysieke sensor
+    // bleef tonen. `effectiveSensorSessionStartedAtMsFlow` is dezelfde
+    // passieve, niet-initialiserende Flow-variant, nu wél sensortype-bewust
+    // — vandaar de extra `selectedSensorA`/`selectedSensorB`-parameter.
+    val sinceMsA by remember(settings, selectedSensorA) {
+        selectedSensorA?.let { settings.effectiveSensorSessionStartedAtMsFlow(SensorSlot.A, it) } ?: flowOf(null)
+    }.collectAsState(initial = null)
+    val sinceMsB by remember(settings, selectedSensorB) {
+        selectedSensorB?.let { settings.effectiveSensorSessionStartedAtMsFlow(SensorSlot.B, it) } ?: flowOf(null)
+    }.collectAsState(initial = null)
     val fingersticksAFlow = remember(calibrationStore, selectedSensorA, sinceMsA) {
         val type = selectedSensorA
         val since = sinceMsA

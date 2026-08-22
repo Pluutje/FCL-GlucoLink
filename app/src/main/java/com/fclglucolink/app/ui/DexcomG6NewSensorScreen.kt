@@ -9,7 +9,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -18,10 +17,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,7 +32,6 @@ import androidx.compose.ui.unit.dp
 import com.fclglucolink.app.data.AppSettings
 import com.fclglucolink.app.sensor.SensorSlot
 import com.fclglucolink.app.sensor.dexcomg6.DexcomG6CalibrationCode
-import com.fclglucolink.app.sensor.dexcomg6.DexcomG6CalibrationState
 import com.fclglucolink.app.startBleConnectionService
 import com.fclglucolink.app.stopBleConnectionService
 import kotlinx.coroutines.launch
@@ -86,16 +82,24 @@ import kotlinx.coroutines.launch
  * — mirror van xDrip+'s eigen handmatige procedure, zie
  * DexcomG6Protocol.parseSessionStart()'s kdoc — dan simpelweg afwijst met
  * infoCode 0x02 "already started" zonder de nieuwe code toe te passen).
- * `sessionAppearsActive` hieronder leest het laatst bekende, door de
- * transmitter zelf gerapporteerde sensor-statusbyte (zie
- * DexcomG6CalibrationState.kt) — als dat NIET op gestopt/verlopen/mislukt
- * staat, toont de "Start sensor"-knop eerst deze waarschuwing; pas na
- * bevestiging wordt zowel de nieuwe code ALS het "stop eerst"-vlaggetje
- * klaargezet (DexcomG6Driver.kt's runControlSequence() voert dan binnen
- * dezelfde verbindcyclus eerst een SessionStop uit, dan pas de nieuwe
- * SessionStart). Geen apart "Stop sensor"-knop nodig — dit dekt precies het
- * enige scenario waarin stoppen zinvol is (een nieuwe sensor starten terwijl
- * de oude nog loopt).
+ * 22/08/2026 (editor, RONDE 121, herontwerp op verzoek — "een start sensor
+ * knop die gewoon eerst checkt of er een actieve sensor is [...] dan zelf
+ * automatisch het stop commando zend") — de handmatige "Sensor already
+ * active?"-bevestigingsdialoog (met `sessionAppearsActive`/`stopFirst`
+ * hierboven beschreven, gebaseerd op de laatst bekende statusbyte) is
+ * VERVALLEN. Dit scherm zet nu altijd gewoon de nieuwe code klaar — DexcomG6
+ * Driver.kt's runControlSequence() controleert zelf, bij elke verbindpoging,
+ * rechtstreeks bij de transmitter (TransmitterTime-aanvraag, opcode 0x24/
+ * 0x25) of er een sessie loopt, stuurt dan zo nodig ZELF een Stop (in een
+ * eigen, losse verbindcyclus — nooit meer gecombineerd met de Start in
+ * dezelfde cyclus, zie die functie's kdoc voor de aanleiding: dat gaf
+ * herhaaldelijk infoCode=3 "Invalid"-afwijzingen), en stuurt pas de
+ * daadwerkelijke Start zodra de transmitter zelf bevestigt dat er geen
+ * sessie meer actief is — bij de eerstvolgende, ~5 minuten latere
+ * herverbinding. Geen bevestiging van de gebruiker meer nodig: dat was
+ * vroeger nodig omdat stoppen een destructieve, direct-uitgevoerde actie
+ * was; nu is het een impliciete tussenstap die de app zelf afhandelt op weg
+ * naar de nieuwe sensor die de gebruiker al expliciet heeft aangevraagd.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -114,49 +118,14 @@ fun DexcomG6NewSensorScreen(
     val isValid = input.length == 4 && DexcomG6CalibrationCode.checkCode(input)
     var showInvalidHint by remember { mutableStateOf(false) }
     var submitted by remember { mutableStateOf(false) }
-    var showActiveSessionWarning by remember { mutableStateOf(false) }
-    val lastCalibrationStateRaw by settings.dexcomG6LastCalibrationState(slot).collectAsState(initial = null)
-    val sessionAppearsActive = lastCalibrationStateRaw?.let {
-        DexcomG6CalibrationState.fromRaw(it).sensorStarted()
-    } == true
 
-    fun queueSensorStart(stopFirst: Boolean) {
+    fun queueSensorStart() {
         scope.launch {
-            if (stopFirst) {
-                settings.setDexcomG6PendingStopBeforeStart(slot, true)
-            }
             settings.setDexcomG6PendingNewSensorCode(slot, input)
             stopBleConnectionService(context)
             startBleConnectionService(context)
             submitted = true
         }
-    }
-
-    if (showActiveSessionWarning) {
-        AlertDialog(
-            onDismissRequest = { showActiveSessionWarning = false },
-            title = { Text("Sensor already active?") },
-            text = {
-                Text(
-                    "The transmitter last reported an active sensor session. " +
-                        "Starting a new sensor will first stop that one — any " +
-                        "readings from it will end. Continue?"
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    showActiveSessionWarning = false
-                    queueSensorStart(stopFirst = true)
-                }) {
-                    Text("Stop old sensor and start new one")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showActiveSessionWarning = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
     }
 
     if (submitted) {
@@ -195,6 +164,14 @@ fun DexcomG6NewSensorScreen(
                         "Sensor screen — \"Last connected\" will update once it's " +
                         "actually gone through.",
                     style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    "If the transmitter still reports an active session, " +
+                        "FCLGlucoLink will stop it automatically first — the new " +
+                        "sensor code is sent on the following connection, about " +
+                        "5 minutes later.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.secondary
                 )
                 Button(onClick = onStarted, modifier = Modifier.fillMaxWidth()) {
                     Text("Back to Sensor")
@@ -257,7 +234,11 @@ fun DexcomG6NewSensorScreen(
 
             Text(
                 "The code is sent to the transmitter on the next connection " +
-                    "attempt, which this screen kicks off right away.",
+                    "attempt, which this screen kicks off right away. If a " +
+                    "sensor session is still active, FCLGlucoLink stops it " +
+                    "automatically first, then sends the new code on the " +
+                    "connection after that (about 5 minutes later) — no need " +
+                    "to stop it yourself first.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.secondary
             )
@@ -268,11 +249,7 @@ fun DexcomG6NewSensorScreen(
                         showInvalidHint = true
                         return@Button
                     }
-                    if (sessionAppearsActive) {
-                        showActiveSessionWarning = true
-                    } else {
-                        queueSensorStart(stopFirst = false)
-                    }
+                    queueSensorStart()
                 },
                 enabled = input.length == 4,
                 modifier = Modifier.fillMaxWidth()
