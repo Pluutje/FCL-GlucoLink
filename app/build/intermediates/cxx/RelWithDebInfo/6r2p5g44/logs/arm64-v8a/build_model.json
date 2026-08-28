@@ -8,9 +8,9 @@
     "triple": "aarch64-linux-android",
     "llvmTriple": "aarch64-none-linux-android"
   },
-  "cxxBuildFolder": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v8.3-WV\\app\\.cxx\\RelWithDebInfo\\6r2p5g44\\arm64-v8a",
-  "soFolder": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v8.3-WV\\app\\build\\intermediates\\cxx\\RelWithDebInfo\\6r2p5g44\\obj\\arm64-v8a",
-  "soRepublishFolder": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v8.3-WV\\app\\build\\intermediates\\cmake\\release\\obj\\arm64-v8a",
+  "cxxBuildFolder": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.4-WV\\app\\.cxx\\RelWithDebInfo\\6r2p5g44\\arm64-v8a",
+  "soFolder": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.4-WV\\app\\build\\intermediates\\cxx\\RelWithDebInfo\\6r2p5g44\\obj\\arm64-v8a",
+  "soRepublishFolder": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.4-WV\\app\\build\\intermediates\\cmake\\release\\obj\\arm64-v8a",
   "abiPlatformVersion": 26,
   "cmake": {
     "effectiveConfiguration": {
@@ -31,13 +31,13 @@
     "implicitBuildTargetSet": [],
     "cmakeSettingsConfiguration": "android-gradle-plugin-predetermined-name",
     "module": {
-      "cxxFolder": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v8.3-WV\\app\\.cxx",
-      "intermediatesBaseFolder": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v8.3-WV\\app\\build\\intermediates",
-      "intermediatesFolder": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v8.3-WV\\app\\build\\intermediates\\cxx",
+      "cxxFolder": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.4-WV\\app\\.cxx",
+      "intermediatesBaseFolder": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.4-WV\\app\\build\\intermediates",
+      "intermediatesFolder": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.4-WV\\app\\build\\intermediates\\cxx",
       "gradleModulePathName": ":app",
-      "moduleRootFolder": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v8.3-WV\\app",
-      "moduleBuildFile": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v8.3-WV\\app\\build.gradle.kts",
-      "makeFile": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v8.3-WV\\app\\src\\main\\cpp\\CMakeLists.txt",
+      "moduleRootFolder": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.4-WV\\app",
+      "moduleBuildFile": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.4-WV\\app\\build.gradle.kts",
+      "makeFile": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.4-WV\\app\\src\\main\\cpp\\CMakeLists.txt",
       "buildSystem": "CMAKE",
       "ndkFolder": "C:\\Users\\palap\\AppData\\Local\\Android\\Sdk\\ndk\\26.1.10909125",
       "ndkFolderBeforeSymLinking": "C:\\Users\\palap\\AppData\\Local\\Android\\Sdk\\ndk\\26.1.10909125",
@@ -136,7 +136,7 @@
         "SYSTEM": {}
       },
       "project": {
-        "rootBuildGradleFolder": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v8.3-WV",
+        "rootBuildGradleFolder": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.4-WV",
         "sdkFolder": "C:\\Users\\palap\\AppData\\Local\\Android\\Sdk",
         "isBuildOnlyTargetAbiEnabled": true,
         "isCmakeBuildCohabitationEnabled": false,
@@ -155,12 +155,12 @@
   "buildSettings": {
     "environmentVariables": []
   },
-  "prefabFolder": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v8.3-WV\\app\\.cxx\\RelWithDebInfo\\6r2p5g44\\prefab\\arm64-v8a",
+  "prefabFolder": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.4-WV\\app\\.cxx\\RelWithDebInfo\\6r2p5g44\\prefab\\arm64-v8a",
   "isActiveAbi": true,
   "fullConfigurationHash": "6r2p5g446t43492b1d5x6o5a364c6i14ft434oq1y38644p486m1g3htp54",
   "fullConfigurationHashKey": "# Values used to calculate the hash in this folder name.\n# Should not depend on the absolute path of the project itself.\n#   - AGP: 8.5.2.\n#   - $NDK is the path to NDK 26.1.10909125.\n#   - $PROJECT is the path to the parent folder of the root Gradle build file.\n#   - $ABI is the ABI to be built with. The specific value doesn\u0027t contribute to the value of the hash.\n#   - $HASH is the hash value computed from this text.\n#   - $CMAKE is the path to CMake 3.22.1.\n#   - $NINJA is the path to Ninja.\n-H$PROJECT/app/src/main/cpp\n-DCMAKE_SYSTEM_NAME\u003dAndroid\n-DCMAKE_EXPORT_COMPILE_COMMANDS\u003dON\n-DCMAKE_SYSTEM_VERSION\u003d26\n-DANDROID_PLATFORM\u003dandroid-26\n-DANDROID_ABI\u003d$ABI\n-DCMAKE_ANDROID_ARCH_ABI\u003d$ABI\n-DANDROID_NDK\u003d$NDK\n-DCMAKE_ANDROID_NDK\u003d$NDK\n-DCMAKE_TOOLCHAIN_FILE\u003d$NDK/build/cmake/android.toolchain.cmake\n-DCMAKE_MAKE_PROGRAM\u003d$NINJA\n-DCMAKE_LIBRARY_OUTPUT_DIRECTORY\u003d$PROJECT/app/build/intermediates/cxx/RelWithDebInfo/$HASH/obj/$ABI\n-DCMAKE_RUNTIME_OUTPUT_DIRECTORY\u003d$PROJECT/app/build/intermediates/cxx/RelWithDebInfo/$HASH/obj/$ABI\n-DCMAKE_BUILD_TYPE\u003dRelWithDebInfo\n-B$PROJECT/app/.cxx/RelWithDebInfo/$HASH/$ABI\n-GNinja",
   "configurationArguments": [
-    "-HD:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v8.3-WV\\app\\src\\main\\cpp",
+    "-HD:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.4-WV\\app\\src\\main\\cpp",
     "-DCMAKE_SYSTEM_NAME\u003dAndroid",
     "-DCMAKE_EXPORT_COMPILE_COMMANDS\u003dON",
     "-DCMAKE_SYSTEM_VERSION\u003d26",
@@ -171,11 +171,11 @@
     "-DCMAKE_ANDROID_NDK\u003dC:\\Users\\palap\\AppData\\Local\\Android\\Sdk\\ndk\\26.1.10909125",
     "-DCMAKE_TOOLCHAIN_FILE\u003dC:\\Users\\palap\\AppData\\Local\\Android\\Sdk\\ndk\\26.1.10909125\\build\\cmake\\android.toolchain.cmake",
     "-DCMAKE_MAKE_PROGRAM\u003dC:\\Users\\palap\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1\\bin\\ninja.exe",
-    "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY\u003dD:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v8.3-WV\\app\\build\\intermediates\\cxx\\RelWithDebInfo\\6r2p5g44\\obj\\arm64-v8a",
-    "-DCMAKE_RUNTIME_OUTPUT_DIRECTORY\u003dD:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v8.3-WV\\app\\build\\intermediates\\cxx\\RelWithDebInfo\\6r2p5g44\\obj\\arm64-v8a",
+    "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY\u003dD:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.4-WV\\app\\build\\intermediates\\cxx\\RelWithDebInfo\\6r2p5g44\\obj\\arm64-v8a",
+    "-DCMAKE_RUNTIME_OUTPUT_DIRECTORY\u003dD:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.4-WV\\app\\build\\intermediates\\cxx\\RelWithDebInfo\\6r2p5g44\\obj\\arm64-v8a",
     "-DCMAKE_BUILD_TYPE\u003dRelWithDebInfo",
-    "-BD:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v8.3-WV\\app\\.cxx\\RelWithDebInfo\\6r2p5g44\\arm64-v8a",
+    "-BD:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.4-WV\\app\\.cxx\\RelWithDebInfo\\6r2p5g44\\arm64-v8a",
     "-GNinja"
   ],
-  "intermediatesParentFolder": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v8.3-WV\\app\\build\\intermediates\\cxx\\RelWithDebInfo\\6r2p5g44"
+  "intermediatesParentFolder": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.4-WV\\app\\build\\intermediates\\cxx\\RelWithDebInfo\\6r2p5g44"
 }

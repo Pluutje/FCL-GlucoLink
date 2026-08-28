@@ -651,6 +651,22 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
      * afronding naar het volgende rasterpunt i.p.v. het vorige — dat is
      * precies gewenst, want dan hoort de meting echt bij die latere plek in
      * het raster.
+     *
+     * 28/08/2026 (editor, RONDE 155, KRITIEKE FIX — het hierboven beschreven
+     * "afronden" bleek zelf de bug: zie DexcomG7Driver.kt's identieke kdoc
+     * bij dezelfde functienaam voor het volledige, met een meerdere-uren-log
+     * bevestigde bewijs) — `Math.round` bleek fragiel zodra een cyclus
+     * CONSISTENT net over de helft van een vak (2,5 min) te laat binnenkwam
+     * (bijvoorbeeld door BLE-scan-overhead, niet per se een botsing met de
+     * andere slot) — dan rondde elke opeenvolgende cyclus opnieuw naar het
+     * volgende rasterpunt, en bleef de cadans permanent op het dubbele
+     * (10 min) steken, i.p.v. zich te herstellen naar 5. Vervangen door
+     * `Math.floor`: kent een late meting toe aan het LAATST al verstreken
+     * vak i.p.v. het dichtstbijzijnde — de "gemiste hele cyclus"-situatie
+     * hierboven blijft daarbij nog steeds correct afgehandeld (zodra een
+     * vertraging een VOL vak overschrijdt, schuift `floor` vanzelf ook door
+     * naar het volgende rasterpunt), alleen niet meer bij een vertraging van
+     * net iets meer dan de helft.
      */
     private fun computeReconnectCooldownMs(): Long {
         // 04/08/2026 (editor, RONDE 38) — de ronde-36-noodrem
@@ -676,7 +692,7 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
             return MIN_SCAN_COOLDOWN_MS
         }
         val anchor = cadenceAnchorAtMs ?: lastReadingAtMs
-        val periodsElapsed = Math.round((lastReadingAtMs - anchor) / SENSOR_PERIOD_MS.toDouble())
+        val periodsElapsed = Math.floor((lastReadingAtMs - anchor) / SENSOR_PERIOD_MS.toDouble()).toLong()
         val gridReadingAtMs = anchor + periodsElapsed * SENSOR_PERIOD_MS
         val predictedNextReadingAtMs = gridReadingAtMs + SENSOR_PERIOD_MS
         // 12/08/2026 (editor, RONDE 100) — onvoorwaardelijk publiceren, zie

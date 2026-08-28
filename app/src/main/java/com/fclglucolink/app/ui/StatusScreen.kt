@@ -265,8 +265,13 @@ fun SlotStatusContent(
     // gescoped: alleen queryen als er WEL een sensor gekozen is, anders een
     // vaste `null`/lege flow — zelfde patroon als CalibrationScreen.kt's
     // latestReadingFlow (RONDE 81).
+    // 28/08/2026 (editor, RONDE 153, CRITIEKE FIX) — was `sensorType = it`:
+    // zie GlucoseReadingStore.kt's kdoc bij latestReading() voor de volledige
+    // analyse (sensorType alleen is geen betrouwbare slot-discriminator
+    // zodra beide slots hetzelfde sensortype draaien). De null-guard op
+    // selectedSensor blijft ongewijzigd nodig.
     val latestFlow = remember(store, selectedSensor) {
-        selectedSensor?.let { store.latestReading(sensorType = it) } ?: flowOf(null)
+        selectedSensor?.let { store.latestReading(slot = slot) } ?: flowOf(null)
     }
     val latest by latestFlow.collectAsState(initial = null)
     // 13/08/2026 (editor, RONDE 104, Fase 1) — zie ui/Units.kt's
@@ -290,8 +295,10 @@ fun SlotStatusContent(
     //
     // 10/08/2026 (editor, RONDE 81) — zelfde null-guard als latestFlow
     // hierboven, zelfde reden.
+    // 28/08/2026 (editor, RONDE 153, CRITIEKE FIX) — zelfde reden als
+    // latestFlow hierboven.
     val recentFlow = remember(store, selectedSensor) {
-        selectedSensor?.let { store.recentReadings(hours = 48, sensorType = it) } ?: flowOf(emptyList())
+        selectedSensor?.let { store.recentReadings(hours = 48, slot = slot) } ?: flowOf(emptyList())
     }
     val recent by recentFlow.collectAsState(initial = emptyList())
     // 10/08/2026 (editor, RONDE 84, BUGFIX na live-melding met screenshots —
@@ -837,7 +844,10 @@ private fun CompactSensorSummary(
             val lastSessionStartInfoCode by settings.dexcomG6LastSessionStartInfoCode(slot).collectAsState(initial = null)
             val lastSessionStartAttemptAtMs by settings.dexcomG6LastSessionStartAttemptAtMs(slot).collectAsState(initial = null)
             val readingStoreForStatus = remember { GlucoseReadingStore(context) }
-            val lastRealReadingForStatus by readingStoreForStatus.latestReading(SensorType.DEXCOM_G6).collectAsState(initial = null)
+            // 28/08/2026 (editor, RONDE 153, CRITIEKE FIX) — was
+            // `latestReading(SensorType.DEXCOM_G6)`: zie GlucoseReadingStore.
+            // kt's kdoc bij latestReading() voor de volledige analyse.
+            val lastRealReadingForStatus by readingStoreForStatus.latestReading(slot = slot).collectAsState(initial = null)
             val text = dexcomG6StatusText(
                 connectionState = connectionState,
                 lastConnectedAtMs = lastConnectedAtMs,

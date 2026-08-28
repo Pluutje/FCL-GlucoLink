@@ -3,6 +3,7 @@ package com.fclglucolink.app.data
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.fclglucolink.app.sensor.GlucoseReading
+import com.fclglucolink.app.sensor.SensorSlot
 import com.fclglucolink.app.sensor.SensorType
 
 /**
@@ -42,17 +43,40 @@ data class GlucoseReadingEntity(
     // glucoseMgdl — functioneel identiek aan "geen kalibratie toegepast",
     // wat voor die oude rijen (waar dit veld sowieso al verloren was) niet
     // meer te reconstrueren is.
-    val calibratedMgdl: Double? = null
+    val calibratedMgdl: Double? = null,
+    // 28/08/2026 (editor, RONDE 153, CRITIEKE FIX — live-melding: twee
+    // gelijktijdig gekoppelde CareSens Air-sensoren (slot A + slot B)
+    // "lijken weer samen te vloeien [...] geen goede scheiding tussen de
+    // beide slots") — vóór deze ronde had deze tabel GEEN kolom die
+    // vastlegde uit WELKE slot een meting kwam, alleen [sensorType]. De
+    // per-slot-filtering die sinds RONDE 79 bestaat (GlucoseReadingDao.
+    // recentReadingsForSensorType()/latestReadingForSensorType(), nu
+    // VERWIJDERD, zie dat bestand se kdoc) filterde dus ALLEEN op
+    // sensortype — genoeg zolang de twee actieve slots verschillende
+    // types draaiden (bv. G6 + CareSens Air, de oorspronkelijke opstelling
+    // van de gebruiker zelf), maar zinloos zodra beide slots HETZELFDE
+    // sensortype draaien: dan komen beide fysieke sensoren se metingen
+    // onder exact dezelfde `sensorType`-waarde binnen, en kan geen enkele
+    // sensorType-gefilterde query ze nog uit elkaar houden — precies het
+    // gemelde symptoom. Nullable (zonder default, zelfde patroon als
+    // [rawSensorMgdl]/[calibratedMgdl] hierboven): bestaande rijen van
+    // vóór deze migratie hebben geen bekende slot en verdwijnen simpelweg
+    // (niet: worden fout toegewezen) uit de per-slot-tabbladen totdat ze
+    // buiten het 48u-venster vallen — een kortstondig, zichzelf
+    // herstellend "gat" in de historie, geen blijvend dataverlies (de
+    // "Combi"-tab, die ongefilterd blijft, toont ze gewoon door).
+    val slot: String? = null
 )
 
-fun GlucoseReading.toEntity(): GlucoseReadingEntity = GlucoseReadingEntity(
+fun GlucoseReading.toEntity(slot: SensorSlot): GlucoseReadingEntity = GlucoseReadingEntity(
     glucoseMgdl = glucoseMgdl,
     trendMgdlPerMin = trendMgdlPerMin,
     timestampMs = timestampMs,
     sensorStartedAtMs = sensorStartedAtMs,
     sensorType = sensorType.name,
     rawSensorMgdl = rawSensorMgdl,
-    calibratedMgdl = calibratedMgdl
+    calibratedMgdl = calibratedMgdl,
+    slot = slot.name
 )
 
 fun GlucoseReadingEntity.toReading(): GlucoseReading = GlucoseReading(

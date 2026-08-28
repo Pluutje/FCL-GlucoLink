@@ -150,8 +150,14 @@ private fun AlarmContent(type: AlarmType, onStop: () -> Unit, onSnooze: (Int) ->
     LaunchedEffect(type) {
         displayUnit = settings.getDisplayUnitOnce()
         val slot = settings.getAapsActiveSlotOnce()
-        val sensorType = slot?.let { settings.getSelectedSensorOnce(it) }
-        latestReading = readingStore.latestReading(sensorType = sensorType).first()
+        // 28/08/2026 (editor, RONDE 153, CRITIEKE FIX) — was
+        // `sensorType = sensorType` (sensorType hier alleen nog gebruikt
+        // geweest als tussenwaarde voor die aanroep, verder ongebruikt): zie
+        // GlucoseReadingStore.kt's kdoc bij latestReading() voor de
+        // volledige analyse. `slot = slot` behoudt hetzelfde `null`-gedrag
+        // (geen actieve AAPS-slot bekend -> ongefilterde/gecombineerde
+        // laatste meting, zelfde fallback als voorheen).
+        latestReading = readingStore.latestReading(slot = slot).first()
     }
 
     Column(

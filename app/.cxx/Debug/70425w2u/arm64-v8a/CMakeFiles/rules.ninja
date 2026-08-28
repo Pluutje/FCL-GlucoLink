@@ -42,7 +42,7 @@ rule CUSTOM_COMMAND
 # Rule for re-running cmake.
 
 rule RERUN_CMAKE
-  command = C:\Users\palap\AppData\Local\Android\Sdk\cmake\3.22.1\bin\cmake.exe --regenerate-during-build -SD:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v8.4-WV\app\src\main\cpp -BD:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v8.4-WV\app\.cxx\Debug\70425w2u\arm64-v8a
+  command = C:\Users\palap\AppData\Local\Android\Sdk\cmake\3.22.1\bin\cmake.exe --regenerate-during-build -SD:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\cpp -BD:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\.cxx\Debug\70425w2u\arm64-v8a
   description = Re-running CMake...
   generator = 1
 

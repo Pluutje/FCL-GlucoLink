@@ -61,6 +61,52 @@ object DiagnosticFileLogger {
     @Volatile private var enabled: Boolean = false
     @Volatile private var appContext: Context? = null
 
+    /**
+     * 29/08/2026 (editor, RONDE 156 — puur diagnostisch, GEEN gedrags-
+     * wijziging) — AANLEIDING: live-melding "blijft vervolgens bijna een
+     * kwartie op connecting staan" na het installeren van v169. De
+     * meegestuurde log (fclglucolink_2026-08-28 23.59.txt) toont tussen
+     * 23:45:58 en 23:48:09 een korte, chaotische reeks mislukte
+     * herverbindingen (waaronder een niet eerder geziene status=133),
+     * gevolgd door VOLLEDIGE stilte — geen enkele DexcomG7-regel meer,
+     * terwijl de disconnect-handler in DexcomG7Driver.kt na ELKE disconnect
+     * onvoorwaardelijk een nieuwe scanpoging inplant. Zo'n totale stilte
+     * (i.p.v. herhaalde foutregels) past bij een eerder, soortgelijk
+     * bevestigd scenario (BleConnectionService.kt's Ronde 59-kdoc: "TWEE
+     * gelijktijdige BluetoothGatt-verbindingen naar hetzelfde toestel...
+     * transmitter raakte in de war, beide verbraken meteen weer") — het
+     * vermoeden is dat de update-herstart kortstondig TWEE APARTE
+     * PROCESSEN met elk hun eigen BleConnectionService-instantie heeft
+     * opgeleverd (elk met een eigen mutex/driver/sessiesleutel — de
+     * bestaande startCommandMutex-bescherming werkt alleen BINNEN één
+     * proces). Dit is NIET hard te bewijzen uit de huidige log: er staat
+     * nergens een proces-ID bij.
+     *
+     * [instanceTag] hieronder is een korte, willekeurige tag die precies
+     * ÉÉN keer wordt aangemaakt zodra dit object voor het eerst wordt
+     * aangeraakt — en dat gebeurt in de praktijk hoogstens één keer per
+     * proces (Kotlin `object`s zijn per-proces singletons; een nieuw
+     * Android-proces = een nieuwe JVM/ART-instantie = een verse
+     * class-initialisatie). Twee gelijktijdig actieve processen krijgen
+     * dus gegarandeerd VERSCHILLENDE tags. Bevat ook het proces-ID zelf
+     * (handig om rechtstreeks te correleren met een systeem-logcat-dump),
+     * plus een korte random suffix als extra zekerheid tegen PID-hergebruik.
+     * Toegevoegd in [writeLine] en [logFatal] — ÉÉN plek, dus geldt
+     * automatisch voor elke bestaande `DiagnosticFileLogger.log(...)`-
+     * aanroep door de hele app heen, zonder één van de honderden bestaande
+     * aanroepen zelf te hoeven aanpassen.
+     *
+     * Ziet een volgende log twee VERSCHILLENDE tags door elkaar heen lopen
+     * binnen hetzelfde tijdsbestek, dan is het duale-proces-vermoeden
+     * bevestigd — blijft het overal dezelfde ene tag, dan ligt de oorzaak
+     * ergens anders en moet dat spoor losgelaten worden.
+     */
+    private val instanceTag: String by lazy {
+        val pid = android.os.Process.myPid()
+        val suffix = (0..0xFFF).random().toString(16).padStart(3, '0')
+        "$pid-$suffix"
+    }
+
     /** Aanroepen bij app-start (zie FclGlucoLinkApp.kt), met de destijds
      *  opgeslagen schakelaarstand — zie kdoc bij setEnabled() voor waarom
      *  dit een los, in-memory vlaggetje is i.p.v. steeds DataStore te lezen. */
@@ -101,7 +147,7 @@ object DiagnosticFileLogger {
             val dateStamp = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
             val file = File(dir, "fclglucolink_$dateStamp.txt")
             val timeStamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US).format(Date())
-            file.appendText("$timeStamp $message\n")
+            file.appendText("$timeStamp [$instanceTag] $message\n")
         }
     }
 
@@ -113,5 +159,51 @@ object DiagnosticFileLogger {
     fun logError(message: String) {
         android.util.Log.e(TAG, message)
         writeLine("ERROR: $message")
+    }
+
+    /**
+     * 27/08/2026 (editor, RONDE 126, na analyse van Rick's logs op verzoek
+     * van de gebruiker) — vóór deze ronde bevatte GEEN van de drie
+     * diagnose-logbestanden ooit een spoor van een crash: de app-crash zelf
+     * killt het proces voordat de gewone, `enabled`-afhankelijke [log]/
+     * [logError] iets hadden kunnen wegschrijven — het enige wat zichtbaar
+     * was, was een gat in de tijdlijn (BLE-communicatie stopt abrupt zonder
+     * de gebruikelijke STATE_DISCONNECTED-regel, gevolgd door een verse
+     * scan/reconnect als het proces herstart). Deze functie, aangeroepen
+     * vanuit een globale [Thread.UncaughtExceptionHandler] (zie
+     * FclGlucoLinkApp.kt's `onCreate()`), schrijft de VOLLEDIGE stacktrace
+     * weg VOORDAT het proces sterft, zodat een volgende crash wél
+     * herleidbaar is.
+     *
+     * Bewust ONAFHANKELIJK van [enabled] (in tegenstelling tot [writeLine]):
+     * een crash is precies het soort gebeurtenis waarvoor je de informatie
+     * wilt hebben, ook als de gebruiker het diagnose-logboek nooit bewust
+     * heeft aangezet — hier direct naar het bestand geschreven i.p.v. via
+     * [writeLine].
+     *
+     * Bewust in een `runCatching` (net als [writeLine]): dit draait op de
+     * crashende thread, vlak vóór processterminatie — een fout HIERIN mag
+     * nooit de eigenlijke crash-afhandeling (het doorgeven aan de vorige
+     * handler, zie FclGlucoLinkApp.kt) blokkeren of zelf een tweede,
+     * verwarrende crash veroorzaken.
+     */
+    fun logFatal(thread: Thread, throwable: Throwable) {
+        val stackTrace = runCatching {
+            val writer = java.io.StringWriter()
+            throwable.printStackTrace(java.io.PrintWriter(writer))
+            writer.toString()
+        }.getOrElse { throwable.toString() }
+        android.util.Log.e(TAG, "UNCAUGHT EXCEPTION on thread ${thread.name}:\n$stackTrace")
+        runCatching {
+            val ctx = appContext ?: return@runCatching
+            val dir = File(ctx.getExternalFilesDir(null), "log")
+            if (!dir.exists() && !dir.mkdirs() && !dir.exists()) return@runCatching
+            val dateStamp = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+            val file = File(dir, "fclglucolink_$dateStamp.txt")
+            val timeStamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US).format(Date())
+            file.appendText(
+                "$timeStamp [$instanceTag] === UNCAUGHT EXCEPTION on thread ${thread.name} ===\n$stackTrace\n"
+            )
+        }
     }
 }

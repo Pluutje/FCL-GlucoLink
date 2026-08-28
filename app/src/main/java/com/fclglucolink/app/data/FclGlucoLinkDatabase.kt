@@ -103,9 +103,24 @@ private val MIGRATION_6_7 = object : Migration(6, 7) {
     }
 }
 
+/** 28/08/2026 (editor, RONDE 153, CRITIEKE FIX) — versie 7 -> 8: nieuwe
+ *  nullable `slot`-kolom op `glucose_readings`, zie GlucoseReadingEntity.kt's
+ *  kdoc bij dat veld voor de volledige aanleiding (twee gelijktijdig
+ *  gekoppelde sensoren van HETZELFDE type konden hun metingen niet meer uit
+ *  elkaar houden, omdat `sensorType` de enige per-slot-filtersleutel was).
+ *  Zelfde "ALTER TABLE i.p.v. destructive migration"-redenering als de
+ *  eerdere migraties hierboven — bestaande rijen krijgen `NULL` (geen bekende
+ *  slot) i.p.v. te worden gewist; ze vallen simpelweg buiten de nieuwe
+ *  slot-gefilterde per-tab-queries totdat ze het 48u-venster uitgroeien. */
+private val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `glucose_readings` ADD COLUMN `slot` TEXT")
+    }
+}
+
 @Database(
     entities = [GlucoseReadingEntity::class, CalibrationEntryEntity::class, SensorSwitchEventEntity::class],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class FclGlucoLinkDatabase : RoomDatabase() {
@@ -123,7 +138,7 @@ abstract class FclGlucoLinkDatabase : RoomDatabase() {
                     context.applicationContext,
                     FclGlucoLinkDatabase::class.java,
                     "fclglucolink.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8).build().also { instance = it }
             }
     }
 }

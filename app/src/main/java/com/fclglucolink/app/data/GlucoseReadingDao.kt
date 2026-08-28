@@ -18,15 +18,28 @@ interface GlucoseReadingDao {
     @Query("SELECT * FROM glucose_readings ORDER BY timestampMs DESC LIMIT 1")
     fun latestReading(): Flow<GlucoseReadingEntity?>
 
-    // 10/08/2026 (editor, RONDE 79 — 2-sensoren-architectuur) — type-gefilterde
-    // varianten, nodig voor de per-slot tabs (Dexcom G6 / CareSens): de
-    // ongefilterde queries hierboven blijven bestaan voor de "Combi"-tab
-    // (gecombineerde weergave van beide slots).
-    @Query("SELECT * FROM glucose_readings WHERE timestampMs >= :sinceMs AND sensorType = :sensorType ORDER BY timestampMs ASC")
-    fun recentReadingsForSensorType(sinceMs: Long, sensorType: String): Flow<List<GlucoseReadingEntity>>
+    // 10/08/2026 (editor, RONDE 79 — 2-sensoren-architectuur) — GEÏNTRODUCEERD
+    // als type-gefilterde varianten voor de per-slot-tabs.
+    //
+    // 28/08/2026 (editor, RONDE 153, VERWIJDERD — CRITIEKE FIX na live-
+    // melding: twee gelijktijdig gekoppelde CareSens Air-sensoren "lijken
+    // weer samen te vloeien") — deze `sensorType`-gefilterde queries
+    // (`recentReadingsForSensorType`/`latestReadingForSensorType`) waren de
+    // eigenlijke OORZAAK van die bug: `sensorType` alleen is GEEN
+    // betrouwbare slot-discriminator zodra beide slots hetzelfde sensortype
+    // draaien (bv. CareSens Air + CareSens Air) — dan filteren deze queries
+    // helemaal niets meer, en komen beide fysieke sensoren se metingen op
+    // ELK tabblad terecht. Vervangen door [recentReadingsForSlot]/
+    // [latestReadingForSlot] hieronder, die op de nieuwe [GlucoseReadingEntity.
+    // slot]-kolom filteren — DIE is per definitie altijd uniek per fysieke
+    // koppeling, ongeacht welk sensortype er toevallig in beide slots
+    // draait. Zie GlucoseReadingEntity.kt's kdoc bij `slot` voor de
+    // volledige analyse.
+    @Query("SELECT * FROM glucose_readings WHERE timestampMs >= :sinceMs AND slot = :slot ORDER BY timestampMs ASC")
+    fun recentReadingsForSlot(sinceMs: Long, slot: String): Flow<List<GlucoseReadingEntity>>
 
-    @Query("SELECT * FROM glucose_readings WHERE sensorType = :sensorType ORDER BY timestampMs DESC LIMIT 1")
-    fun latestReadingForSensorType(sensorType: String): Flow<GlucoseReadingEntity?>
+    @Query("SELECT * FROM glucose_readings WHERE slot = :slot ORDER BY timestampMs DESC LIMIT 1")
+    fun latestReadingForSlot(slot: String): Flow<GlucoseReadingEntity?>
 
     /** Huishouding — voorkomt dat de tabel onbeperkt blijft groeien.
      *  Aangeroepen bij elke insert vanuit GlucoseReadingStore. */
@@ -71,7 +84,16 @@ interface GlucoseReadingDao {
      *  daadwerkelijk dataverlies-risico dat vóór de 2-sensoren-architectuur
      *  niet kon optreden (er was toch maar één actieve sensor tegelijk).
      *  BleConnectionService.kt roept vanaf nu deze type-gefilterde variant
-     *  aan i.p.v. [deleteFrom]. */
-    @Query("DELETE FROM glucose_readings WHERE timestampMs >= :fromMs AND sensorType = :sensorType")
-    suspend fun deleteFromForSensorType(fromMs: Long, sensorType: String)
+     *  aan i.p.v. [deleteFrom].
+     *
+     *  28/08/2026 (editor, RONDE 153, VERWIJDERD) — zelfde reden als
+     *  [recentReadingsForSlot]'s kdoc hierboven: `sensorType` alleen is geen
+     *  betrouwbare slot-scoping zodra beide slots hetzelfde sensortype
+     *  draaien (dan zou een nieuwe-sessie-trim op de ene slot ook de nog
+     *  geldige historie van de ANDERE, gelijktijdig actieve slot van
+     *  hetzelfde type wegvegen — exact de bugklasse die deze functie's
+     *  eigen kdoc destijds probeerde te voorkomen, alleen onvolledig).
+     *  Vervangen door [deleteFromForSlot]. */
+    @Query("DELETE FROM glucose_readings WHERE timestampMs >= :fromMs AND slot = :slot")
+    suspend fun deleteFromForSlot(fromMs: Long, slot: String)
 }

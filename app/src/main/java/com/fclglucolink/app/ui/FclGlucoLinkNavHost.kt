@@ -66,6 +66,10 @@ private const val BASE_DEXCOM_G6_STATUS = "dexcom_g6_status"
 private val ROUTE_DEXCOM_G6_STATUS = "$BASE_DEXCOM_G6_STATUS/{slot}"
 private const val BASE_CARESENS_STATUS = "caresens_status"
 private val ROUTE_CARESENS_STATUS = "$BASE_CARESENS_STATUS/{slot}"
+// 27/08/2026 (editor, RONDE 129) — zie DexcomG7StatusScreen.kt's kdoc:
+// vervangt de statusRouteFor()-fallback naar PairingScreen uit Ronde 127.
+private const val BASE_DEXCOM_G7_STATUS = "dexcom_g7_status"
+private val ROUTE_DEXCOM_G7_STATUS = "$BASE_DEXCOM_G7_STATUS/{slot}"
 private const val ROUTE_SETTINGS = "settings"
 private const val ROUTE_ABOUT = "about"
 // 13/08/2026 (editor, RONDE 106) — geen slot-argument nodig, zie
@@ -171,19 +175,40 @@ fun FclGlucoLinkNavHost() {
      *  (zonder slot), zie slotRoute() bovenaan dit bestand: de aanroeper
      *  plakt zelf de juiste slot erachter, want deze functie kent alleen
      *  het sensortype, niet voor welke slot 'm aangeroepen wordt.
+     *
+     *  27/08/2026 (editor, RONDE 127, bug gemeld tijdens een live G7-test —
+     *  "als ik op het hoofdscherm op de status info klik komt hij op de
+     *  'choose you sensor' pagina en klikt bij de g7 niet door naar de
+     *  extra info pagina") — DEXCOM_G7 had hier GEEN eigen case, viel dus in
+     *  de `else -> BASE_SENSOR_SELECTION`-val: een "status info"-tik voor
+     *  een G7-slot landde daardoor altijd op SensorSelectionScreen i.p.v.
+     *  ergens G7-specifieks. Erger nog: SensorSelectionScreen's eigen
+     *  `sensor == activeSensor -> onReopenActive()`-tak (zie
+     *  SensorSelectionScreen.kt) roept DEZE functie opnieuw aan — tikken op
+     *  de dan al-actieve G7-tegel navigeerde dus telkens naar dezelfde
+     *  BASE_SENSOR_SELECTION-route waar de gebruiker al stond, wat als een
+     *  scherm voelt dat niets doet ("klikt niet door").
+     *
+     *  Tussenoplossing in RONDE 127: bij gebrek aan een eigen G7-
+     *  statusscherm stuurde dit voor DEXCOM_G7 door naar de generieke
+     *  PairingScreen. RONDE 129 (op verzoek — "wat we in ieder geval alvast
+     *  kunnen doen is een statusscherm maken") bouwt dat eigen scherm alsnog
+     *  (DexcomG7StatusScreen.kt), dus DEXCOM_G7 krijgt nu net als G6/
+     *  CareSens/Simulator een eigen, echte case.
      */
-    fun statusBaseFor(sensorType: SensorType?): String = when (sensorType) {
-        SensorType.DEXCOM_G6 -> BASE_DEXCOM_G6_STATUS
-        SensorType.CARESENS_AIR -> BASE_CARESENS_STATUS
-        SensorType.SIMULATOR -> BASE_SIMULATOR_SETUP
-        else -> BASE_SENSOR_SELECTION
+    fun statusRouteFor(sensorType: SensorType?, slot: SensorSlot): String = when (sensorType) {
+        SensorType.DEXCOM_G6 -> slotRoute(BASE_DEXCOM_G6_STATUS, slot)
+        SensorType.CARESENS_AIR -> slotRoute(BASE_CARESENS_STATUS, slot)
+        SensorType.SIMULATOR -> slotRoute(BASE_SIMULATOR_SETUP, slot)
+        SensorType.DEXCOM_G7 -> slotRoute(BASE_DEXCOM_G7_STATUS, slot)
+        else -> slotRoute(BASE_SENSOR_SELECTION, slot)
     }
 
     NavHost(navController = navController, startDestination = ROUTE_COMBI) {
         // 10/08/2026 (editor, RONDE 79) — het nieuwe startscherm, zie
         // CombiScreen.kt's kdoc. Leest hier ZELF selectedSensorA/B (i.p.v.
         // dat CombiScreen dat doet) puur om onOpenSensorStatus's
-        // routebepaling (statusBaseFor) te kunnen doen — CombiScreen zelf
+        // routebepaling (statusRouteFor) te kunnen doen — CombiScreen zelf
         // hoeft de resulterende ROUTE-naam niet te kennen, geeft alleen de
         // aangetikte SensorSlot door.
         composable(ROUTE_COMBI) {
@@ -195,7 +220,7 @@ fun FclGlucoLinkNavHost() {
                 },
                 onOpenSensorStatus = { targetSlot ->
                     val activeSensor = if (targetSlot == SensorSlot.A) selectedSensorA else selectedSensorB
-                    navController.navigate(slotRoute(statusBaseFor(activeSensor), targetSlot))
+                    navController.navigate(statusRouteFor(activeSensor, targetSlot))
                 },
                 onOpenSettings = { navController.navigate(ROUTE_SETTINGS) },
                 // 10/08/2026 (editor, RONDE 81, CRITICAL BUGFIX) — zie kdoc
@@ -300,6 +325,31 @@ fun FclGlucoLinkNavHost() {
             )
         }
 
+        // 27/08/2026 (editor, RONDE 129) — zie DexcomG7StatusScreen.kt's kdoc,
+        // zelfde patroon als ROUTE_DEXCOM_G6_STATUS/ROUTE_CARESENS_STATUS
+        // hierboven.
+        composable(ROUTE_DEXCOM_G7_STATUS) { backStackEntry ->
+            val slot = slotArg(backStackEntry)
+            DexcomG7StatusScreen(
+                slot = slot,
+                onBack = { navController.popBackStack() },
+                onDisconnect = {
+                    stopBleConnectionService(context)
+                    ConnectionStatusBridge.update(slot, ConnectionState.Disconnected)
+                    scope.launch { settings.clearDeviceAddress(slot) }
+                },
+                // 27/08/2026 (editor, RONDE 130) — zie DexcomG7StatusScreen.kt's
+                // kdoc punt 3+4: hergebruikt dezelfde route/flow als
+                // SensorSelectionScreen's "Switch transmitter"-actie
+                // (regel ~457 hieronder) — DexcomG7SetupScreen.kt's
+                // onConfirmed wist zelf al het device-adres, slaat de nieuwe
+                // code op en navigeert door naar het koppelscherm.
+                onChangePairingCode = {
+                    navController.navigate(slotRoute(BASE_DEXCOM_G7_SETUP, slot))
+                }
+            )
+        }
+
         // 08/08/2026 (editor, RONDE 56) — zie DexcomG6NewSensorScreen.kt's kdoc.
         composable(ROUTE_DEXCOM_G6_NEW_SENSOR) { backStackEntry ->
             val slot = slotArg(backStackEntry)
@@ -343,7 +393,7 @@ fun FclGlucoLinkNavHost() {
             SensorSelectionScreen(
                 activeSensor = activeSensor,
                 onReopenActive = {
-                    navController.navigate(slotRoute(statusBaseFor(activeSensor), slot)) {
+                    navController.navigate(statusRouteFor(activeSensor, slot)) {
                         popUpTo(ROUTE_SENSOR_SELECTION) { inclusive = true }
                     }
                 },
@@ -374,6 +424,24 @@ fun FclGlucoLinkNavHost() {
                     // hier: sla de setup-wizard over en ga direct naar
                     // PairingScreen.
                     scope.launch {
+                        // 28/08/2026 (editor, RONDE 140, op melding van de
+                        // gebruiker — zie README voor het volledige verhaal)
+                        // — een Dexcom G7-koppelcode hoort bij de WEGWERP-
+                        // SENSOR (elke nieuwe G7 heeft een eigen code op de
+                        // applicator, sensor gaat ~10 dagen mee), niet bij
+                        // herbruikbare hardware zoals G6's transmitter-ID
+                        // (waarvoor "onthoud 'm bij terugwisselen" hierboven
+                        // WEL expliciet gevraagd is, zie kdoc bij DEXCOM_G6).
+                        // Wisselen weg van G7 naar een ander type moet de
+                        // oude code dus vergeten — anders koppelt de app bij
+                        // de volgende (nieuwe) G7-sensor stilzwijgend door
+                        // met een inmiddels ONGELDIGE code, wat alleen tot
+                        // een verwarrende "onjuiste koppelcode"-foutmelding
+                        // kan leiden terwijl de gebruiker de nieuwe code
+                        // (nog) niet eens had kunnen invoeren.
+                        if (activeSensor == SensorType.DEXCOM_G7 && sensorType != SensorType.DEXCOM_G7) {
+                            settings.clearDexcomG7PairingCode(slot)
+                        }
                         when (sensorType) {
                             SensorType.SIMULATOR -> {
                                 settings.setSelectedSensor(slot, sensorType)
@@ -436,6 +504,13 @@ fun FclGlucoLinkNavHost() {
                     stopBleConnectionService(context)
                     ConnectionStatusBridge.update(slot, ConnectionState.Disconnected)
                     scope.launch {
+                        // RONDE 140 — zie kdoc hierboven bij onSensorChosen:
+                        // zelfde reden, "op None zetten" is voor G7 ook een
+                        // type-wissel (weg van DEXCOM_G7), dus ook hier de
+                        // oude koppelcode vergeten i.p.v. laten staan.
+                        if (activeSensor == SensorType.DEXCOM_G7) {
+                            settings.clearDexcomG7PairingCode(slot)
+                        }
                         settings.clearSelectedSensor(slot)
                         navController.popBackStack()
                     }
@@ -470,6 +545,12 @@ fun FclGlucoLinkNavHost() {
                     // de zojuist geschreven waarde ziet.
                     scope.launch {
                         settings.clearDeviceAddress(slot)
+                        // 28/08/2026 (editor, RONDE 154, CRITIEKE FIX) — zie
+                        // AppSettings.clearCareSensAirSensorSession()'s kdoc:
+                        // zonder deze reset bleef de VORIGE sensor's Start-/
+                        // End-tijd zichtbaar totdat de nieuwe sensor zijn
+                        // eerste live GATT-antwoord had gestuurd.
+                        settings.clearCareSensAirSensorSession(slot)
                         settings.setSelectedSensor(slot, SensorType.CARESENS_AIR)
                         navController.navigate("$BASE_PAIRING/${SensorType.CARESENS_AIR.name}/${slot.name}") {
                             popUpTo(ROUTE_CARESENS_AIR_CHOICE) { inclusive = true }
@@ -500,6 +581,10 @@ fun FclGlucoLinkNavHost() {
                     // tegen de tijd dat PairingScreen 'm leest.
                     scope.launch {
                         settings.clearDeviceAddress(slot)
+                        // 28/08/2026 (editor, RONDE 154, CRITIEKE FIX) — zie
+                        // AppSettings.clearCareSensAirSensorSession()'s kdoc/
+                        // de identieke reset hierboven bij onExistingSensor.
+                        settings.clearCareSensAirSensorSession(slot)
                         settings.setSelectedSensor(slot, SensorType.CARESENS_AIR)
                         settings.saveCareSensAirScan(slot, result)
                         // 31/07/2026 (editor) — koppel-stap 2/4: de barcode
@@ -584,6 +669,14 @@ fun FclGlucoLinkNavHost() {
                         settings.clearDeviceAddress(slot)
                         settings.setSelectedSensor(slot, SensorType.DEXCOM_G7)
                         settings.setDexcomG7PairingCode(slot, pairingCode)
+                        // 28/08/2026 (editor, RONDE 152) — een nieuwe koppelcode
+                        // betekent (vrijwel altijd) een NIEUWE fysieke sensor;
+                        // zonder deze reset zou het statusscherm de batterij-/
+                        // firmwaregegevens van de VORIGE sensor blijven tonen,
+                        // en zou een nieuwe firmware-uitvraag tot 30 dagen
+                        // uitgesteld blijven — zie AppSettings.
+                        // clearDexcomG7BatteryAndFirmwareInfo's kdoc.
+                        settings.clearDexcomG7BatteryAndFirmwareInfo(slot)
                         navController.navigate("$BASE_PAIRING/${SensorType.DEXCOM_G7.name}/${slot.name}") {
                             popUpTo(ROUTE_DEXCOM_G7_SETUP) { inclusive = true }
                         }

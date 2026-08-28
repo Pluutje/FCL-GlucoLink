@@ -65,7 +65,13 @@ class AlarmMonitor(private val context: Context) {
             )
         }
 
-        val latestReading = readingStore.latestReading(sensorType = sensorType).first()
+        // 28/08/2026 (editor, RONDE 153, CRITIEKE FIX) — was
+        // `sensorType = sensorType`: zie GlucoseReadingStore.kt's kdoc bij
+        // latestReading() voor de volledige analyse. `slot` is hier
+        // gegarandeerd niet-null — als [slot] null was, was [sensorType]
+        // dat via de `slot?.let {...}` hierboven ook geweest, en had de
+        // guard op regel 50 deze functie al laten terugkeren.
+        val latestReading = readingStore.latestReading(slot = slot!!).first()
         val firing = AlarmEvaluator.evaluate(configs, latestReading, nowMs)
 
         val sounding = AlarmRuntimeState.currentlySoundingType

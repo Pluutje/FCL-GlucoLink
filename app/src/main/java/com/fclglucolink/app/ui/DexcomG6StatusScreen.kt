@@ -2,6 +2,7 @@ package com.fclglucolink.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -18,6 +19,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -36,10 +38,10 @@ import com.fclglucolink.app.data.AppSettings
 import com.fclglucolink.app.data.GlucoseReadingStore
 import com.fclglucolink.app.sensor.ConnectionState
 import com.fclglucolink.app.sensor.SensorSlot
-import com.fclglucolink.app.sensor.SensorType
 import com.fclglucolink.app.sensor.ble.ConnectionStatusBridge
 import com.fclglucolink.app.sensor.dexcomg6.DexcomG6CalibrationState
 import com.fclglucolink.app.sensor.dexcomg6.DexcomG6Protocol
+import com.fclglucolink.app.sensor.dexcomg6.DexcomG6TransmitterType
 import com.fclglucolink.app.sensor.dexcomg6.dexcomG6FallbackWarmupSeconds
 import com.fclglucolink.app.startBleConnectionService
 import com.fclglucolink.app.stopBleConnectionService
@@ -48,6 +50,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /**
  * ============================================================================
@@ -141,8 +144,17 @@ fun DexcomG6StatusScreen(
     // [sessionStartConfirmedAtMs] varen — een niet-bevestigde gok mag geen
     // harde-tijd-berekening aansturen).
     val pendingCodeQueuedAtMs by settings.dexcomG6PendingNewSensorCodeQueuedAtMs(slot).collectAsState(initial = null)
+    // 24/08/2026 (editor, RONDE 125) — zie AppSettings.dexcomG6ExpectedLifespanDays()'s
+    // kdoc: alleen daadwerkelijk gebruikt/getoond wanneer deze slot's
+    // transmitter als Anubis herkend is (zie de "Expected lifespan"-Slider
+    // verderop) — voor een Original-transmitter is het transmitter-eigen
+    // typicalSensorDays al betrouwbaar, dus is dit veld daar niet relevant.
+    val expectedLifespanDays by settings.dexcomG6ExpectedLifespanDays(slot).collectAsState(initial = 14)
     val readingStore = remember { GlucoseReadingStore(context) }
-    val lastRealReading by readingStore.latestReading(SensorType.DEXCOM_G6).collectAsState(initial = null)
+    // 28/08/2026 (editor, RONDE 153, CRITIEKE FIX) — was
+    // `latestReading(SensorType.DEXCOM_G6)`: zie GlucoseReadingStore.kt's
+    // kdoc bij latestReading() voor de volledige analyse.
+    val lastRealReading by readingStore.latestReading(slot = slot).collectAsState(initial = null)
 
     // 09/08/2026 (editor, RONDE 65) — zie dexcomG6StatusText()'s kdoc: de
     // "Xh Ym warmup remaining"-aftelling moet blijven doortikken zolang dit
@@ -296,9 +308,14 @@ fun DexcomG6StatusScreen(
             // een eigen, hier gedupliceerde 15-dagen-`when` — zelfde
             // classificatie, nu op één centrale plek (ook gebruikt door de
             // nieuwe fallback-opwarmtijd hieronder).
-            val typeText = when (com.fclglucolink.app.sensor.dexcomg6.DexcomG6TransmitterType.fromTypicalSensorDays(typicalSensorDays)) {
-                com.fclglucolink.app.sensor.dexcomg6.DexcomG6TransmitterType.ANUBIS -> "Anubis"
-                com.fclglucolink.app.sensor.dexcomg6.DexcomG6TransmitterType.ORIGINAL -> "Original"
+            // 24/08/2026 (editor, RONDE 125) — `transmitterType` apart
+            // vastgelegd (voorheen alleen inline in `typeText` hieronder) om
+            // 'm ook te kunnen gebruiken voor de nieuwe, alleen-bij-Anubis
+            // "Expected lifespan"-Slider verderop.
+            val transmitterType = DexcomG6TransmitterType.fromTypicalSensorDays(typicalSensorDays)
+            val typeText = when (transmitterType) {
+                DexcomG6TransmitterType.ANUBIS -> "Anubis"
+                DexcomG6TransmitterType.ORIGINAL -> "Original"
                 null -> "—"
             }
             val sensorLifeText = typicalSensorDays?.let { "$it days" } ?: "—"
@@ -348,6 +365,48 @@ fun DexcomG6StatusScreen(
                     "Temperature" to temperatureText
                 )
             )
+
+            // 24/08/2026 (editor, RONDE 125, op verzoek: "Als de sensor
+            // echter een g6 met Anubis is dan zou er een extra veld getoond
+            // moeten worden waarin de verwachte looptijd [...] die dan bij
+            // de start datum op moeten tellen om de fictieve eind tijd te
+            // bepalen") — alleen zichtbaar wanneer deze slot's transmitter
+            // als Anubis herkend is (voor Original is het transmitter-eigen
+            // "Sensor life" hierboven al betrouwbaar, dus geen extra invoer
+            // nodig). Gebruikt door BleConnectionService.kt's
+            // computeBreakOutDecayFactor() om de fictieve einddatum voor de
+            // uitloop-demping te bepalen — zie AppSettings.
+            // dexcomG6ExpectedLifespanDays()'s kdoc. Range 7-30 dagen: de
+            // gebruiker noemde zelf 14 (eigen praktijk) en 20+ (andere
+            // gebruikers) als voorbeelden.
+            if (transmitterType == DexcomG6TransmitterType.ANUBIS) {
+                Text(
+                    "Expected sensor lifespan",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    "This transmitter's own \"Sensor life\" figure above " +
+                        "isn't reliable for Anubis clones — used for the " +
+                        "break-out filter's estimated end date (Settings).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Days", style = MaterialTheme.typography.bodyMedium)
+                    Text("$expectedLifespanDays", style = MaterialTheme.typography.bodyMedium)
+                }
+                Slider(
+                    value = expectedLifespanDays.toFloat().coerceIn(7f, 30f),
+                    onValueChange = { newValue ->
+                        scope.launch { settings.setDexcomG6ExpectedLifespanDays(slot, newValue.roundToInt()) }
+                    },
+                    valueRange = 7f..30f,
+                    steps = 22
+                )
+            }
 
             OutlinedButton(onClick = onSwitchTransmitter, modifier = Modifier.fillMaxWidth()) {
                 Text("Switch transmitter")

@@ -26,6 +26,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -34,7 +35,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.fclglucolink.app.data.AppSettings
 import com.fclglucolink.app.logging.DiagnosticFileLogger
@@ -94,6 +97,14 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit) {
     // twee waarden uiteindelijk worden toegepast.
     val breakInFilterEnabled by settings.breakInFilterEnabled.collectAsState(initial = false)
     val breakInFilterDurationHours by settings.breakInFilterDurationHours.collectAsState(initial = 24.0)
+    // 24/08/2026 (editor, RONDE 125, op verzoek: "een breakout filter wat
+    // eigenlijk precies omgekeerd werkt tov de breakin" — na CareSens
+    // Air-meldingen dat sensoren de laatste dagen van hun looptijd weer
+    // instabiel worden) — zie smoothing/KalmanSmoother.kt's klasse-kdoc
+    // (RONDE-125-paragraaf) en BleConnectionService.kt's
+    // computeBreakOutDecayFactor() voor het volledige mechanisme.
+    val breakOutFilterEnabled by settings.breakOutFilterEnabled.collectAsState(initial = false)
+    val breakOutFilterDurationHours by settings.breakOutFilterDurationHours.collectAsState(initial = 48.0)
     // 18/08/2026 (editor, RONDE 113, op verzoek: "toon gefilterde data op
     // hoofdscherm") — zie AppSettings.kt's kdoc bij Keys.
     // SMOOTHING_SHOW_PIPELINE_ON_MAIN_SCREEN en StatusScreen.kt's
@@ -591,6 +602,80 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit) {
                         steps = 70,
                         enabled = breakInDurationInteractive
                     )
+
+                    HorizontalDivider()
+
+                    // 24/08/2026 (editor, RONDE 125, op verzoek: "een
+                    // breakout filter wat eigenlijk precies omgekeerd werkt
+                    // tov de breakin [...] boven op de basis (ongeacht welke
+                    // stand gekozen is) en even sterk als break in dus in
+                    // principe een omgekeerde kopie" — na CareSens Air-
+                    // meldingen dat sensoren de laatste dagen van hun
+                    // looptijd weer instabiel worden) — zelfde
+                    // kopje/toelichting/switch/duur-opzet als break-in
+                    // hierboven. Enige visuele verschil: de duration-Slider
+                    // is bewust rechts-naar-links getekend (RTL-
+                    // CompositionLocalProvider om ALLEEN de Slider, niet de
+                    // labels ernaast) — op uitdrukkelijk verzoek, zodat
+                    // "langer maken" ook visueel naar links trekken is, als
+                    // duidelijke aanwijzing dat deze duur vanaf het EINDE
+                    // terugtelt i.p.v. vanaf het begin optelt zoals break-in.
+                    val breakOutDimAlpha = if (smoothingEnabled) 1.0f else 0.38f
+                    Text(
+                        "Break-out filter for aging sensors",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = breakOutDimAlpha)
+                    )
+                    Text(
+                        "Mirrors the break-in filter above, but counts down " +
+                            "to a sensor's estimated end of life instead of " +
+                            "up from its start — filtering builds up over " +
+                            "the duration below, right before the estimated " +
+                            "end. Filters both rises and suspicious-looking " +
+                            "dips (an isolated drop not yet confirmed by " +
+                            "further readings); a sustained real decline is " +
+                            "never delayed.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary.copy(alpha = breakOutDimAlpha)
+                    )
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        Switch(
+                            checked = breakOutFilterEnabled,
+                            enabled = smoothingEnabled,
+                            onCheckedChange = { enabled ->
+                                scope.launch { settings.setBreakOutFilterEnabled(enabled) }
+                            }
+                        )
+                    }
+                    val breakOutDurationInteractive = smoothingEnabled && breakOutFilterEnabled
+                    val breakOutDurationAlpha = if (breakOutDurationInteractive) 1.0f else 0.38f
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            "Duration",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = breakOutDurationAlpha)
+                        )
+                        Text(
+                            "${breakOutFilterDurationHours.roundToInt()}h",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = breakOutDurationAlpha)
+                        )
+                    }
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                        Slider(
+                            value = breakOutFilterDurationHours.toFloat().coerceIn(1f, 96f),
+                            onValueChange = { newValue ->
+                                scope.launch { settings.setBreakOutFilterDurationHours(newValue.roundToInt().toDouble()) }
+                            },
+                            valueRange = 1f..96f,
+                            steps = 94,
+                            enabled = breakOutDurationInteractive
+                        )
+                    }
 
                     HorizontalDivider()
 

@@ -458,11 +458,24 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
      * eenmalige vertraging (bijvoorbeeld door een scanbotsing met de andere
      * slot) de cadans niet permanent scheef; de eerstvolgende voorspelling
      * mikt gewoon weer op het oorspronkelijke rasterpunt.
+     *
+     * 28/08/2026 (editor, RONDE 155, KRITIEKE FIX — zie DexcomG7Driver.kt's
+     * identieke kdoc bij dezelfde functienaam voor de volledige analyse,
+     * hier één-op-één van toepassing want letterlijk dezelfde formule) —
+     * `Math.round` hierboven bleek fragiel: zodra een cyclus consistent net
+     * over de helft van een vak (2,5 min) te laat binnenkwam, rondde de
+     * afronding naar het VOLGENDE rasterpunt i.p.v. het vak waar de meting
+     * echt bij hoorde, waarna de fout zichzelf oneindig herhaalde (elke
+     * cyclus weer 10 minuten i.p.v. 5). `Math.floor` i.p.v. `Math.round`:
+     * kent een late meting toe aan het LAATST al verstreken vak (in lijn met
+     * hoe de sensor zijn eigen data pas bij de ECHTE volgende meting
+     * overschrijft, zie kdoc hierboven), zodat een eenmalige vertraging
+     * nooit meer een heel extra vak doorschuift.
      */
     private fun computeReconnectCooldownMs(): Long {
         val lastReadingAtMs = lastSuccessfulConnectionAtMs ?: return SENSOR_PERIOD_MS - SCAN_START_MARGIN_MS
         val anchor = cadenceAnchorAtMs ?: lastReadingAtMs
-        val periodsElapsed = Math.round((lastReadingAtMs - anchor) / SENSOR_PERIOD_MS.toDouble())
+        val periodsElapsed = Math.floor((lastReadingAtMs - anchor) / SENSOR_PERIOD_MS.toDouble()).toLong()
         val gridReadingAtMs = anchor + periodsElapsed * SENSOR_PERIOD_MS
         val predictedNextReadingAtMs = gridReadingAtMs + SENSOR_PERIOD_MS
         // 12/08/2026 (editor, RONDE 100) — onvoorwaardelijk publiceren, zie

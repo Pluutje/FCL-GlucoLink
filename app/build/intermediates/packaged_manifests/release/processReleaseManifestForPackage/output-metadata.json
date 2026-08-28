@@ -11,8 +11,8 @@
       "type": "SINGLE",
       "filters": [],
       "attributes": [],
-      "versionCode": 136,
-      "versionName": "0.9.37-g6-dextime-and-started-fallback",
+      "versionCode": 170,
+      "versionName": "0.9.71-diagnostic-instance-tag",
       "outputFile": "AndroidManifest.xml"
     }
   ],

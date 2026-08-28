@@ -1,5 +1,6 @@
 package com.fclglucolink.app.sensor.dexcomg7
 
+import com.fclglucolink.app.sensor.dexcomg6.DexcomG6Crypto
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.SecureRandom
@@ -33,13 +34,17 @@ import java.util.UUID
  * WAT HIER WEL/NIET in zit: de volledige PIN-koppelroute (opcodes 0x02/0x04/
  * 0x05, de drie J-PAKE-rondepakketten via DexcomG7Crypto.kt, de "TIME_
  * EXTENDED"-bond-triggerbytes) plus het glucoseverzoek/-antwoord (opcode
- * 0x4E). NIET geport: de QR-code-certificaat-koppelroute (opcodes 0x0b/0x0c,
- * zie DexcomG7Crypto.kt's klasse-kdoc) en de backfill-payload-indeling na
- * opcode 0x59 — xDrip+'s EIGEN bron markeert die laatste met een letterlijke
- * `// TODO more to parse here`, dus zelfs de meest volledige publiek
- * beschikbare referentie heeft 'm niet volledig uitgeplozen. [parseBackfillControl]
- * hieronder herkent alleen OF er een backfill-afsluitpakket binnenkwam, leest
- * de inhoud nog niet.
+ * 0x4E). NIET geport: de backfill-payload-indeling na opcode 0x59 — xDrip+'s
+ * EIGEN bron markeert die met een letterlijke `// TODO more to parse here`,
+ * dus zelfs de meest volledige publiek beschikbare referentie heeft 'm niet
+ * volledig uitgeplozen. [parseBackfillControl] hieronder herkent alleen OF
+ * er een backfill-afsluitpakket binnenkwam, leest de inhoud nog niet.
+ *
+ * 28/08/2026 (editor, RONDE 144) — de certificaat-koppelroute (opcodes
+ * 0x0b/0x0c/0x0d) IS inmiddels wél geport, zie [buildCertInfoRequest]/
+ * [parseCertInfoResponse]/[buildSignChallenge]/[CHALLENGE_OUT] hieronder en
+ * DexcomG7CertMaterial.kt/DexcomG7Crypto.signWithCertPrivateKey voor de
+ * herkomst/het waarom.
  */
 object DexcomG7Protocol {
 
@@ -63,17 +68,35 @@ object DexcomG7Protocol {
     // ============================================================
 
     /** opcode 0x02 — AuthRequestTxMessage2: 8-byte eigen willekeurig token +
-     *  1 slotbyte (altijd 0 — het "specifiedSlot"-motor-modus in xDrip+ is
-     *  hier niet van toepassing). [token] wordt door de aanroeper bewaard om
-     *  straks (na de sensor se antwoord) tegen diens uitdaging-hash te
-     *  vergelijken (zie DexcomG7Crypto.DexcomG7Jpake.calculateHash's
-     *  gebruik in DexcomG7Driver.kt). */
+     *  1 slotbyte. [token] wordt door de aanroeper bewaard om straks (na de
+     *  sensor se antwoord) tegen diens uitdaging-hash te vergelijken (zie
+     *  DexcomG7Crypto.DexcomG7Jpake.calculateHash's gebruik in
+     *  DexcomG7Driver.kt).
+     *
+     * 27/08/2026 (editor, RONDE 135, na een live-test die — dankzij Ronde
+     * 134's partij-ID-fix — voor het eerst alle drie de J-PAKE-rondes zag
+     * SLAGEN, maar daarna 3x op rij vastliep op EXACT dezelfde plek: de
+     * sensor beantwoordde de auth-aanvraag nooit en verbrak de verbinding
+     * (status=19) binnen ~200ms) — de slotbyte stond hier op 0. De echte
+     * bron (`jamorham.keks.message.AuthRequestTxMessage2`, rechtstreeks
+     * opgehaald) laat zien dat dat NOOIT 0 is:
+     *   this(token_size, (alt ? endByteAlt : endByteStd)
+     *           + (chal.length > 2 ? chal[2] : 0));
+     *   // endByteStd = 0x2, endByteAlt = 0x1
+     * Bij een gewone (eerste) koppelpoging is `alt` altijd `false` (die
+     * wordt alleen op `true` gezet via een apart datakanaal dat xDrip+ zelf
+     * ook nooit voor deze route gebruikt) en `chal` altijd leeg (`chal.
+     * length > 2` is dan `false`) — dus de slotbyte is in de praktijk altijd
+     * gewoon `endByteStd` = **2**, nooit 0. Vermoedelijk negeert/verwerpt de
+     * sensor een auth-aanvraag met een onherkende slotwaarde stilzwijgend
+     * (geen antwoord, gewoon de verbinding verbreken) — precies het
+     * waargenomen symptoom. */
     fun buildAuthRequest(token: ByteArray): ByteArray {
         require(token.size == 8) { "token moet 8 bytes zijn" }
         val buffer = ByteBuffer.allocate(10).order(ByteOrder.LITTLE_ENDIAN)
         buffer.put(0x02)
         buffer.put(token)
-        buffer.put(0) // slot
+        buffer.put(2) // slot — AuthRequestTxMessage2's endByteStd (0x2), zie kdoc
         return buffer.array()
     }
 
@@ -158,6 +181,59 @@ object DexcomG7Protocol {
     }
 
     // ============================================================
+    // Certificaat-koppelroute (opcodes 0x0b/0x0c/0x0d) — RONDE 144
+    // ============================================================
+
+    /** opcode 0x0b — CertInfoTxMessage: kondigt aan dat we [which] (0=deel A,
+     *  1=deel B, zie DexcomG7CertMaterial.kt) van [length] bytes gaan sturen.
+     *  6 bytes: opcode, which, length (4-byte little-endian int) — letterlijk
+     *  `jamorham.keks.message.CertInfoTxMessage.expectMyCert()`. */
+    fun buildCertInfoRequest(which: Int, length: Int): ByteArray {
+        val buffer = ByteBuffer.allocate(6).order(ByteOrder.LITTLE_ENDIAN)
+        buffer.put(0x0b)
+        buffer.put(which.toByte())
+        buffer.putInt(length)
+        return buffer.array()
+    }
+
+    /** Antwoord op [buildCertInfoRequest] — 7 bytes: opcode, state, which,
+     *  size (2-byte little-endian; de laatste 2 bytes van het pakket blijven
+     *  bewust ongebruikt, xDrip+'s eigen `CertInfoRxMessage` doet dat ook
+     *  letterlijk zo — kdoc daar: "might be an int but just ignore later
+     *  bytes"). */
+    data class CertInfoRx(val state: Int, val which: Int, val size: Int)
+
+    fun parseCertInfoResponse(data: ByteArray): CertInfoRx? {
+        if (data.size != 7 || data[0] != 0x0b.toByte()) return null
+        val state = data[1].toInt()
+        val which = data[2].toInt()
+        val size = ((data[4].toInt() and 0xFF) shl 8) or (data[3].toInt() and 0xFF)
+        return CertInfoRx(state, which, size)
+    }
+
+    /** opcode 0x0c — SignChallengeTxMessage: 16 willekeurige bytes die de
+     *  sensor in zijn beurt gebruikt/beantwoordt (zie
+     *  DexcomG7Crypto.signWithCertPrivateKey's kdoc voor het vervolg). */
+    fun buildSignChallenge(challenge16: ByteArray): ByteArray {
+        require(challenge16.size == 16) { "challenge moet 16 bytes zijn" }
+        val buffer = ByteBuffer.allocate(17)
+        buffer.put(0x0c)
+        buffer.put(challenge16)
+        return buffer.array()
+    }
+
+    fun randomSignChallenge(): ByteArray {
+        val bytes = ByteArray(16)
+        SecureRandom().nextBytes(bytes)
+        return bytes
+    }
+
+    /** Config.java's vaste `CHALLENGE_OUT` (0x0d,0x00,0x02) — afsluiting van
+     *  de certificaatstap; gaat samen met onze berekende handtekening (via
+     *  ExtraData, chunked, zie DexcomG7Driver.kt's `runCertificateExchange`). */
+    val CHALLENGE_OUT: ByteArray = byteArrayOf(0x0d, 0x00, 0x02)
+
+    // ============================================================
     // Glucose — inkomend (RX), opcode 0x4E
     // ============================================================
 
@@ -214,4 +290,165 @@ object DexcomG7Protocol {
      *  binnenkwam; leest de inhoud (nog) niet, zie klasse-kdoc. */
     fun isBackfillControlPacket(packet: ByteArray): Boolean =
         packet.isNotEmpty() && packet[0] == 0x59.toByte()
+
+    // ============================================================
+    // Batterij-/firmwareversie (opcodes 0x22/0x23 batterij, 0x20/0x21
+    // firmware) — RONDE 150, op verzoek: "of hij dan ook de data als
+    // batterij en firmware version terug geeft zoals xdrip ook netjes doet".
+    // ============================================================
+
+    /**
+     * 28/08/2026 (editor, RONDE 150) — BELANGRIJK, in tegenstelling tot de
+     * klasse-kdoc hierboven over de auth-handshake-berichten (die BEWUST
+     * GEEN CRC hebben): xDrip+'s eigen bron (`g5model/BatteryInfoTxMessage.
+     * java`/`VersionRequestTxMessage.java`/`BaseMessage.java`) laat zien dat
+     * dít stel berichten wél het KLASSIEKE G5/G6-envelop gebruikt —
+     * opcode(1) + CRC16(2, little-endian) — over hetzelfde `Control`-kanaal
+     * dat nu al voor het glucoseverzoek (opcode 0x4E) gebruikt wordt.
+     * `Ob1G5StateMachine.checkVersionAndBattery(parent, connection)` is
+     * ONVOORWAARDELIJK gedeeld tussen G5/G6/G7 (bevestigd via een
+     * nabijgelegen commentaar dat G5/G6/G7 onderscheidt via `usingG6() ?
+     * (shortTxId() ? "G7" : "G6") : "G5"` — G7 IS dus een `usingG6()`-tak,
+     * geen aparte G7-only code). Vandaar hier een eigen, kleine CRC16-
+     * helper i.p.v. de CRC-loze aanpak van de rest van dit bestand — en
+     * bewust hergebruik van DexcomG6Crypto.crc16 (dezelfde CCITT-16-tabel,
+     * al bewezen werkend voor G6's eigen batterijverzoek) i.p.v. een eigen
+     * kopie te maken.
+     *
+     * VERTROUWENSNIVEAU — expliciet lager dan de rest van dit bestand: dit
+     * is architectuur-bewijs uit xDrip+'s gedeelde broncode (dezelfde
+     * opcodes/CRC-envelop/Control-kanaal als het al bewezen glucoseverzoek),
+     * maar NOG NIET byte-voor-byte bevestigd tegen een echte G7-sensor via
+     * een HCI-capture (in tegenstelling tot bijv. het glucoseverzoek zelf,
+     * dat al meerdere keren rechtstreeks in de gebruiker's eigen bugreports
+     * is teruggezien). Zie DexcomG7Driver.kt's kdoc bij de aanroep hiervan.
+     */
+    private fun appendCrc(buffer: ByteBuffer): ByteArray {
+        val withoutCrc = buffer.array()
+        val crc = DexcomG6Crypto.crc16(withoutCrc, 0, withoutCrc.size - 2)
+        withoutCrc[withoutCrc.size - 2] = crc[0]
+        withoutCrc[withoutCrc.size - 1] = crc[1]
+        return withoutCrc
+    }
+
+    /** opcode 0x22 — BatteryInfoTxMessage: vraagt batterijspanning (A/B) +
+     *  temperatuur op. 3 bytes: opcode+CRC16. Antwoord komt terug als opcode
+     *  0x22 óf 0x23 (transmitter-firmware-afhankelijk, zie
+     *  [parseBatteryInfo]) — letterlijk dezelfde vorm als
+     *  DexcomG6Protocol.buildBatteryInfoRequest(). */
+    fun buildBatteryInfoRequest(): ByteArray {
+        val buf = ByteBuffer.allocate(3).order(ByteOrder.LITTLE_ENDIAN)
+        buf.put(0x22)
+        return appendCrc(buf)
+    }
+
+    /** Zelfde veldindeling als DexcomG6Protocol.BatteryInfoRx — zie dat
+     *  bestand's kdoc voor de herkomst (xDrip+'s BatteryInfoRxMessage).
+     *  `resistance`/`runtimeDays` zijn -1 als niet aanwezig (10-byte
+     *  "rev2"-lay-out, geen weerstandsveld). */
+    data class BatteryInfoRx(
+        val status: Int,
+        val voltageA: Int,
+        val voltageB: Int,
+        val resistance: Int,
+        val runtimeDays: Int,
+        val temperatureC: Int
+    )
+
+    /** Opcodes 0x22 én 0x23 komen als antwoord voor. GEEN CRC-check (mirror
+     *  van xDrip+'s eigen parser — DexcomG6Protocol.parseBatteryInfo() doet
+     *  dat om dezelfde reden ook niet). */
+    fun parseBatteryInfo(packet: ByteArray): BatteryInfoRx? {
+        if (packet.size < 10) return null
+        val opcode = packet[0]
+        if (opcode != 0x22.toByte() && opcode != 0x23.toByte()) return null
+        val buf = ByteBuffer.wrap(packet).order(ByteOrder.LITTLE_ENDIAN)
+        buf.position(1)
+        val status = buf.get().toInt() and 0xff
+        val voltageA = buf.short.toInt() and 0xffff
+        val voltageB = buf.short.toInt() and 0xffff
+        val hasResistance = packet.size != 10
+        val resistance = if (hasResistance) (buf.short.toInt() and 0xffff) else -1
+        val runtimeRaw = buf.get().toInt() and 0xff
+        val runtime = if (packet.size == 10) -1 else runtimeRaw
+        val temperature = buf.get().toInt() // signed
+        return BatteryInfoRx(status, voltageA, voltageB, resistance, runtime, temperature)
+    }
+
+    /**
+     * VersionRequestTxMessage, alle drie de voor G7 relevante varianten —
+     * opcode+CRC16, 3 bytes. Antwoord komt (bij succes) terug als opcode
+     * 0x21 (VersionRequestRxMessage) — LET OP: dit is een ANDER bericht dan
+     * DexcomG6Protocol's buildVersionRequest2()/opcode 0x52 (die vraagt
+     * opwarmtijd/sensor-levensduur op, geen firmware-versiestring).
+     *
+     * 28/08/2026 (editor, RONDE 152, CORRECTIE op RONDE 150) — Ronde 150
+     * koos [version]=0 (opcode 0x20) als "eenvoudigste/meest-compatibele
+     * variant", een AANNAME die nooit tegen xDrip+'s eigen broncode
+     * geverifieerd was. Een live-test tegen de gebruiker's echte G7-sensor
+     * wees die aanname af (opcode 0x20 werd afgewezen — zie
+     * DexcomG7Driver.kt's kdoc bij [queryFirmwareIfStale]). Bij het
+     * uitzoeken WAAROM xDrip+ zelf blijkbaar wél lukt, bleek
+     * `Ob1G5StateMachine.requiredNextFirmwareDetailsType()` (rechtstreeks
+     * nagelezen in de vendored bron) een HEEL ANDERE prioriteitsvolgorde te
+     * hanteren dan aangenomen: **versie 1 (opcode 0x4A) EERST**, altijd,
+     * voor élke transmitter — pas ALS dat mislukt/nog niet geprobeerd is EN
+     * de transmitter-ID 6 tekens is (xDrip+'s eigen G7-detectie, zie
+     * `txid.length() == 6`-check) volgt versie 0 (opcode 0x20) als tweede
+     * poging, en versie 2 (opcode 0x52) als laatste redmiddel. Versie 0 was
+     * dus NOOIT xDrip+'s eerste keus voor een G7 — dat verklaart
+     * waarschijnlijk waarom deze specifieke sensor 'm afwees.
+     */
+    fun buildFirmwareVersionRequest(version: Int): ByteArray {
+        val opcode = when (version) {
+            0 -> 0x20
+            1 -> 0x4A
+            2 -> 0x52
+            else -> throw IllegalArgumentException("Onbekende firmware-request-versie: $version")
+        }
+        val buf = ByteBuffer.allocate(3).order(ByteOrder.LITTLE_ENDIAN)
+        buf.put(opcode.toByte())
+        return appendCrc(buf)
+    }
+
+    /** Letterlijke poort van xDrip+'s VersionRequestRxMessage — dotted-
+     *  string-velden zijn precies zoals xDrip's eigen "Firmware Version"-
+     *  label ze toont (bv. "32.192.109.40"). */
+    data class FirmwareVersionRx(
+        val status: Int,
+        val firmwareVersion: String,
+        val bluetoothFirmwareVersion: String,
+        val hardwareVersion: Int,
+        val otherFirmwareVersion: String,
+        val asic: Int
+    )
+
+    /** Leest [length] bytes vanaf de huidige positie en plakt ze als
+     *  ongetekende decimale waardes aan elkaar met ".", mirror van xDrip+'s
+     *  `dottedStringFromData()` (o.a. gebruikt in zowel `g5model/
+     *  VersionRequestRxMessage.java` als `cgm/dex/g7/BaseMessage.java`). */
+    private fun dottedStringFromData(buf: ByteBuffer, length: Int): String {
+        val parts = ArrayList<Int>(length)
+        repeat(length) { parts.add(buf.get().toInt() and 0xff) }
+        return parts.joinToString(".")
+    }
+
+    /** opcode 0x21, vereist >= 18 bytes (mirror van xDrip+'s
+     *  `VersionRequestRxMessage`'s eigen `packet.length >= 18`-check). GEEN
+     *  CRC-check — zelfde reden als [parseBatteryInfo]. */
+    fun parseFirmwareVersion(packet: ByteArray): FirmwareVersionRx? {
+        if (packet.size < 18 || packet[0] != 0x21.toByte()) return null
+        val buf = ByteBuffer.wrap(packet).order(ByteOrder.LITTLE_ENDIAN)
+        buf.position(1)
+        val status = buf.get().toInt() and 0xff
+        val firmwareVersion = dottedStringFromData(buf, 4)
+        val bluetoothFirmwareVersion = dottedStringFromData(buf, 4)
+        val hardwareVersion = buf.get().toInt() and 0xff
+        val otherFirmwareVersion = dottedStringFromData(buf, 3)
+        val asic = buf.short.toInt() and 0xffff
+        return FirmwareVersionRx(
+            status, firmwareVersion, bluetoothFirmwareVersion,
+            hardwareVersion, otherFirmwareVersion, asic
+        )
+    }
 }

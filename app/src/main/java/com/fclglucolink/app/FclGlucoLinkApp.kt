@@ -65,5 +65,41 @@ class FclGlucoLinkApp : Application() {
             val settings = AppSettings(this@FclGlucoLinkApp)
             DiagnosticFileLogger.setEnabled(settings.isDiagnosticFileLoggingEnabled())
         }
+        installCrashLogging()
+    }
+
+    /**
+     * 27/08/2026 (editor, RONDE 126, op verzoek — "bouw dat maar", na een
+     * analyse van Rick's drie logbestanden die geen enkel spoor van zijn
+     * gemelde crash bevatten) — een gewone crash killt het proces voordat
+     * het bestaande, `enabled`-afhankelijke logpad iets had kunnen
+     * wegschrijven; het enige zichtbare spoor was een gat in de tijdlijn.
+     * Deze globale [Thread.UncaughtExceptionHandler] vangt de crash af
+     * VOORDAT het systeem 'm verder afhandelt, schrijft de volledige
+     * stacktrace via [DiagnosticFileLogger.logFatal] (die kdoc voor waarom
+     * dat bewust NIET via de gewone, schakelaar-afhankelijke [log]-functie
+     * gaat), en geeft 'm dan door aan de oorspronkelijke handler.
+     *
+     * Bewust NIET de crash zelf onderdrukken: [previousHandler] wordt altijd
+     * aangeroepen (of, als die om wat voor reden dan ook ontbreekt, het
+     * proces alsnog met [Process.killProcess]/[exitProcess] beëindigd) —
+     * anders zou de app na een crash in een kapotte, halfklaar-afgesloten
+     * toestand kunnen doorlopen, en zou Android's eigen crash-dialoog/
+     * bugreport-mechanisme niet meer normaal werken. Deze handler is puur
+     * een waarnemer die ZELF nooit een uitzondering mag gooien (zie
+     * `logFatal`'s eigen `runCatching`) of extra tijd mag kosten — het
+     * proces staat op het punt te eindigen.
+     */
+    private fun installCrashLogging() {
+        val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            DiagnosticFileLogger.logFatal(thread, throwable)
+            if (previousHandler != null) {
+                previousHandler.uncaughtException(thread, throwable)
+            } else {
+                android.os.Process.killProcess(android.os.Process.myPid())
+                kotlin.system.exitProcess(10)
+            }
+        }
     }
 }

@@ -7556,4 +7556,2070 @@ Gewijzigd: `ui/StatusScreen.kt`, `data/AppSettings.kt`,
 
 versionCode 136, versionName "0.9.37-g6-dextime-and-started-fallback".
 
+## Ronde 125 (24/08/2026) — break-out filter voor verouderende sensoren
+
+**Aanleiding.** Community-meldingen dat CareSens Air-sensoren de laatste
+dagen van hun looptijd weer instabiel worden. Verzoek: "een breakout filter
+wat eigenlijk precies omgekeerd werkt tov de breakin [...] boven op de basis
+(ongeacht welke stand gekozen is) en even sterk als break in dus in
+principe een omgekeerde kopie." Na doorvragen over filterrichting: "Nu, dit
+lezende denk ik toch alleen beide op de stijging, en de dalingen als die
+verdacht ogen" — dus stijgingen altijd dempen (zoals break-in), dalingen
+alleen zolang ze nog "verdacht" (onbevestigd) zijn, en die uitbreiding geldt
+dan ook terug voor break-in zelf.
+
+**KalmanSmoother.kt.** `smooth()` krijgt een tweede, gelijkwaardige
+parameter `breakOutDecayFactor` naast het bestaande `breakInDecayFactor`.
+Beide worden gecombineerd tot één `edgeStrength` (het maximum van de twee —
+ze horen bij niet-overlappende delen van de looptijd, begin resp. eind) en
+delen vanaf daar letterlijk dezelfde twee ingrepen
+(`breakInExtraRMgdlSq`/`breakInThresholdBoost`) als de bestaande
+inloop-demping — een spiegelkopie in tijd, geen los mechanisme met eigen
+constantes. Tweede wijziging: naast stijgingen dempen beide edge-filters nu
+ook "verdachte" dalingen — een dalende afwijking die de bestaande
+2-van-3-tekenbevestiging (`sameSignCount`/`qInflateAllowed`, RONDE 109) nog
+niet gehaald heeft. Zodra 2 van de laatste 3 grote afwijkingen dezelfde
+dalende richting bevestigen, is de daling niet langer "verdacht" en loopt
+'ie ongedempt door — een echte, aanhoudende daling (mogelijke hypo) wordt
+zo nooit langer dan de eerste, nog onbevestigde meting vertraagd, wat de
+SMB-veiligheidsafweging uit de klasse-kdoc intact houdt.
+
+**AppSettings.kt.** Nieuwe, app-brede sleutels
+`SMOOTHING_BREAK_OUT_FILTER_ENABLED`/`SMOOTHING_BREAK_OUT_FILTER_DURATION_HOURS`
+(spiegelbeeld van de bestaande break-in-sleutels, default UIT / 48u). Nieuw,
+PER-SLOT `dexcomG6ExpectedLifespanDays(slot)` (default 14 dagen) — alleen
+relevant voor een G6 met Anubis-transmitter, waarvan de eigen
+`typicalSensorDays` niet te vertrouwen is (kan tot 60 dagen melden).
+
+**BleConnectionService.kt.** Nieuwe `computeBreakOutDecayFactor()`,
+spiegelbeeld van `computeBreakInDecayFactor()`: telt uren TOT een geschat
+einde i.p.v. uren SINDS de start, zelfde exponentiële opbouw (τ = duur/5).
+De geschatte einddatum is per sensortype bepaald: CareSens Air vaste 15
+dagen (zelfde constante als CareSensAirStatusScreen.kt's "End (est.)"),
+Dexcom G6 Original het transmitter-eigen `typicalSensorDays` (betrouwbaar
+voor die hardware), Dexcom G6 Anubis de nieuwe handmatig ingestelde
+`dexcomG6ExpectedLifespanDays`. G7/ONE+ en de simulator bewust nog buiten
+scope (expliciete keuze: "CareSens Air + G6").
+
+**SettingsScreen.kt.** Nieuwe "Break-out filter for aging sensors"-sectie,
+zelfde kopje/toelichting/switch/duur-opzet als break-in. Duration-Slider
+(0-96u) bewust rechts-naar-links getekend via een
+`CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl)`
+om ALLEEN de Slider (niet de labels ernaast) — op uitdrukkelijk verzoek,
+zodat "langer maken" ook visueel naar links trekken is, als aanwijzing dat
+deze duur vanaf het EINDE terugtelt i.p.v. vanaf het begin optelt.
+
+**DexcomG6StatusScreen.kt.** Nieuw "Expected sensor lifespan"-veld (Slider,
+7-30 dagen, default 14), alleen zichtbaar wanneer deze slot's transmitter
+als Anubis herkend is (`DexcomG6TransmitterType.fromTypicalSensorDays()`).
+
+**Verificatie.** Balance-checker op alle vijf gewijzigde bestanden. Enige
+bestaande aanroeper van `KalmanSmoother.smooth()`
+(BleConnectionService.kt) gecontroleerd en bijgewerkt naar de nieuwe
+parametervolgorde.
+
+Gewijzigd: `smoothing/KalmanSmoother.kt`, `data/AppSettings.kt`,
+`sensor/ble/BleConnectionService.kt`, `ui/SettingsScreen.kt`,
+`ui/DexcomG6StatusScreen.kt`.
+
+versionCode 137, versionName "0.9.38-breakout-filter".
+
+## Ronde 126 (27/08/2026) — crash naar diagnose-logboek geschreven vóór proces-dood
+
+**Aanleiding.** Analyse van drie door Rick gedeelde logbestanden (24/25/26-8)
+na een melding "de telefoon gaf aan dat fclglucolink een bug bevat". Geen van
+de drie bevatte ook maar één spoor van een crash — logisch, want een crash
+killt het proces voordat het bestaande, `Instellingen -> Diagnose-logboek`-
+schakelaar-afhankelijke logpad iets had kunnen wegschrijven. Het enige
+zichtbare spoor in de logs was een gat in de tijdlijn: op 26-8 stopt alle
+BLE-communicatie om 17:10:25 abrupt midden in een succesvolle lezing, zonder
+de gebruikelijke `STATE_DISCONNECTED`-regel; om 18:02:18 hervat de
+communicatie met een complete nieuwe scan/handshake — het patroon van een
+proces dat crasht en herstart, niet van een normale BLE-hapering (die de app
+altijd netjes zelf logt). Verzoek na deze analyse: "bouw dat maar."
+
+**DiagnosticFileLogger.kt.** Nieuwe `logFatal(thread, throwable)` — schrijft
+de VOLLEDIGE stacktrace naar hetzelfde dagbestand (`fclglucolink_yyyy-MM-
+dd.txt`), bewust ONAFHANKELIJK van de `enabled`-schakelaar (in tegenstelling
+tot `log()`/`logError()`): een crash is precies het soort gebeurtenis
+waarvoor je de informatie wilt hebben, ook als de gebruiker het diagnose-
+logboek nooit bewust heeft aangezet. In een `runCatching` — een fout hierin
+mag nooit de eigenlijke crash-afhandeling blokkeren.
+
+**FclGlucoLinkApp.kt.** Nieuwe `installCrashLogging()`, aangeroepen vanuit
+`onCreate()`: registreert een globale `Thread.UncaughtExceptionHandler` die
+bij een crash eerst `DiagnosticFileLogger.logFatal()` aanroept en dan ALTIJD
+doorgeeft aan de oorspronkelijke handler (of, als die ontbreekt, het proces
+alsnog netjes beëindigt) — de crash wordt dus nooit onderdrukt, alleen eerst
+waargenomen, zodat Android's eigen crash-afhandeling normaal blijft werken.
+
+**Zijvraag beantwoord (geen codewijziging).** Rick's logbestanden kwamen aan
+als `.docx` met bestandsnamen als `orca_share_media<...>.docx` — inhoudelijk
+wél hetzelfde soort regels (`TIMESTAMP bericht`, geschreven door dezelfde
+DiagnosticFileLogger), maar zonder tag-voorvoegsel omdat CareSensAirDriver.kt
+zijn `DiagnosticFileLogger.log(...)`-aanroepen (in tegenstelling tot
+DexcomG6Driver.kt's "DexcomG6: ..."-aanroepen) geen vast voorvoegsel
+meegeeft — dat is dus geen inconsistentie tussen gebruikers, puur een
+verschil tussen de twee driver-bestanden. De afwijkende bestandsnaam/
+`.docx`-verpakking komt niet van de app zelf (die exporteert altijd als
+`fclglucolink_yyyy-MM-dd.txt`) maar van de deelmethode die Rick gebruikte —
+een share-app die het platte tekstbestand kennelijk in een Word-document
+verpakt en een eigen naam geeft bij het doorsturen.
+
+**Verificatie.** Balance-checker op beide gewijzigde bestanden.
+
+Gewijzigd: `logging/DiagnosticFileLogger.kt`, `FclGlucoLinkApp.kt`.
+
+versionCode 138, versionName "0.9.39-crash-logging".
+
+## Ronde 127 (27/08/2026) — G7-koppel-navigatiebug gevonden en gefixt + BLE-verbindingsafwijzing verklaard
+
+**Aanleiding.** Live koppeltest met een geleende, nog bij de vorige eigenaar
+verbonden G7-sensor: "als ik op het hoofdscherm op de status info klik komt
+hij op de 'choose you sensor' pagina en klikt bij de g7 niet door naar de
+extra info pagina", plus een meegestuurde logcat-uitsnede die een geslaagde
+GATT-verbinding + CCCD-writes toont, gevolgd door een `status=19`-disconnect
+~10 seconden later, nog vóór enige G7-authenticatie.
+
+**Navigatiebug (gevonden en gefixt).** `FclGlucoLinkNavHost.kt`'s
+`statusBaseFor(sensorType)` had géén eigen `SensorType.DEXCOM_G7`-tak en viel
+daardoor altijd terug op `BASE_SENSOR_SELECTION` — vandaar dat "status info"
+voor een G7-slot op de "choose your sensor"-pagina belandde i.p.v. ergens
+G7-specifieks. Erger: `SensorSelectionScreen.kt`'s eigen
+`sensor == activeSensor -> onReopenActive()`-tak roept dezelfde functie
+opnieuw aan, dus tikken op de al-actieve G7-tegel navigeerde telkens naar
+dezelfde route waar de gebruiker al stond — precies het "klikt niet door"-
+gevoel uit de melding. Er bestaat geen eigen G7-statusscherm, dus de functie
+(hernoemd naar `statusRouteFor(sensorType, slot)`, geeft nu de VOLLEDIGE
+route inclusief slot terug i.p.v. alleen de basisnaam) stuurt G7 voortaan
+rechtstreeks naar de generieke `PairingScreen` — hetzelfde patroon dat
+`onSensorChosen`'s al-werkende G7-tak (Ronde 112) al gebruikte. Bewust geen
+`hasKnownDexcomG7PairingCodeOnce()`-check hier: als G7 al de ACTIEVE sensor
+van deze slot is, is de koppelcode per definitie al bekend.
+
+**BLE-verbindingsafwijzing (verklaard, geen codewijziging — geen bug in de
+app).** `DexcomG7Driver.kt`'s `GattCallback` gelezen: na een geslaagde
+verbinding volgt MTU-onderhandeling, service-discovery, en dan CCCD-writes
+op ExtraData en Authentication — dat zijn allemaal generieke GATT/ATT-
+operaties die geen sensor-authenticatie vereisen, vandaar dat die in de
+logcat gewoon lukten. Pas ná die twee CCCD-writes start
+`runPairingHandshake()`, wat als EERSTE actie een write naar het ExtraData-
+kanaal doet (ronde 1 van de J-PAKE-handshake) — die write zou een eigen
+"write ok/FAILED"-regel loggen (`onCharacteristicWrite`), en het eigen
+timeout-pad (`PAIRING_STEP_TIMEOUT_MS` = 15s) zou bij uitblijven een
+expliciet "geen antwoord op ronde 1"-regel loggen vóór het zelf disconnect()
+aanroept. Geen van beide verscheen in de meegestuurde logcat — de `status=19`
+disconnect kwam ~10s ná de CCCD-writes, dus RUIM vóór de 15s-timeout, en
+zonder dat onze eigen code ooit `disconnect()` aanriep. `status=19`
+(`GATT_CONN_TERMINATE_PEER_USER`) betekent bovendien dat de SENSOR zelf de
+verbinding beëindigde, niet onze telefoon. Dit patroon — generieke GATT-
+operaties lukken, maar zodra de app een echt protocolpakket probeert te
+sturen valt de sensor stil en breekt de verbinding zelf af — is precies wat
+je verwacht van een Dexcom G7/ONE+ die nog een actieve, geauthenticeerde
+sessie met een ANDERE telefoon heeft (xDrip+'s eigen documentatie: "only one
+app can collect from the transmitter at any time"). Geen codewijziging hier:
+dit is een sensor-kant-beperking, geen fout in deze app's BLE-code.
+
+**Verificatie.** Balance-checker op het gewijzigde bestand. Beide
+aanroeppunten van de hernoemde functie (CombiScreen's "status info"-knop en
+SensorSelectionScreen's `onReopenActive`) gecontroleerd en bijgewerkt.
+
+Gewijzigd: `ui/FclGlucoLinkNavHost.kt`.
+
+versionCode 139, versionName "0.9.40-g7-status-nav-fix".
+
+## Ronde 128 (27/08/2026) — G7 ronde-1-stilte verklaard en gefixt: verkeerd write-type
+
+**Aanleiding.** Live vervolgtest met dezelfde geleende (kapotte) G7. Op
+suggestie van de gebruiker xDrip+ ernaast laten draaien op hetzelfde
+toestel — die kwam WEL door de volledige koppeling heen (Android-bonding,
+authenticatie, zelfs een batterij-uitlezing), terwijl FCLGlucoLink al bij
+ronde 1 van de J-PAKE-handshake vastliep: lokaal "write ok", maar nooit een
+antwoord, en na ~10s beëindigde de sensor zelf de verbinding (`status=19`).
+xDrip's eigen "Sensor Failed 7"-melding (een letterlijke Dexcom-statuscode,
+niet een xDrip-fout) bevestigde bovendien dat de sensor zélf kapot is (geen
+actieve sensor-sessie) — maar dat de transmitter-elektronica en het
+BLE-kanaal wél volledig gezond zijn, dus een bruikbaar testobject voor de
+handshake zelf.
+
+**Root cause gevonden.** Een subagent vergeleek xDrip+'s echte, actuele
+broncode (github.com/NightscoutFoundation/xdrip,
+`Ob1G5StateMachine.doNext()`) met onze eigen `writeChunked()`/
+`writeCharacteristic()`. Twee concrete verschillen: (1) xDrip+ zet vlak vóór
+elke ExtraData-chunk-write expliciet `WRITE_TYPE_NO_RESPONSE` op die
+characteristic — onze code gebruikte altijd `WRITE_TYPE_DEFAULT` (een ATT
+"Write Request", verwacht een write-antwoord). Dat verklaart het waargenomen
+symptoom precies: Android's eigen `onCharacteristicWrite`-callback kan lokaal
+"success" melden zonder dat de transmitter-firmware de payload ooit aan zijn
+J-PAKE-handler doorgeeft, als die characteristic daar alleen op de
+geen-antwoord-route voor is aangesloten. (2) xDrip+ wacht na de volledige
+chunk-reeks nog een extra 500ms vóór het de ronde-commandobyte naar
+Authentication schrijft — onze code deed dat meteen aansluitend.
+
+**DexcomG7Driver.kt.** `writeCharacteristic()` krijgt een `writeType`-
+parameter (default ongewijzigd `WRITE_TYPE_DEFAULT` — alle Authentication-
+writes blijven dus exact zoals ze waren). `writeChunked()` (alleen gebruikt
+voor ExtraData tijdens de J-PAKE-rondes) geeft nu expliciet
+`WRITE_TYPE_NO_RESPONSE` mee per chunk, en wacht na de volledige reeks
+`POST_CHUNK_SETTLE_MS` (500ms) — beide mirrors van xDrip+'s regels 224/238/243
+in `Ob1G5StateMachine.java`.
+
+**Verificatie.** Balance-checker op het gewijzigde bestand. Kon niet
+end-to-end tegen een levende sensor getest worden (de beschikbare G7 heeft
+zelf geen actieve sessie meer, zie hierboven) — de fix is dus gegrond op een
+geverifieerde, geciteerde broncode-vergelijking, niet op een geslaagde
+live-koppeling. Nuttig om bij een volgende G7-test (kapot of werkend) in de
+gaten te houden of ronde 1 nu wél een antwoord krijgt.
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Driver.kt`.
+
+versionCode 140, versionName "0.9.41-g7-round1-write-type-fix".
+
+## Ronde 128b (27/08/2026) — G7 ronde-sequencing gefixt: ontbrekende "aftrap"-stap
+
+**Aanleiding.** Direct vervolg op Ronde 128: met de write-type-fix kreeg
+ronde 1 nu wél een antwoord van de sensor, maar `validateRound1Packet` bleef
+falen — ook nadat de gebruiker de koppelcode op slot 2 helemaal opnieuw en
+met 100% zekerheid correct had ingevoerd. Dat sloot een verkeerde code
+volledig uit.
+
+**Root cause gevonden.** Op verzoek de daadwerkelijke G7/ONE+-koppelcode van
+OpenApsAIMI (github.com/MTR93600/OpenApsAIMI, branch dev_OnePlusG7) laten
+opzoeken. Die branch blijkt xDrip+'s eigen KEKS-crypto-module (dezelfde
+module als waar onze eigen `DexcomG7Crypto.kt` ooit van geport is)
+1-op-1 te vendoren — dus wél de échte, volledige J-PAKE-implementatie,
+zelf rechtstreeks nagelezen op GitHub (`plugins/libkeks/.../jamorham/keks/
+Plugin.java`). De crypto-wiskunde zelf bleek al correct geport (bevestigd,
+`Calc`/`Context`/`Curve`/`KeyPair` komen vrijwel regel-voor-regel overeen).
+De bug zat in de RONDE-SEQUENCING: `Plugin.java`'s `aNext()` schuift `state`
+door VOORDAT `sequencePacket()` zijn parameter-tag bepaalt — het echte
+protocol is daardoor een vraag-antwoord-cyclus van VIER stappen, niet drie:
+(A) een KALE `{0x0A,0x00}`-aftrap naar Authentication zonder ExtraData-data
+(vraagt de sensor om zíjn eigen ronde-1-pakket), (B) pas dán ons eigen
+ronde-1-pakket, getagd met param 1, (C) ons ronde-2-pakket, getagd met
+param 2, (D) ons ronde-3-pakket + de echte auth-aanvraag (ongewijzigd, geen
+KEYCMD-tag). Onze code sloeg stap A over en stuurde in de EERSTE
+uitwisseling al ons eigen ronde-1-pakket mee, getagd met param 0 — precies
+verklarend waarom er wél een antwoord kwam (de sensor herkende het
+aftrap-commando gewoon) maar de validatie faalde (het pakket dat we als
+"sensor se ronde 1" behandelden was eigenlijk het antwoord op een
+uitwisseling die de sensor niet als zodanig bedoeld had).
+
+**DexcomG7Driver.kt.** `runPairingHandshake()` herschreven naar de correcte
+vier-stappen-cyclus: kale aftrap → ons ronde-1 (param 1) → ons ronde-2
+(param 2) → ons ronde-3 + auth-aanvraag (ongewijzigd). De crypto-aanroepen
+zelf (`getRoundXPacket`/`validateRoundXPacket`) zijn NIET aangepast — alleen
+WANNEER en met WELKE param-tag ze verstuurd worden.
+
+**Verificatie.** Balance-checker op het gewijzigde bestand. Kon nog niet
+end-to-end bevestigd worden (vereist een volgende live-test), maar is
+gegrond op een rechtstreeks zelf nagelezen, geciteerde referentie-
+implementatie — niet op giswerk.
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Driver.kt`.
+
+versionCode 141, versionName "0.9.42-g7-round-sequencing-fix".
+
+## Ronde 129 (27/08/2026) — eigen G7-statusscherm
+
+**Aanleiding.** Op verzoek, direct na Ronde 128b: "Wat we in ieder geval
+alvast kunnen doen is een status scherm maken vergelijkbaar met de g6 maar
+dan niet met losse transmitter en losse sensor" — met een meegestuurde
+screenshot van xDrip+'s "Systeem status"-scherm als richtlijn voor
+zinvolle velden. Sinds Ronde 127 viel een "status info"-tik op een G7-slot
+terug op de generieke PairingScreen (bij gebrek aan een eigen scherm) — dat
+werkt, maar voelt niet als een statusoverzicht.
+
+**DexcomG7StatusScreen.kt (nieuw).** Één vlakke tabel (bewust GEEN aparte
+Sensor-/Transmitter-tabellen zoals G6 — G7/ONE+ heeft dat onderscheid niet,
+net als CareSens Air), met: Status (bovenaan, los), Bluetooth link, Address,
+Pairing code (Saved/Not saved), Last connected. Batterij/firmwareversie uit
+de xDrip-screenshot bewust NIET meegenomen: onze driver doet daar nog geen
+uitvraag naar, dus die rijen zouden alleen als permanente "—" staan — kan
+een latere ronde worden. Nieuwe "Forget pairing code"-knop (met
+bevestigingsdialoog): wist de opgeslagen G7-koppelcode voor deze slot, zodat
+de volgende koppelpoging 'm gewoon opnieuw vraagt — ontstaan uit deze sessies
+eigen live-tests, waarbij een opgeslagen code niet meer zichtbaar of
+controleerbaar was.
+
+**AppSettings.kt.** Nieuwe `clearDexcomG7PairingCode(slot)`, tegenhanger van
+de al bestaande `setDexcomG7PairingCode`.
+
+**FclGlucoLinkNavHost.kt.** `statusRouteFor()`'s DEXCOM_G7-tak (Ronde 127)
+wijst nu naar het nieuwe `BASE_DEXCOM_G7_STATUS`-scherm i.p.v. naar
+PairingScreen. Nieuw `ROUTE_DEXCOM_G7_STATUS`-composable, zelfde
+onDisconnect-patroon als G6/CareSens (stopBleConnectionService +
+ConnectionStatusBridge + clearDeviceAddress).
+
+**Verificatie.** Balance-checker op alle drie gewijzigde/nieuwe bestanden.
+
+Gewijzigd: `ui/FclGlucoLinkNavHost.kt`, `data/AppSettings.kt`. Nieuw:
+`ui/DexcomG7StatusScreen.kt`.
+
+versionCode 142, versionName "0.9.43-g7-status-screen".
+
+## Ronde 130 (27/08/2026) — G7-statusscherm-UX-fixes + koppeling blijft
+onderzocht
+
+**Aanleiding.** Live-test van v142 (Ronde 129's statusscherm): koppeling
+faalt nog steeds bij "ronde 1: ongeldig bewijs", ondanks de write-type- én
+sequencing-fixes uit Ronde 128/128b (beide bevestigd structureel actief in
+de log). Daarnaast een reeks concrete UX-klachten op het nieuwe
+statusscherm zelf: "Wat niet goed is is dat hij tranmitter heet op het
+status scherm, dat moet sensor worden. De forget pairing code knop werkt
+wel maar dan is er nergens een knop om hem weer in te voeren [...] Ook de
+disconnect knop werkt maar vervolgens kun je niet weer connecten [...] het
+lijkt me handiger dat er een streepje staat tot hij ingevuld is dan dat hij
+niet zichtbaar is."
+
+**Koppeling — verder onderzoek, geen doorbraak.** De crypto
+(`DexcomG7Crypto.kt`) is deze ronde BYTE-VOOR-BYTE geverifieerd tegen de
+echte, vendored xDrip+-broncode (`MTR93600/OpenApsAIMI`,
+`dev_OnePlusG7`-branch, `plugins/libkeks/.../jamorham/keks/{Config,Calc,
+Packet,JECPoint}.java` — rechtstreeks opgehaald en zelf regel-voor-regel
+nagelopen, niet alleen via een subagent-samenvatting). Ook de op het eerste
+gezicht verdacht ogende "alice"/"bob" party-ID-hex-constanten bleken
+byte-voor-byte te kloppen. Geen enkel verschil gevonden — de wiskunde zelf
+is dus met vrij hoge zekerheid correct.
+
+Wél gevonden: `DexcomG7Driver.kt`'s `awaitExtraDataPacket()`/
+`awaitAuthIndication()` zetten hun `CompletableDeferred` klaar NADAT de
+bijbehorende schrijfactie al was uitgevoerd — een smal race-venster tussen
+het versturen van een commando en het "klaarzetten" om het antwoord op te
+vangen (de write keert synchroon meteen terug, de GATT-notificatiecallback
+loopt op een ander thread). Gefixt: beide functies nemen nu een
+`trigger: suspend () -> Unit`-parameter en voeren die pas uit NADAT de
+deferred al staat. Op zich een smal venster (een echte BLE-rondetrip duurt
+normaliter veel langer dan de paar tussenliggende CPU-instructies), dus
+geen garantie dat dit DE oorzaak is — maar correct en goedkoop om te
+sluiten.
+
+Om een vierde blinde gok te voorkomen als dit niet de oorzaak blijkt: een
+nieuwe `logRound1ValidationFailure()` logt bij een mislukte ronde-1-
+validatie de ruwe hex van het ontvangen pakket (`point1`/`point2`/`hash`)
+plus onze eigen `bob`/`alice`/`keyA.publicKey`-waarden naar het
+diagnose-logboek — genoeg om de zero-knowledge-hash desnoods handmatig na
+te rekenen bij de eerstvolgende live-test, i.p.v. weer te moeten raden.
+
+**DexcomG7StatusScreen.kt — vijf UX-fixes.**
+1. "Transmitter"-titel → "Sensor".
+2. "Pairing code"-rij toont nu de werkelijke code (of "—") i.p.v.
+   "Saved"/"Not saved".
+3. De losse "Forget pairing code"-knop + bevestigingsdialoog is vervangen
+   door één ALTIJD zichtbare "Change pairing code"-knop (nieuwe
+   `onChangePairingCode`-parameter) die rechtstreeks naar
+   `DexcomG7SetupScreen` navigeert — dezelfde, al werkende flow die
+   "Switch transmitter" elders gebruikt (wist device-adres, slaat nieuwe
+   code op, navigeert door naar het koppelscherm). Lost in één keer op: (a)
+   er was geen weg terug om een nieuwe code in te voeren na "Forget", en
+   (b) na "Disconnect" was er geen voor de hand liggende weg om weer te
+   connecten zonder eerst een andere sensor te kiezen en dan pas weer G7
+   (de gemelde workaround) — de knop is nu altijd zichtbaar, ongeacht
+   connectiestatus. De "blijft op Saved/Connecting staan na Forget"-klacht
+   vervalt hiermee ook: er is geen tussentijdse "vergeten maar nog niet
+   opnieuw gekoppeld"-status meer om in vast te lopen, de knop navigeert
+   meteen weg van dit scherm.
+4. Zeven extra rijen (Sensor status, Brain state, Firmware version, Battery
+   last queried, Transmitter days, Voltage A, Voltage B) toegevoegd als
+   "—"-placeholders, expliciet op verzoek — vervangt Ronde 129's bewuste
+   keuze om ze weg te laten. Onze driver vraagt deze gegevens nog niet uit;
+   de rij-structuur staat nu wel al klaar voor als dat ooit toegevoegd
+   wordt.
+
+**FclGlucoLinkNavHost.kt.** `ROUTE_DEXCOM_G7_STATUS`-composable geeft nu
+ook `onChangePairingCode` door, gekoppeld aan
+`navController.navigate(slotRoute(BASE_DEXCOM_G7_SETUP, slot))`.
+
+**Verificatie.** Balance-checker (haakjes/accolades) op alle drie
+gewijzigde bestanden.
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Driver.kt`, `ui/DexcomG7StatusScreen.kt`,
+`ui/FclGlucoLinkNavHost.kt`.
+
+versionCode 143, versionName "0.9.44-g7-status-fixes-diagnostics".
+
+## Ronde 131 (27/08/2026) — G7-koppeling: vroegtijdig createBond(), op basis
+van een echte xDrip+-log op dezelfde sensor
+
+**Aanleiding.** V143's diagnose-logging (Ronde 130) leverde 45 mislukte
+ronde-1-pogingen op. Onafhankelijk in Python nagerekend (losse implementatie,
+niet de Kotlin-code): de ontvangen punten liggen echt op de curve (geen
+verminkte bytes), maar het zero-knowledge-bewijs klopt in GEEN van de 45
+gevallen — met of zonder partij-ID's/punten omgewisseld. Belangrijk: deze
+controle gebruikt de koppelcode niet eens, het is puur een zelfconsistentie-
+check van de sensor. Dat zou bij gezonde communicatie altijd moeten slagen.
+
+Op verzoek van de gebruiker is xDrip+ herinstalleerd en opnieuw verbonden met
+DEZELFDE sensor. Diens log liet iets doorslaggevends zien: herhaalde
+`Bond state 11 Pairing` / `Prompting user to notice pairing request with
+sound` momenten (soms terugvallend naar `Bond state 10 Unpaired`, meerdere
+"Error count reached"-pogingen) — en pas NA `Bond state 12 Paired` (na
+meerdere pogingen) kwamen `VersionRX`/`BatteryRX` succesvol binnen. Ook trad
+xDrip+'s eigen "Missing QR code"-uitzondering op (bevestigt dat xDrip+ WEL
+door de volledige J-PAKE-authenticatie heen komt op deze sensor, vóórdat het
+in een secundair pad struikelt) — dus de transmitter-hardware kán de
+handshake overduidelijk aan.
+
+**Conclusie.** FCLGlucoLink's driver riep `gatt.device.createBond()` tot nu
+toe alleen aan NA een geslaagde J-PAKE-authenticatie (die nooit gehaald
+werd) — het Android-systeem-koppelscherm kwam daardoor nooit tevoorschijn,
+en de BLE-link bleef de hele sessie ongebonded/onversleuteld. xDrip+'s eigen
+log suggereert sterk dat bonden VROEG (en soms pas na meerdere pogingen)
+moet gebeuren, niet als laatste stap.
+
+**DexcomG7Driver.kt.** `onServicesDiscovered()`: `createBond()` wordt nu
+vroegtijdig aangeroepen (als de link nog niet gebonded is), vóórdat de
+J-PAKE-handshake start — niet blokkerend, de handshake wordt gewoon meteen
+geprobeerd terwijl bonden op de achtergrond kan lopen (mirror van xDrip+'s
+eigen, niet-blokkerende gedrag). `registerBondReceiver()` logt nu ELKE
+bond-state-overgang (niet alleen BOND_BONDED), mirror van xDrip+'s eigen
+informatieve `Bond state N Naam bs: ... was ...`-logregels — nuttig voor een
+volgende diagnoseronde als dit niet meteen de volledige fix blijkt.
+
+**Verificatie.** Balance-checker op het gewijzigde bestand.
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Driver.kt`.
+
+versionCode 144, versionName "0.9.45-g7-early-createbond".
+
+## Ronde 132 (27/08/2026) — v144's vroege createBond() gefixt: seriёel i.p.v.
+gelijktijdig met CCCD-writes
+
+**Aanleiding.** Live-test van v144 leverde een regressie op: een raw
+systeem-logcat toonde `status=19`-disconnect binnen ~150ms na verbinden —
+zelfs VÓÓR ronde 1 ooit geprobeerd werd, iets wat zelfs vóór Ronde 131 nooit
+gebeurde. Exacte volgorde uit de logcat: `createBond()` aangeroepen -> CCCD-
+write voor ExtraData "ok" -> `Bond state Pairing` -> `setCharacteristic
+Notification` voor Authentication -> `onConnectionUpdated` (een BLE-
+verbindingsparameter-update, een typisch bijverschijnsel van het STARTEN
+van SMP-bonding) -> binnen ~50ms daarna `status=19`-disconnect -> `Bond
+state Unpaired`. De sensor lijkt de verbinding af te breken zodra er een
+SMP-koppelverzoek binnenkomt TERWIJL er nog andere GATT-operaties (CCCD-
+writes) in de pijplijn zitten — Ronde 131's `createBond()`-aanroep liep
+namelijk GELIJKTIJDIG met de CCCD-writes, niet ervoor.
+
+**DexcomG7Driver.kt.** `onServicesDiscovered()`: nu strikt serieel — als de
+link nog niet gebonded is, wordt `createBond()` aangeroepen en wordt er
+gewacht op een DEFINITIEVE uitkomst (via `pendingAfterBond`, hergebruikt
+van de bestaande post-auth-bond-flow) vóórdat er ook maar één CCCD-write
+gedaan wordt. Geen permanente blokkade: na een nieuwe
+`EARLY_BOND_TIMEOUT_MS` (15s, zelfde marge als `PAIRING_STEP_TIMEOUT_MS`)
+wordt gewoon doorgegaan met de handshake op de huidige (mogelijk nog
+ongebonded) verbinding, zodat een langzaam/nooit-succesvol bondproces de
+boel niet blijvend blokkeert — xDrip+'s eigen log liet zien dat bonden soms
+meerdere pogingen over meerdere verbindingen kost; de bestaande reconnect-
+lus vangt dat vanzelf op.
+
+**Verificatie.** Balance-checker op het gewijzigde bestand.
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Driver.kt`.
+
+versionCode 145, versionName "0.9.46-g7-serialized-createbond".
+
+## Ronde 133 (27/08/2026) — vroegtijdig createBond() weer teruggedraaid: de
+sensor breekt de verbinding af zodra we het zelf aanroepen
+
+**Aanleiding.** Live-test van v145 (Ronde 132's strikt-seriële variant)
+leverde een raw systeem-logcat op die bijna 20 minuten en ~19 herhaalde
+verbindingspogingen besloeg (20:35–20:54), allemaal met exact hetzelfde
+patroon: verbinden -> `createBond()` aangeroepen (onze eigen logregel
+bevestigt: geen enkele CCCD-write is op dat moment nog gedaan) ->
+`onConnectionUpdated` (bijverschijnsel van het starten van SMP) -> BINNEN
+~50-150ms `status=19`-disconnect -> vervolgens, ~15s later, de
+`EARLY_BOND_TIMEOUT_MS`-fallback die alsnog `setCharacteristicNotification`
+probeert op de allang gesloten gatt, wat faalt.
+
+Dit weerlegt Ronde 132's aanname rechtstreeks: het was NIET de
+gelijktijdigheid met CCCD-writes die de disconnect veroorzaakte (v145 had
+die gelijktijdigheid volledig weggehaald), maar de `createBond()`-aanroep
+ZELF, ongeacht timing. Resultaat was zelfs slechter dan de situatie vóór
+Ronde 131: geen enkele verbinding overleefde nog lang genoeg om ronde 1 van
+de J-PAKE-handshake te proberen, laat staan te falen.
+
+**Conclusie.** Bij deze specifieke sensor lijkt bonden PERIFEER-
+geïnitieerd te zijn — de sensor (of Android, via bv. een "insufficient
+encryption"-GATT-fout tijdens de handshake) start zelf een SMP-
+koppelverzoek wanneer dat nodig is. xDrip+'s log uit Ronde 131 toonde wel
+`Bond state Pairing`-overgangen, maar dat is geen bewijs dat xDrip zelf
+`createBond()` aanroept vóór de handshake — dat kan net zo goed automatisch
+zijn gestart. De broncode van xDrip+'s eigen bonding-trigger
+(`Ob1G5CollectionService`) kon deze sessie niet gevonden worden (meerdere
+fetch-pogingen op `raw.githubusercontent.com/NightscoutFoundation/xdrip`
+leverden niets op), dus de "vroeg bonden"-aanpak van Ronde 131/132 was
+gebaseerd op AFLEIDING uit het geobserveerde gedrag, niet op de daadwerkelijke
+broncode — en die afleiding bleek dit keer verkeerd.
+
+**DexcomG7Driver.kt.** `onServicesDiscovered()`: de vroegtijdige/seriële
+`createBond()`-aanroep (Ronde 131/132) is volledig verwijderd. Terug naar de
+oorspronkelijke (Ronde 112-)opzet: direct doorgaan met CCCD-writes en de
+J-PAKE-handshake; `createBond()` wordt pas aangeroepen NA succesvolle
+authenticatie, in `runPairingHandshake()`'s bestaande
+`if (!status.isBonded) { ...; gatt.device.createBond() }`-tak — ongewijzigd
+sinds Ronde 112. De ongebruikte `EARLY_BOND_TIMEOUT_MS`-constante is
+verwijderd. De verbeterde bond-state-logging uit Ronde 131
+(`bondStateName()`, elke overgang loggen, niet alleen BOND_BONDED) blijft
+staan — puur observationeel, onschadelijk, en heeft dit keer net de
+doorslaggevende diagnose geleverd.
+
+**Belangrijk voorbehoud.** Dit lost de bonding-regressie van Ronde 131/132
+op (terug naar het gedrag van vóór die experimenten), maar lost NIET de
+onderliggende "ronde 1: ongeldig bewijs"-mysterie op — dat blijft, na
+uitputtende verificatie tegen de echte referentie-implementatie én
+onafhankelijke Python-validatie tegen 45 echte samples, een openstaande
+vraag voor een volgende ronde. Het is inmiddels wel duidelijk vastgesteld
+dat het GEEN cryptografie-/protocolvolgorde-bug in FCLGlucoLink's eigen
+code is.
+
+**Verificatie.** Balance-checker (haakjes/accolades) op het gewijzigde
+bestand.
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Driver.kt`.
+
+versionCode 146, versionName "0.9.47-g7-revert-early-bond".
+
+## Ronde 134 (27/08/2026) — DE bug gevonden: partij-ID's "client"/"server"
+werden met verkeerd-om genibbelde hex geparset
+
+**Aanleiding.** Live-test van v146 (Ronde 133's revert) toonde iets heel
+waardevols: de verbinding bleef nu STABIEL — 11 opeenvolgende
+koppelpogingen (21:27–21:37) bereikten allemaal netjes ronde 1, schreven de
+CCCD's, ontvingen een volledig 160-byte antwoordpakket, zonder ook maar één
+`status=19`-disconnect. Maar ELKE keer faalde `ronde1-validatie` alsnog,
+met exact hetzelfde patroon als in alle eerdere pogingen deze sessie.
+
+Op verzoek van de gebruiker ("wil dit gewoon werkend krijgen [...] graag de
+methode die de meeste kans op succes heeft") is de eerdere exhaustieve
+verificatie (Calc/Packet/Context/Plugin/JECPoint/Digest/SHA256.java, allemaal
+al gelezen en geverifieerd in eerdere rondes) nog één keer overgedaan, maar
+dit keer inclusief een bestand dat nooit eerder was opgehaald:
+`jamorham.keks.util.Util`. Daar bleek `hexStringToByteArray()` de twee
+hex-cijfers van elk bytepaar VERWISSELD te decoderen:
+`data[i/2] = (digit(str[i+1]) << 4) + digit(str[i])` — dus met de HOGE en
+LAGE nibble omgedraaid t.o.v. standaard hex-parsing. Config.java's
+`ALICE_B`/`BOB_B`-constanten (`"36C69656E647"`/`"375627675627"`) worden
+UITSLUITEND via deze functie gedecodeerd — en met die verwisseling correct
+toegepast blijken ze doodgewoon de ASCII-tekst **"client"** resp.
+**"server"** te zijn: voor de hand liggende, betekenisvolle partij-ID's voor
+een J-PAKE-koppeling tussen telefoon en sensor.
+
+FCLGlucoLink's eigen `hexToBytes()` (Ronde 112) deed STANDAARD nibble-
+parsing op diezelfde hex-strings, en produceerde dus 6 volkomen andere,
+niet-ASCII bytes (`36 C6 96 56 E6 47` i.p.v. `63 6C 69 65 6E 74` voor
+"alice"). Die partij-ID gaat rechtstreeks de zero-knowledge-hash in
+(`getZeroKnowledgeHash`'s `party`-argument, gebruikt in ZOWEL het bouwen
+als het valideren van elk rondepakket) — met de verkeerde bytes daar kan de
+Schnorr-bewijsvergelijking (`g^r · publicKey^h =? gv`) nooit uitkomen,
+hoe correct de rest van de wiskunde ook is. Dit verklaart in één keer:
+waarom de twee ontvangen EC-punten in elk gefaald pakket altijd wél geldige
+curvepunten waren (die decodering gebruikt de partij-ID-bytes niet); waarom
+eerdere Python-kruisverificatie met alice/bob- en punt1/punt2-omwisselingen
+niets vond (geen van die hypotheses raakte aan HOE de constanten zelf
+gedecodeerd werden — alle vier de combinaties gebruikten nog steeds de
+verkeerde onderliggende bytes); en waarom dit een 100%-reproduceerbare,
+sensor-onafhankelijke fout was (een partij-ID-constante, geen sensor-
+specifieke waarde).
+
+**DexcomG7Crypto.kt.** `DexcomG7JpakeContext.alice`/`.bob` worden nu
+rechtstreeks als ASCII-letterlijke tekst geschreven
+(`"client".toByteArray(StandardCharsets.US_ASCII)` /
+`"server".toByteArray(...)`) — geen hex-parsing meer nodig, dus de
+(nu overbodige én foutgevoelige) `hexToBytes()`-hulpfunctie is verwijderd.
+
+**Verificatie.** Onafhankelijk in Python nagerekend dat jamorham's
+verwisselde nibble-parsing op beide hex-strings toegepast exact
+`b"client"`/`b"server"` oplevert (zie sessie-transcript). Balance-checker
+(haakjes/accolades) op het gewijzigde bestand.
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Crypto.kt`.
+
+versionCode 147, versionName "0.9.48-g7-party-id-nibble-fix".
+
+## Ronde 135 (27/08/2026) — auth-aanvraag kreeg nooit antwoord: slotbyte
+stond op 0 i.p.v. 2
+
+**Aanleiding.** Live-test van v147 (Ronde 134's partij-ID-fix) was een
+doorbraak: voor het eerst deze hele sessie slaagden ronde 1, ronde 2 ÉN
+ronde 3 van de J-PAKE-handshake stuk voor stuk — geen enkele
+`ronde1/2/3-validatie MISLUKT` meer, op 3 onafhankelijke verbindingen na
+elkaar (22:31, 22:32, 22:33). Maar alle 3 liepen daarna vast op EXACT
+dezelfde volgende stap: nadat de auth-aanvraag (opcode 0x02) naar de
+Authentication-characteristic geschreven was, kwam er nooit een antwoord —
+de sensor verbrak de verbinding (`status=19`) binnen ~200ms, en de handshake
+faalde met "geen antwoord op auth-aanvraag".
+
+**Oorzaak.** `buildAuthRequest()`'s laatste byte (het "slot"-veld) stond op
+`0`. De echte bron
+(`jamorham.keks.message.AuthRequestTxMessage2`, rechtstreeks opgehaald)
+laat zien dat dat veld nooit 0 is:
+```java
+this(token_size, (alt ? endByteAlt : endByteStd)
+        + (chal.length > 2 ? chal[2] : 0));
+// endByteStd = 0x2, endByteAlt = 0x1
+```
+Bij een normale (eerste) koppelpoging is `alt` altijd `false` en `chal`
+altijd leeg, dus de slotbyte is in de praktijk altijd gewoon `endByteStd`
+= **2** — nooit 0. Vermoedelijk verwerpt de sensor een auth-aanvraag met een
+onherkende slotwaarde stilzwijgend (geen antwoord, gewoon ophangen) —
+precies het waargenomen symptoom. Ook `AuthChallengeTxMessage.java` en
+`AuthStatusRxMessage.java` (de twee stappen erna) zijn ter controle
+opgehaald en rechtstreeks vergeleken — die twee kloppen al exact.
+
+**DexcomG7Protocol.kt.** `buildAuthRequest()`'s slotbyte: `0` → `2`.
+
+**Verificatie.** Balance-checker (haakjes/accolades) op het gewijzigde
+bestand. Byte-layout van `AuthRequestTxMessage2`/`BaseMessage.init()`
+rechtstreeks nagelezen (opcode + 8-byte token + slotbyte = 10 bytes,
+little-endian-allocatie maar byte-voor-byte puts — matcht onze
+`ByteBuffer.allocate(10)`-opbouw al exact, alleen de slotwaarde was fout).
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Protocol.kt`.
+
+versionCode 148, versionName "0.9.49-g7-auth-request-slot-fix".
+
+## Ronde 136 (27/08/2026) — Android's eigen koppeldialoog kreeg nooit onze
+koppelcode: `ACTION_PAIRING_REQUEST` afgehandeld
+
+**Aanleiding.** Live-test van v148 (Ronde 135's slotbyte-fix) was de
+volgende doorbraak: voor het eerst zag de handshake de auth-aanvraag ÉN
+het uitdaging-antwoord beide slagen (drie opeenvolgende geslaagde writes
+naar de Authentication-characteristic, gevolgd door een `Bond state
+Pairing`-overgang). De gebruiker meldde daarbij zelf: "ik zag wel een paar
+keer heel kort een android popup voorbij komen waarin stond: 'onjuiste
+koppel code'. De koppeling waarin het vinkje wordt gezet dat de koppeling
+permanent is komt niet voorbij." — en de sensor verbrak steeds de
+verbinding (`status=19`) binnen ~250ms na het begin van die `Pairing`-fase.
+
+**Oorzaak.** Na een geslaagde J-PAKE-authenticatie vereist de G7 alsnog een
+gewone OS-niveau Bluetooth-bonding (los van de J-PAKE-laag zelf — dat is
+precies waar `gatt.device.createBond()` al voor bedoeld was, sinds Ronde
+112). Maar onze app luisterde tot nu toe UITSLUITEND naar
+`ACTION_BOND_STATE_CHANGED` (het RESULTAAT van een koppelpoging), nooit
+naar `ACTION_PAIRING_REQUEST` (het VERZOEK om zelf een PIN aan te bieden).
+Zonder een luisteraar die de PIN aanbiedt, probeert Android's eigen
+systeem-koppeldialoog het zelf — kennelijk met een verkeerde/lege waarde —
+en dat faalt binnen enkele honderden ms, precies het "heel kort voorbij
+komen"-gedrag dat de gebruiker beschreef.
+
+**DexcomG7Driver.kt.** `registerBondReceiver()`'s bestaande ontvanger
+luistert nu OOK naar `ACTION_PAIRING_REQUEST`: bij ontvangst biedt hij de
+opgeslagen (4-cijferige) koppelcode aan via `device.setPin(pairingCode.
+toByteArray(Charsets.US_ASCII))`, en onderdrukt Android's eigen
+systeemdialoog met `abortBroadcast()` — exact het patroon dat xDrip+/AAPS
+voor dezelfde G6/G7-koppelstap gebruiken. De `IntentFilter` kreeg
+`IntentFilter.SYSTEM_HIGH_PRIORITY` zodat onze ontvanger vóór Android's
+eigen dialoog-handler draait en die daadwerkelijk kan onderdrukken.
+
+**Verificatie.** Balance-checker (haakjes/accolades) op het gewijzigde
+bestand.
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Driver.kt`.
+
+versionCode 149, versionName "0.9.50-g7-os-pairing-request-pin".
+
+## Ronde 137 (27/08/2026) — Ronde 136's `abortBroadcast()` weer verwijderd:
+xDrip+ onderdrukt Android's eigen koppeldialoog helemaal niet
+
+**Aanleiding.** Directe verduidelijking van de gebruiker na v149: "xdrip
+roept wel androids eigen dialoog aan die waarbij je de koppeling permanent
+zet en waarbij je de mogelijkheid hebt om de bluetooth toegang tot de
+contacten en telefoon te geven." Dat is precies het systeem-dialoog dat
+`abortBroadcast()` in Ronde 136 onderdrukte.
+
+**Conclusie.** Ronde 136's aanname was fout: xDrip+ vult de koppelcode niet
+stil in via `setPin()` + `abortBroadcast()` — het laat Android's EIGEN
+koppeldialoog gewoon verschijnen (met het "maak deze koppeling
+permanent"-vinkje en de contacten/telefoon-toegangsoptie), en de gebruiker
+bevestigt die zelf. Door de broadcast af te breken onderdrukten we precies
+dát dialoog — vandaar dat de gebruiker meldde dat "de koppeling waarin het
+vinkje wordt gezet dat de koppeling permanent is" na v149 niet meer
+voorbijkwam.
+
+**DexcomG7Driver.kt.** `abortBroadcast()` verwijderd uit de
+`ACTION_PAIRING_REQUEST`-afhandeling in `registerBondReceiver()`. Android's
+eigen systeemdialoog krijgt nu weer de kans om te verschijnen; de gebruiker
+moet 'm zelf bevestigen (zoals bij xDrip+). `setPin()` blijft staan als
+onschadelijke best-effort aanvulling (relevant als de sensor daadwerkelijk
+om PIN-invoer vraagt i.p.v. een simpele bevestiging) — dat vult höchstens
+een veld, het toont geen eigen UI en blokkeert niets.
+
+**Verificatie.** Balance-checker (haakjes/accolades) op het gewijzigde
+bestand; expliciet gecontroleerd dat de daadwerkelijke `abortBroadcast()`-
+aanroep weg is (alleen nog in commentaar-tekst, ter documentatie van de
+fout).
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Driver.kt`.
+
+versionCode 150, versionName "0.9.51-g7-dont-suppress-pairing-dialog".
+
+## Ronde 138 (27/08/2026) — `createBond()` expliciet op TRANSPORT_LE: geen
+dialoog-onderdrukking was het probleem, de OS-koppelpoging zelf faalde al
+
+**Aanleiding.** Live-test met v150 (`fclglucolink_2026-08-27 23.27.txt`,
+zes opeenvolgende verbindingen): het volledige J-PAKE-handshake + auth-
+request/challenge/status-traject slaagt telkens (allemaal "write ok"), Bond
+state gaat van Unpaired naar Pairing — en dan, zonder uitzondering, binnen
+~250-300ms een status=19-disconnect (GATT_CONN_TERMINATE_PEER_USER — de
+sensor zelf haakt af), gevolgd door Bond state terug naar Unpaired. Geen
+enkele keer verscheen "Pairing request ontvangen" in de log — de
+`ACTION_PAIRING_REQUEST`-broadcast kwam dus nooit binnen, met of zonder
+Ronde 137's fix. De gebruiker vroeg terecht: hoe lukt dit Juggluco/xDrip/
+AIMI/BYODA wel?
+
+**Onderzoek.** xDrip+'s eigen open-source G6-driver opgezocht
+(`NightscoutFoundation/xDrip`, `Ob1G5CollectionService.java`, via
+grep.app-codesearch omdat GitHub's eigen API/zoekfunctie niet bereikbaar
+was in deze omgeving). Cruciale vondst op regel 1168-1172:
+
+```java
+if (Build.VERSION.SDK_INT < 26) {
+    registerReceiver(mPairingRequestRecevier, pairingRequestFilter);
+} else {
+    UserError.Log.d(TAG, "Not registering pairing receiver on Android 8+");
+}
+```
+
+xDrip+ registreert zélf HELEMAAL GEEN `ACTION_PAIRING_REQUEST`-ontvanger
+meer op Android 8+ — precies omdat die broadcast op moderne Android niet
+(betrouwbaar) bij losse apps terechtkomt. Dat bevestigt onafhankelijk wat
+onze eigen logs al lieten zien, en betekent dat Ronde 136/137's hele
+dialoog-onderdrukkingshypothese een dood spoor was: het probleem zit vóór
+elk moment waarop een dialoog ooit zou kunnen verschijnen. `setPin()`-
+aanroepen bleven daarom feitelijk zonder effect.
+
+**Conclusie/hypothese.** Onze blijvende `gatt.device.createBond()`-aanroep
+gebruikt (net als xDrip+'s eigen G6-code overigens) het argumentloze
+`TRANSPORT_AUTO`. Op een toestel dat zowel classic (BR/EDR) als LE
+ondersteunt kan Android daarmee een classic/dual koppelpoging proberen
+naast/in plaats van zuiver LE — een LE-only sensor als de G7 (geen BR/EDR-
+radio) kan zo'n verkeerd-getransporteerde koppelpoging direct laten
+mislukken/afhaken, precies het "Pairing -> ~250ms later status=19,
+zonder dialoog"-patroon dat consequent in de logs staat. Dit is een bekend
+Android-BLE-koppelvalkuiltje bij LE-only accessoires. Sinds API 30 (Android
+11) is er een publieke `createBond(int transport)`-overload waarmee
+`TRANSPORT_LE` expliciet afgedwongen kan worden.
+
+**DexcomG7Driver.kt.** De `createBond()`-aanroep in de
+`!status.isBonded`-tak (na een geslaagde auth) gebruikt nu, met SDK-check
+en fallback voor minSdk 26:
+
+```kotlin
+if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+    gatt.device.createBond(BluetoothDevice.TRANSPORT_LE)
+} else {
+    gatt.device.createBond()
+}
+```
+
+**Verificatie.** Balance-checker (haakjes/accolades) op het gewijzigde
+bestand: 199/199 accolades, 607/607 haakjes.
+
+Dit is een gerichte, onderbouwde hypothese — geen 100%-bevestigde fix zoals
+Ronde 134/135 (die waren byte-voor-byte tegen xDrip+'s brontekst
+geverifieerd). Als v151 nog steeds op hetzelfde punt faalt, is een verse
+log nodig om te zien of het status=19-patroon verandert (bijv. andere
+timing, of alsnog een "Pairing request ontvangen"-regel).
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Driver.kt`, `app/build.gradle.kts`.
+
+versionCode 151, versionName "0.9.52-g7-createbond-transport-le".
+
+## Ronde 138b (27/08/2026) — 32x "Call requires permission" lintfout in
+DexcomG7Driver.kt onderdrukt
+
+**Aanleiding.** Na v151: "DexcomG7Driver.kt nu geeft hij: 32 keer deze
+fout: Call requires permission which may be rejected by user: code should
+explicitly check to see if permission is available (with `checkPermission`)
+of expliciet een potentiële `SecurityException` afhandelen."
+
+**Diagnose.** Dit is Android Lint's standaard `MissingPermission`-check op
+alle `BluetoothDevice`/`BluetoothGatt`-methodes die met
+`@RequiresPermission` zijn geannoteerd (BLUETOOTH_SCAN/BLUETOOTH_CONNECT,
+sinds Android 12). `BLUETOOTH_SCAN`/`BLUETOOTH_CONNECT` staan al in
+`AndroidManifest.xml` en worden vóór elke koppelpoging als runtime-
+permissie aangevraagd/gecontroleerd — dát is precies waarom deze driver in
+de praktijk al talloze keren succesvol verbindt (zie alle live-testlogs tot
+nu toe). Lint kan die controle, die in een ánder bestand gebeurt (het
+scherm dat de koppeling start), niet dataflow-volgen, en markeert daarom
+elke losse Bluetooth-aanroep in dit bestand als "mogelijk ongeautoriseerd"
+— 32 keer, want dat is precies hoeveel losse `BluetoothDevice`/
+`BluetoothGatt`-aanroepen dit bestand heeft (`connectGatt`,
+`discoverServices`, `setCharacteristicNotification`,
+`writeCharacteristic`, `createBond`, etc.), inclusief de nieuwe
+`createBond(TRANSPORT_LE)`-aanroep uit Ronde 138. Puur een statische-
+analyse-beperking, geen runtime-probleem — vandaar dat dit nu pas
+opdook (na de wijziging in Ronde 138) terwijl de talrijke andere
+Bluetooth-aanroepen in dit bestand al veel langer bestonden.
+
+**DexcomG7Driver.kt.** `@SuppressLint("MissingPermission")` toegevoegd op
+klasseniveau (`class DexcomG7Driver`) — dat dekt ook de geneste anonieme
+`BluetoothGattCallback`. Puur een lint-onderdrukking met toelichtende kdoc;
+geen enkele wijziging aan runtime-gedrag of de permissielogica zelf.
+
+**Verificatie.** Balance-checker: 199/199 accolades, 611/611 haakjes.
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Driver.kt`, `app/build.gradle.kts`.
+
+versionCode 152, versionName "0.9.53-g7-suppress-missingpermission-lint".
+
+## Ronde 138c (27/08/2026) — `createBond(TRANSPORT_LE)` compileerde niet:
+via reflectie, met fallback
+
+**Aanleiding.** Na v152: "Too many arguments for 'fun createBond(): Boolean'.
+in 863" — de directe `gatt.device.createBond(BluetoothDevice.TRANSPORT_LE)`-
+aanroep uit Ronde 138 compileert niet.
+
+**Diagnose.** Correctie op Ronde 138's aanname: `createBond(int transport)`
+bestaat weliswaar sinds API 30 in AOSP, maar staat gemarkeerd als
+`@SystemApi` — hij zit dus niet in de publieke `android.jar`-stub waartegen
+we compileren (compileSdk 34), vandaar de compilerfout "Too many
+arguments". De methode zelf vereist geen system-permissie, ze is puur uit
+de publieke SDK-stub weggelaten — reflectie is de gangbare workaround
+hiervoor.
+
+**DexcomG7Driver.kt.** De `createBond(TRANSPORT_LE)`-aanroep gaat nu via
+reflectie (`BluetoothDevice::class.java.getMethod("createBond",
+Int::class.javaPrimitiveType)`), met try/catch: als reflectie om wat voor
+reden dan ook faalt (oudere Android-versie, hidden-API-restrictie,
+fabrikant-afwijking), valt de code terug op de gewone publieke
+`createBond()` (TRANSPORT_AUTO, het oude gedrag) — nooit een harde crash.
+
+**Verificatie.** Balance-checker: 202/202 accolades, 622/622 haakjes.
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Driver.kt`, `app/build.gradle.kts`.
+
+versionCode 153, versionName "0.9.54-g7-createbond-transport-le-reflection".
+
+## Ronde 139 (28/08/2026) — echte oorzaak gevonden via HCI-snooplog:
+createBond() racete tegen onze eigen laatste GATT-write
+
+**Aanleiding.** Na v153 (TRANSPORT_LE via reflectie) meldde de gebruiker,
+terecht gefrustreerd, dat er al meerdere rondes waren geweest met
+speculatieve fixes die telkens niets uithaalden, en vroeg direct: hoe komt
+het dat xDrip/Juggluco/AIMI dit wél kunnen en wij niet. In plaats van nóg
+een hypothese te bouwen is een volledig Android-bugreport opgevraagd (via
+Instellingen → Ontwikkelaarsopties → Bugrapport, geen ADB nodig) en is de
+daarin meegeleverde ruwe Bluetooth HCI-snooplog (`btsnooz_hci.log`,
+1747 pakketten, 6 koppelpogingen) byte-voor-byte ontleed — grondwaarheid
+i.p.v. nog een gok.
+
+**Diagnose (deel 1 — SMP-laag).** In alle 6 pogingen: de telefoon stuurt
+een SMP Pairing Request naar de G7; de sensor antwoordt NOOIT (geen
+Pairing Response, geen Pairing Failed, geen Security Request — in de
+volledige capture van 1747 pakketten komt geen van die drie ooit voor); na
+~250-300ms verbreekt de sensor zelf de verbinding (HCI-reden 0x13, "remote
+user terminated"). Dit weerlegde definitief de Ronde 138(c)-hypothese
+(TRANSPORT_LE): v153 had die fix al, en het patroon was identiek aan
+vóór de fix.
+
+Belangrijke aanvullende aanwijzing van de gebruiker: bij xDrip verschijnt
+voor dezelfde sensor wél het standaard Android-koppelscherm (hetzelfde als
+bij bv. een auto), en een eenmaal ingevoerde koppelcode hoeft niet opnieuw.
+Dat wijst erop dat de G7 voor xDrip WEL op de SMP-aanvraag reageert en tot
+een echte OS-koppeling komt — het probleem zit dus specifiek in hoe/wanneer
+ONZE app die aanvraag doet, niet in "de G7 accepteert nooit OS-bonding".
+
+**Diagnose (deel 2 — ATT-laag, de daadwerkelijke oorzaak).** Uitbreiding
+van de decoder naar de ATT/GATT-laag (naast de SMP-laag) legde het
+volgende bloot, consistent in alle 3 gecontroleerde pogingen: de allerlaatste
+schrijfactie vóór `createBond()` — de TIME_EXTENDED-write naar de
+Authentication-characteristic — kreeg zijn eigen Write Response pas 15-70ms
+NADAT de SMP Pairing Request al verstuurd was. M.a.w.: `createBond()` werd
+aangeroepen terwijl de sensor onze vorige write nog aan het verwerken was.
+
+In de code (`DexcomG7Driver.kt`) bleek dit exact te kloppen:
+`writeCharacteristic()` is een gewone (niet-suspend) functie die terugkeert
+zodra Android de write lokaal heeft aangenomen — niet zodra de sensor 'm
+daadwerkelijk kreeg. De TIME_EXTENDED-write op deze plek was, anders dan
+alle voorgaande stappen in de handshake, nooit in een await-helper
+gewikkeld; `createBond()` volgde er zonder enig suspension-point direct op.
+Dat is dus geen giswerk meer maar een race die letterlijk terug te zien is
+in de ruwe HCI-trace.
+
+(Secundaire observatie, niet geïmplementeerd: `DexcomG7Protocol.kt`'s eigen
+kdoc bij `TIME_EXTENDED` beschrijft dat xDrip+ een INKOMENDE indicatie met
+diezelfde bytes herkent als "sensor vraagt om nu te bonden" en dán pas de
+eerste variant terugschrijft — onze code schrijft 'm nu altijd op eigen
+initiatief, zonder op zo'n binnenkomend signaal te wachten. Dat kan een
+verdere verfijning zijn als de onderstaande fix niet voldoende blijkt.)
+
+**DexcomG7Driver.kt.** Nieuwe `pendingWriteAckDeferred`-veld +
+`awaitWriteAck()`-helper (zelfde patroon als de bestaande
+`awaitExtraDataPacket`/`awaitAuthIndication`): wacht op de echte
+Write Response van `onCharacteristicWrite()` voordat de aanroepende code
+verdergaat. De TIME_EXTENDED-write is hier nu in gewikkeld, gevolgd door
+een `POST_CHUNK_SETTLE_MS` (500ms) marge — dezelfde marge die elders in dit
+bestand al na `writeChunked()` gebruikt wordt — vóórdat `createBond()`
+wordt aangeroepen. Bij timeout/mislukte ack: alleen loggen, niet hard
+falen (createBond() wordt alsnog geprobeerd, met een duidelijke
+diagnostische regel dat de ack ontbrak).
+
+**Verificatie.** Balance-checker: 206/206 accolades, 651/651 haakjes.
+Dit is de eerste fix in deze reeks die daadwerkelijk gebaseerd is op een
+in de ruwe Bluetooth-trace waargenomen race-conditie i.p.v. een hypothese
+over sensor-gedrag — vandaar de uitgebreidere onderbouwing hierboven. Nog
+niet op een fysieke sensor getest; dat is de volgende stap.
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Driver.kt`, `app/build.gradle.kts`.
+
+versionCode 154, versionName "0.9.55-g7-await-write-ack-before-bond".
+
+## Ronde 140 (28/08/2026) — G7-koppelcode werd NIET vergeten bij
+"sensor op None zetten"; + duiding "onjuiste code"-melding
+
+**Aanleiding.** Gebruiker, terecht en herhaald: als de sensor op "None"
+gezet wordt, mag je aannemen dat alles gereset wordt — en toch hoefde de
+koppelcode daarna nooit opnieuw ingevoerd te worden, ook niet na het
+terugzetten naar G7. Dat is precies het soort mechanisme dat op den duur
+tot foutieve-koppelcode-fouten leidt (een nieuwe G7-sensor heeft een NIEUWE
+code op de applicator). De gebruiker gaf hierbij ook expliciet aan het
+gevoel te hebben niet gehoord te worden op dit punt.
+
+**Diagnose.** Klopte, en was zo bedoeld — maar verkeerd toegepast op G7.
+`FclGlucoLinkNavHost.kt`'s `onSensorChosen`/`onClearSensor` onthouden
+bewust de laatste Dexcom G6-transmitter-ID over een None-omweg heen (dat is
+in Ronde 64/112 EXPLICIET zo gevraagd, want een G6-transmitter is
+herbruikbare hardware — dezelfde code blijft geldig). Ronde 112 kopieerde
+ditzelfde "onthoud 'm"-patroon 1-op-1 voor G7's koppelcode
+(`hasKnownDexcomG7PairingCodeOnce` → sla setup over, koppel direct met de
+opgeslagen code) — maar een G7-sensor is GEEN herbruikbare hardware, het is
+een wegwerpartikel van ~10 dagen met een eigen code per sensor. Nergens
+werd `AppSettings.clearDexcomG7PairingCode(slot)` aangeroepen bij het
+verlaten van G7, dus de oude code bleef eeuwig staan en werd bij een nieuwe
+sensor stilzwijgend (en dus fout) hergebruikt.
+
+Aanvullend, om de "kan niet koppelen wegens onjuiste code"-melding zelf te
+duiden: in de nieuwste bugreport van de gebruiker (01:19-capture) bereikt
+de handshake gewoon "Bond state Pairing" — d.w.z. de 4-cijferige
+sensorcode klopte, de J-PAKE-authenticatie is voor die poging gewoon
+geslaagd (geen "ongeldig bewijs"/"authentication failed" in de log). Wat
+daarna misgaat is dezelfde OS-koppelfout als in Ronde 139 onderzocht
+(status=19). Android laat bij ELKE mislukte Bluetooth-koppelpoging
+standaard een generieke systeemmelding zien in de trant van "Kan niet
+koppelen... onjuiste pincode of sleutel" — dat is Android's eigen, vaste
+tekst voor willekeurig welke SMP-koppeling faalt, NIET een melding van
+onze app over de 4-cijferige sensorcode. Die twee "codes" (de
+Dexcom-sensorcode vs. Android's eigen Bluetooth-koppelmechanisme) zien er
+voor de gebruiker identiek uit maar zijn technisch volledig gescheiden —
+een begrijpelijke bron van verwarring, geen fout van de gebruiker.
+
+Kanttekening: deze specifieke bugreport-capture toont, qua timing, nog
+geen spoor van Ronde 139's write-ack-wachtstap (writes volgen elkaar nog
+in het oude, snelle ~45ms-ritme op, geen 500ms-marge zichtbaar vóór de
+uiteindelijke disconnect) — waarschijnlijk dus nog vóór de installatie van
+v154 vastgelegd, en zegt daarom nog niets over of Ronde 139's fix werkt.
+
+**FclGlucoLinkNavHost.kt.** In zowel `onSensorChosen` (bij het kiezen van
+een ANDER sensortype terwijl G7 actief was) als `onClearSensor` ("op None
+zetten"): `settings.clearDexcomG7PairingCode(slot)` toegevoegd zodra het
+vorige actieve type `DEXCOM_G7` was. G6's eigen "onthoud transmitter-ID"-
+gedrag blijft ongewijzigd (dat is nog steeds correct voor herbruikbare
+hardware).
+
+**Verificatie.** Balance-checker: 162/162 accolades, 347/347 haakjes.
+
+Gewijzigd: `ui/FclGlucoLinkNavHost.kt`, `app/build.gradle.kts`.
+
+versionCode 155, versionName "0.9.56-g7-clear-pairing-code-on-type-switch".
+
+## Ronde 141 (28/08/2026) — het echte antwoord: wachten op de
+bond-trigger-indicatie van de sensor zelf, bewezen met een geslaagde
+xDrip+-koppeling
+
+**Aanleiding.** Na v155 bleef "kan niet koppelen wegens onjuiste code"
+terugkomen. De gebruiker stelde voor: laat xDrip+ daadwerkelijk koppelen
+met dezelfde sensor, en genereer DAARVAN een bugreport — grondwaarheid uit
+een geslaagde koppeling in plaats van nog een analyse van onze eigen
+mislukte pogingen. Uitstekend voorstel, uitgevoerd: de gebruiker koppelde
+xDrip+ succesvol en leverde zowel xDrip+'s eigen debug-log als de bugreport
+(met HCI-snooplog) van die sessie aan.
+
+**Diagnose — twee bevestigingen in xDrip+'s eigen log.** Regel 21:
+"Prompting user to notice pairing request with sound - On Android 8+ you
+have to manually pair when requested" — xDrip+ waarschuwt de gebruiker
+actief met een GELUID zodra de OS-koppeling begint, want op Android 8+
+moet de gebruiker de systeemmelding zelf handmatig bevestigen. Regel 20 vs.
+22: Bond state ging om 09:42:48 naar "Pairing" en pas 09:42:58 — een VOLLE
+10 SECONDEN later — naar "Paired". Dat is precies de tijd die een mens
+nodig heeft om die systeemmelding op te merken en te bevestigen.
+
+**De HCI-snooplog van diezelfde sessie bevestigt dit tot op de byte.** De
+SMP-uitwisseling verloopt bij xDrip+ volledig (Pairing Request → Response →
+Public Key-uitwisseling → Confirm/Random → daarna een gat van 6,4 seconden
+— exact het wachten op de gebruiker — → DHKey Check → geslaagd). Belangrijker
+nog, op de ATT-laag vlak vóór de SMP Pairing Request:
+
+```
+07:42:47.754526 TX Write Req  → TIME_EXTENDED (06,19) naar Authentication
+07:42:47.838358 RX Write Rsp  → (eigen write bevestigd)
+07:42:47.839226 RX Handle Value Ind → 06,00 (=TIME_EXTENDED_3, dus isBondTrigger()==true!)
+07:42:47.840776 TX Handle Value Conf
+07:42:47.971450 TX SMP Pairing Request  → 130ms na de bond-trigger-indicatie
+```
+
+xDrip+ wacht dus niet op zijn EIGEN write-ack (wat Ronde 139 deed) maar op
+een BINNENKOMENDE indicatie VAN DE SENSOR ZELF, met bytes die exact
+overeenkomen met `DexcomG7Protocol.isBondTrigger()` se TIME_EXTENDED_3-
+variant — dat mechanisme stond al beschreven in `TIME_EXTENDED`'s eigen
+kdoc ("de sensor vraagt om nu te bonden"), maar werd in de code nooit
+daadwerkelijk afgewacht. Ronde 139's vaste 500ms-marge na de eigen write-ack
+was dus de VERKEERDE voorwaarde — educated guess, geen bewezen mechanisme.
+Dit verklaart ook v155's HCI-capture waarin de verbinding al doodging vóór
+de 500ms-marge zelfs maar afliep: we zaten op het verkeerde signaal te
+wachten.
+
+**DexcomG7Driver.kt.** Ronde 139's `pendingWriteAckDeferred`/
+`awaitWriteAck()` + `delay(POST_CHUNK_SETTLE_MS)` volledig verwijderd.
+Vervangen door dezelfde `awaitAuthIndication`-helper die de rest van de
+handshake ook gebruikt: de TIME_EXTENDED-write wordt verstuurd, en er wordt
+gewacht op de eerstvolgende indicatie op het Authentication-kanaal. Bij
+timeout of een onherkende indicatie: alleen loggen (niet hard falen) —
+`createBond()` wordt hoe dan ook geprobeerd, met een duidelijke
+diagnostische regel die aangeeft of het geverifieerde xDrip-patroon wel of
+niet gevolgd werd.
+
+**Verificatie.** Balance-checker: 205/205 accolades, 643/643 haakjes. Dit
+is de eerste fix in deze hele reeks die niet op onze eigen falende
+captures gebaseerd is, maar op een daadwerkelijk geslaagde koppeling met
+dezelfde sensor — het hoogste bewijsniveau tot nu toe. Nog niet zelf op de
+sensor getest.
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Driver.kt`, `app/build.gradle.kts`.
+
+versionCode 156, versionName "0.9.57-g7-await-bond-trigger-indication".
+
+## Ronde 142 (28/08/2026) — volledige byte-voor-byte vergelijking met xDrip+'s
+sessie: het enige verschil was `requestMtu(185)`
+
+**Aanleiding.** v156 getest: 6 pogingen, en in ELKE poging kwam nooit een
+bond-trigger-indicatie terug van de sensor (`DiagnosticFileLogger`: "geen
+indicatie ontvangen na TIME_EXTENDED (timeout)"). De gebruiker merkte
+bovendien scherp op dat er bij xDrip+ een popup/systeemdialoog OVER het
+xDrip-scherm heen verschijnt die hij handmatig moet bevestigen, en dat
+FCLGlucoLink dat scherm nooit toont — alleen een korte "kan niet koppelen
+wegens onjuiste code"-melding. Terechte observatie: die popup is Android's
+ACTIONABLE bevestigingsdialoog, die alleen verschijnt als de SMP-
+onderhandeling ver genoeg komt om bevestiging nodig te hebben. Onze
+verbinding kapt al af vóórdat de sensor ook maar zijn bond-trigger-
+indicatie stuurt — Android heeft dus letterlijk niets om een dialoog voor
+te tonen, en toont in plaats daarvan zijn eigen generieke faal-toast.
+
+**Diagnose.** In plaats van nog een hypothese: een volledige, letterlijke
+byte-voor-byte vergelijking van xDrip+'s bewezen geslaagde HCI-sessie
+(bugreport van de gebruiker, gehele sessie vanaf de verbinding) tegen onze
+eigen v156-capture (bugreport 10:38:57), stap voor stap door de hele GATT-
+opzet heen: service-discovery-volgorde, CCCD-schrijfvolgorde (ExtraData
+eerst met NOTIFICATION, dan Authentication met INDICATION — identiek),
+CCCD-waarden (identiek), de kale `{0x0A,0x00}`-aftrap naar Authentication
+(identiek, zelfde bytes), de chunking naar ExtraData (identiek patroon en
+timing). Alles kwam exact overeen — op ÉÉN ding na: onze app stuurt
+meteen bij het verbinden een ATT Exchange MTU Request
+(`gatt.requestMtu(185)` in `onConnectionStateChange`); xDrip+'s hele
+sessie bevat GEEN ENKELE MTU-onderhandeling — gaat rechtstreeks van
+verbinden naar service-discovery op de standaard-MTU (23 bytes).
+
+Extra bevestiging dat dit al een inconsistentie in onze eigen code was:
+`CHUNK_SIZE`'s eigen kdoc (Ronde 128) zegt letterlijk "BLE-MTU ZONDER
+onderhandeling" — de rest van het bestand was dus al geschreven in de
+aanname dat er geen MTU-onderhandeling plaatsvindt, terwijl
+`onConnectionStateChange` die alsnog aanvroeg.
+
+**DexcomG7Driver.kt.** `gatt.requestMtu(185)` verwijderd — nu meteen
+`gatt.discoverServices()` bij `STATE_CONNECTED`, exact xDrip+'s bewezen
+volgorde. De nu onbereikbare `onMtuChanged()`-override (riep toch alleen
+`discoverServices()` aan) is ook verwijderd.
+
+**Verificatie.** Balance-checker: 203/203 accolades, 645/645 haakjes. Dit
+is de eerste fix in deze reeks gebaseerd op een VOLLEDIGE, systematische
+sequentie-vergelijking i.p.v. een gedeeltelijke of speculatieve — het
+enige overgebleven verschil met een bewezen werkende koppeling. Nog niet
+zelf getest.
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Driver.kt`, `app/build.gradle.kts`.
+
+versionCode 157, versionName "0.9.58-g7-remove-mtu-request-match-xdrip".
+
+## Ronde 143 (28/08/2026) — cooldown-hypothese getest en verworpen
+
+**Aanleiding.** Voordat nog een fix werd geraden: de gebruiker liet
+FCLGlucoLink 15-20+ minuten volledig met rust (Bluetooth uit, beide apps
+afgesloten om onderlinge interferentie uit te sluiten), zette Bluetooth
+daarna weer aan en deed precies één schone koppelpoging, ongeacht de
+uitkomst gevolgd door een bugreport.
+
+**Diagnose.** De EERSTE poging na die rustperiode faalde identiek aan alle
+eerdere pogingen: TIME_EXTENDED-write bevestigd, ~196ms later disconnect
+(reden 0x13), nooit een bond-trigger-indicatie ontvangen. Dat sluit de
+hypothese "onze eigen agressieve reconnect-lus put het geduld van de
+sensor uit" definitief uit — het is geen cooldown-/rate-limit-probleem.
+
+**Verificatie.** Geen codewijziging deze ronde, puur een experiment met een
+eenduidige negatieve uitkomst — de aanleiding voor de daadwerkelijke
+doorbraak in Ronde 144 hieronder.
+
+## Ronde 144 (28/08/2026) — de ontbrekende certificaat-koppelstap gevonden
+en geïmplementeerd
+
+**Aanleiding.** Na Ronde 143's negatieve resultaat: een grondige, met
+werkelijke pakketgroottes (het `orig_len`-veld van elk HCI-snoop-record,
+NIET het afgekapte `incl_len` — Android's btsnoop-logging knipt elk
+pakket standaard af op de eerste ~15 bytes, wat eerdere sessies dit
+onderzoek al één keer op het verkeerde been had gezet) herberekende
+vergelijking tussen xDrip+'s bewezen geslaagde sessie en onze eigen
+v157-capture. Na de AuthChallenge/AuthStatus-stap (die wij al correct
+implementeren) voert xDrip+ VIER extra schrijf/indicatie-uitwisselingen
+uit op het Authentication-kanaal, elk met een fikse ExtraData-databurst
+ervoor, vóórdat `TIME_EXTENDED` geschreven wordt — iets wat onze
+`runPairingHandshake()` tot nu toe helemaal niet deed.
+
+**Diagnose.** Teruggevonden in xDrip+'s eigen `libkeks`-broncode
+(`jamorham.keks.Plugin.java`): `receivedResponse()`'s `ChallengeReply`-tak
+schakelt, zodra authenticatie lukt maar bonden niet, naar een aanvullende
+certificaat-gebaseerde wederzijdse-authenticatiestap
+(`SendCertificate0` → `SendCertificate1` → `SendCertificate1out` →
+`SendCertificate2` → `SendCertificate2out` → `SendKeyChallenge` →
+`SendKeyChallengeOut`). Opcodes en pakketgroottes kwamen exact overeen met
+de herberekende HCI-capture: `CertInfoTxMessage`/`CertInfoRxMessage`
+(opcode 0x0b, 6/7 bytes), `SignChallengeTxMessage` (opcode 0x0c, 17
+bytes), en het vaste `CHALLENGE_OUT`-commando (opcode 0x0d — de bytes
+`0d,00,02` waren zelfs in de afgekapte capture al zichtbaar en matchten
+letterlijk).
+
+Deze stap heeft drie stukken sleutelmateriaal nodig
+(`context.partA`/`partB`/`partC`) die xDrip+ zelf uit lokale voorkeuren
+(`keks_p1`/`keks_p2`/`keks_p3`) haalt. Onderzoek van xDrip+'s eigen
+`Loader.java`/`Dialog.java` liet zien dat de externe, consent-gated
+plugin-downloadroute (`askIfNeeded()`) in de broncode volledig
+uitgecommentarieerd staat — dus geen netwerk nodig, bevestigt de
+gebruiker se observatie dat koppelen zonder internet werkt. xDrip+ heeft
+wél een ingebouwde exportfunctie voor precies dit doel: hoofdmenu →
+"Share config via QR code" → "Export KEKS key to another phone". De
+gebruiker heeft dat scherm op zijn eigen, al succesvol met deze sensor
+koppelende xDrip+-installatie opgezocht en de resulterende QR-code
+aangeleverd. Decodering (gzip + xDrip+'s eigen, publieke
+`QRcodeUtils`-serialisatieformaat) en verificatie tegen de DER-structuur
+bevestigden: deel A/B zijn X.509-certificaten (Dexcom se eigen
+fabrieks-PKI, CN "DEX00PG1"/"DEX03PG1", CRL bij
+`crl.dp.saas.primekey.com`) — naar hun aard openbaar bedoeld
+materiaal — en deel C is een PKCS8-DER EC-privésleutel (secp256r1) om de
+sensor se "sign challenge" mee te ondertekenen. Zie
+`DexcomG7CertMaterial.kt`'s klasse-kdoc voor het volledige, letterlijke
+feitenrelaas.
+
+**Nieuw bestand `sensor/dexcomg7/DexcomG7CertMaterial.kt`.** De drie
+hex-gecodeerde DER-blokken (`PART_A`/`PART_B`/`PART_C`), elk byte-voor-byte
+tegen de aangeleverde QR-code geverifieerd, met volledige herkomst-kdoc.
+
+**`sensor/dexcomg7/DexcomG7Protocol.kt`.** Nieuwe berichten:
+`buildCertInfoRequest`/`parseCertInfoResponse` (opcode 0x0b),
+`buildSignChallenge`/`randomSignChallenge` (opcode 0x0c), `CHALLENGE_OUT`
+(opcode 0x0d, vaste bytes).
+
+**`sensor/dexcomg7/DexcomG7Crypto.kt`.** Nieuwe functie
+`signWithCertPrivateKey()` — poort van `DSAChallenger.response()`: SHA-256
+over de 16-byte uitdaging, gewone (niet-deterministische) ECDSA-
+handtekening via BouncyCastle's kale, niet-JCE-geregistreerde klassen
+(`PrivateKeyFactory`/`ECDSASigner`/`SHA256Digest` — zelfde
+"geen-provider-lookup"-patroon als de rest van dit bestand), r/s als twee
+vast-lange 32-byte unsigned-big-endian waarden aan elkaar geplakt (64
+bytes, GEEN DER-encodering — exact wat `DSAChallenger.sequenceToBytes()`
+doet).
+
+**`sensor/dexcomg7/DexcomG7Driver.kt`.** Nieuwe `runCertificateExchange()`,
+aangeroepen in `runPairingHandshake()`'s `!status.isBonded`-tak, vóór de
+bestaande TIME_EXTENDED-wacht (Ronde 141): kondig deel A aan, stuur 'm via
+ExtraData; zelfde voor deel B; stuur een eigen 16-byte "sign challenge",
+onderteken de sensor se uitdaging-antwoord met deel C; stuur die
+handtekening + `CHALLENGE_OUT`, wacht op een indicatie. Faalt de
+uitwisseling ergens, dan breekt de handshake af via de bestaande
+`failHandshake()`-route — de bestaande reconnect-/backoff-logica handelt
+de rest af.
+
+**Verificatie.** Balance-checker: alle vier gewijzigde/nieuwe bestanden
+sluitend (accolades en haakjes gelijk aan beide kanten) — één missende
+sluithaakje in een nieuw kdoc-blok gevonden en gecorrigeerd tijdens het
+checken. Alle drie hex-blokken in `DexcomG7CertMaterial.kt` zijn
+programmatisch, byte-voor-byte tegen de brondata uit de QR-code
+geverifieerd (geen handmatige overtypfout mogelijk gebleven). Geen
+Gradle/Android-SDK beschikbaar in deze werkomgeving om een volledige
+build te draaien — zorgvuldige handmatige review van importpaden,
+functiesignaturen en het bestaande "geen JCE-provider-registratie"-patroon
+i.p.v. compileren. Nog niet zelf op de sensor getest — dit is de eerste
+ronde die een STRUCTURELE ontbrekende protocolstap aanpakt in plaats van
+een timing-/volgorde-detail, dus een reëel volgende-stap-kandidaat, geen
+garantie.
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Protocol.kt`,
+`sensor/dexcomg7/DexcomG7Crypto.kt`, `sensor/dexcomg7/DexcomG7Driver.kt`,
+`app/build.gradle.kts`. Nieuw: `sensor/dexcomg7/DexcomG7CertMaterial.kt`.
+
+versionCode 158, versionName "0.9.59-g7-certificate-pairing-stage".
+
+## Ronde 145 (28/08/2026) — eerste echte bonding gelukt; Control-kanaal
+verwachtte notificatie, sensor stuurt indicatie
+
+**Aanleiding.** v158 getest: voor het eerst pairt/verbindt de sensor
+daadwerkelijk (screenshot bevestigt Android's systeem-koppeldialoog en
+"Last connected"-tijdstip) — Ronde 144's certificaatstap werkt dus. Maar
+daarna komen geen periodieke updates meer binnen; de statuspagina toont
+"No connection for 7 minutes (still trying)".
+
+**Diagnose.** Bugreport (v158, bevestigd via dumpsys) geanalyseerd. Op elke
+reconnect komt `AuthStatusRx.isBonded` nu terug als `true` — de
+certificaatstap wordt dus terecht overgeslagen, precies zoals
+`onAuthAndBondReady()` bedoeld is. Maar vlak na de aanvraag-cyclus
+(Control-CCCD-schrijf, dan de 1-byte glucose-aanvraag opcode 0x4E) verbreekt
+de sensor de verbinding (reden 0x13) binnen ~200ms, zonder ooit een
+glucose-antwoord te sturen — hetzelfde "schrijf-ack, dan meteen weg"-
+patroon als eerdere rondes, nu op een nieuwe plek.
+
+Rechtstreekse vergelijking met xDrip+'s EIGEN bewezen geslaagde HCI-capture
+(dezelfde referentiesessie als Ronde 141-144) op precies dit punt: xDrip+'s
+glucose-antwoord komt terug als een `HandleValueInd` (INDICATIE) — niet als
+`HandleValueNotif` (NOTIFICATIE). Onze `onAuthAndBondReady()` schakelde
+echter `useIndication = false` (notificatie) in voor de Control-
+characteristic. De sensor verwacht kennelijk indicaties op dit kanaal (net
+als op Authentication) en breekt af zodra de aanvraag binnenkomt op een
+kanaal dat daar niet voor is ingericht.
+
+**`sensor/dexcomg7/DexcomG7Driver.kt`.** `onAuthAndBondReady()`:
+`enableNotify(gatt, controlChar, useIndication = false)` →
+`useIndication = true`. Eén regel, maar direct uit de bewezen referentie-
+capture afgeleid, geen giswerk.
+
+**Verificatie.** Balance-checker: 213/213 accolades, 691/691 haakjes. Geen
+Gradle/Android-SDK beschikbaar om te compileren — handmatige review i.p.v.
+build. Nog niet zelf getest, maar dit is de eerste ronde waarbij het
+GEHELE koppelproces (inclusief het nieuwe certificaatdeel uit Ronde 144)
+al aantoonbaar werkte vóór deze laatste stap faalde — een goed teken.
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Driver.kt`, `app/build.gradle.kts`.
+
+versionCode 159, versionName "0.9.60-g7-control-channel-indication".
+
+## Ronde 146 (28/08/2026) — ~4,3s tijdslimiet ontdekt bij reconnect naar
+al-gebonden sensor; POST_CHUNK_SETTLE_MS verlaagd
+
+**Aanleiding.** Na Ronde 145's indicatie-fix meldde de gebruiker: "hij
+verbind nog steeds alleen de eerste keer en dan is het stil", met een
+logcat-fragment dat 4 opeenvolgende verbindingspogingen toonde — elke
+keer verbrak de sensor de verbinding kort nadat de glucose-aanvraag was
+verstuurd. Op verzoek stuurde de gebruiker een verse bugreport
+(14:24:21) direct na een nieuwe testronde, ditmaal MET een bruikbare
+btsnoop-log die exact dat tijdvak dekte.
+
+**Diagnose.** HCI-analyse (met dezelfde `orig_len`-correctie als eerdere
+rondes) van deze bugreport liet VIER losse verbindingspogingen zien
+binnen ~6 minuten:
+
+1. 12:17:42 — mislukt vóór enige SMP/pairing, sensor verbreekt na 7s
+   (reden 0x13), tijdens de J-PAKE-handshake zelf.
+2. 12:18:38 — GESLAAGD: `isBonded` kwam terug als `false`, dus de volledige
+   route liep (certificaatuitwisseling, verse SMP LE Secure Connections-
+   koppeling met ECDH-sleuteluitwisseling, Control-CCCD, glucose-aanvraag)
+   — en de sensor stuurde daadwerkelijk een geldige glucosewaarde terug
+   via `HandleValueInd`! Dit is de EERSTE keer in dit hele traject dat een
+   bugreport een daadwerkelijk ontvangen glucosewaarde bevestigt. Onze
+   eigen code verbrak nadien zelf de verbinding (na gebruik, zoals
+   bedoeld) — geen bug.
+3. 12:22:55 — mislukt: `isBonded` kwam nu meteen `true` terug (reconnect
+   naar de zojuist gebonden sensor, rechtstreeks naar
+   `onAuthAndBondReady()`, geen certificaatstap nodig). CCCD- en
+   glucose-aanvraagschrijven slaagden, maar de sensor verbrak de
+   verbinding (reden 0x13, echt door de sensor geïnitieerd — geen "CMD
+   Disconnect" van onze kant vooraf) vóórdat ooit een antwoord kwam.
+4. 12:23:05 — identiek patroon als poging 3.
+
+Het opvallendste: de tijd tussen ons eigen `LE_Start_Encryption`-commando
+en de mislukking was in poging 3 en 4 bijna EXACT gelijk — 4,307s en
+4,301s, slechts 5ms uiteen. In de GESLAAGDE poging 2 verstreek vanaf
+hetzelfde startpunt maar 3,65s tot de glucosewaarde binnen was. Dat wijst
+sterk op een vaste tijdslimiet aan sensorzijde specifiek voor de
+"reconnect naar een al-bekende sensor"-route (poging 2's verse-
+koppelroute liep in totaal 16s en had dus geen vergelijkbare tijdsdruk).
+
+Alleen al de drie `POST_CHUNK_SETTLE_MS`-pauzes (500ms elk, ná de
+ExtraData-chunkreeks van ronde 1/2/3) kostten samen 1,5s — plus 0,96s aan
+`CHUNK_DELAY_MS`-pauzes tussen de acht chunks per ronde — ruim de helft
+van het beschikbare ~4,3s-budget, nog vóór ronde 0, de auth-aanvraag/
+-uitdaging, Control's CCCD en de glucose-aanvraag zelf aan de beurt komen.
+`POST_CHUNK_SETTLE_MS`'s eigen herkomst-kdoc (Ronde 128) citeert xDrip+'s
+broncode-commentaar "TODO wait for completion?" — dus zelfs xDrip+'s
+eigen auteur was hier onzeker, dit was nooit een harde vereiste.
+
+**Kanttekening.** Dit is een sterk vermoeden op basis van precieze,
+tweemaal herhaalde timing-consistentie — geen 100% zekerheid, want er is
+geen xDrip+-referentiecapture van precies dit "snelle reconnect"-pad om
+1-op-1 tegen te vergelijken (de eerder gebruikte referentiesessie betrof
+een verse koppeling, niet een reconnect naar een al-gebonden sensor).
+
+**`sensor/dexcomg7/DexcomG7Driver.kt`.** `POST_CHUNK_SETTLE_MS`:
+500L → 120L (nog altijd 3× zo lang als `CHUNK_DELAY_MS`, dus geen
+nul-marge-gok) — geldt voor alle `writeChunked()`-aanroepen (ronde 1/2/3
+én de certificaatstap), wint ~1,1s terug op het krappe pad zonder de al
+bewezen werkende verse-koppelroute (die geen tijdsdruk had) negatief te
+raken.
+
+**Verificatie.** Balance-checker: 213/213 accolades, 702/702 haakjes.
+Geen Gradle/Android-SDK beschikbaar om te compileren — handmatige review
+i.p.v. build. Nog niet zelf getest.
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Driver.kt`, `app/build.gradle.kts`.
+
+versionCode 160, versionName "0.9.61-g7-reconnect-timing-margin".
+
+## Ronde 147 (28/08/2026) — Ronde 146's fix hielp niet; sensor accepteert
+kennelijk geen hergebruikte LTK, forceer verse SMP-koppeling elke keer
+
+**Aanleiding.** Gebruiker testte v160 en meldde opnieuw geen succes, met
+een nieuwe bugreport (15:09:48) — ditmaal met btsnoop-log uit hetzelfde
+tijdvak als de test (v160 bevestigd via dumpsys).
+
+**Diagnose.** HCI-analyse toonde 5 verbindingspogingen: poging 1 (verse
+koppeling, `isBonded` was `false`) slaagde weer — glucosewaarde ontvangen.
+Poging 2 t/m 5 (reconnect naar de al gebonden sensor) faalden allemaal,
+mét hetzelfde "schrijf-ack, dan ~150-200ms later weg (reden 0x13)"-patroon
+als vóór Ronde 146. Cruciaal: Ronde 146's verlaagde `POST_CHUNK_SETTLE_MS`
+werkte wél zoals bedoeld — de sensor werd nu ~800ms-1s sneller bereikt
+(bijv. van verbinding tot glucose-aanvraag-schrijf-ack in 3,34s i.p.v.
+eerder ~4,2s) — maar dat loste niets op. De ~4,3s-tijdslimiet-hypothese uit
+Ronde 146 was dus WEERLEGD: geen vaste tijd vanaf `LE_Start_Encryption`,
+want de mislukkingen kwamen nu bij ~3,4-3,5s in plaats van ~4,3s, nog
+steeds mislukt.
+
+Het patroon dat WEL standhoudt over beide bugreports samen (6 mislukte
+reconnect-pogingen, 2 geslaagde verse koppelingen): bij een geslaagde
+poging deed Android altijd een VERSE SMP LE Secure Connections-koppeling
+(zichtbaar in de HCI-capture: Pairing_Request/Response,
+Pairing_Public_Key-uitwisseling met ECDH, Pairing_Confirm/Random,
+Pairing_DHKey_Check) vóórdat de glucosewaarde binnenkwam. Bij elke
+mislukte poging herkende de SENSOR zichzelf al als gebonden
+(`AuthStatusRx.isBonded == true`), dus ging de code rechtstreeks naar
+`onAuthAndBondReady()` — Android hergebruikte dan stilzwijgend de
+OPGESLAGEN LTK (`LE_Start_Encryption` met een bestaande sleutel, GEEN
+nieuwe SMP-onderhandeling zichtbaar) — en precies dan levert de sensor
+nooit de glucose-indicatie af.
+
+**Werkhypothese** (sterk vermoeden op basis van 100%-consistente
+correlatie over 8 pogingen in 2 onafhankelijke bugreports, geen bevestigde
+Dexcom-documentatie): de G7-sensor accepteert hergebruik van een gecachte
+LTK niet voor het vrijgeven van een meting en verwacht bij elke verbinding
+een verse SMP-koppeling — vermoedelijk een bewuste anti-replay-maatregel.
+
+**`sensor/dexcomg7/DexcomG7Driver.kt`.** `runPairingHandshake()`:
+de `if (!status.isBonded) { ... } else { onAuthAndBondReady(gatt) }`-
+splitsing verwijderd. De certificaatuitwisseling (Ronde 144) blijft alleen
+in de `!status.isBonded`-tak, maar de TIME_EXTENDED-wacht en
+`createBond()`-stap (Ronde 138/141) lopen nu ALTIJD. Vlak vóór
+`createBond()`: als `gatt.device.bondState == BOND_BONDED`, eerst
+`removeBond()` aanroepen (via reflectie, net als `createBond
+(TRANSPORT_LE)` hieronder — publieke maar niet in de SDK-stub
+gedeclareerde methode) — anders is een hernieuwde `createBond()` een
+no-op omdat Android het toestel al gebonden acht, en wordt er dus nooit
+een verse SMP-onderhandeling geforceerd.
+
+**Kanttekening.** Mogelijk neveneffect: het Android-systeemkoppeldialoog
+kan nu bij elke reconnect terugkomen in plaats van alleen bij de
+allereerste koppeling. Als dat gebeurt, bevestigt dat de hypothese
+gedeeltelijk — ook al is voortdurend een dialoog moeten bevestigen geen
+ideale eindtoestand; dat zou dan het volgende te onderzoeken punt zijn.
+
+**Verificatie.** Balance-checker: 218/218 accolades, 735/735 haakjes.
+Geen Gradle/Android-SDK beschikbaar om te compileren — handmatige review
+i.p.v. build. Nog niet zelf getest.
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Driver.kt`, `app/build.gradle.kts`.
+
+versionCode 161, versionName "0.9.62-g7-force-fresh-repair".
+
+## Ronde 148 (28/08/2026) — Ronde 147 verworpen; het echte probleem was de
+overbodig herhaalde J-PAKE-handshake, niet de LTK-hergebruik-status
+
+**Aanleiding.** De gebruiker had v161 gecompileerd maar nog niet getest,
+en liet in de tussentijd xDrip+ zelf nog een keer koppelen/reconnecten
+(om zeker te weten dat xDrip+'s eigen systeemdialoog maar één keer
+verschijnt), met een bugreport tijdens die xDrip+-sessie. Op mijn verzoek
+werd deze data eerst geanalyseerd, vóórdat v161 werd getest.
+
+**Diagnose.** HCI-analyse van xDrip+'s EIGEN reconnects (4 verbindingen in
+deze capture) liet iets doorslaggevends zien: 2 geslaagde reconnects,
+BEIDE via een hergebruikte LTK (`LE_Start_Encryption` met een bestaande
+sleutel, binnen ~70ms na verbinden, GEEN nieuwe SMP-onderhandeling
+zichtbaar) — precies het scenario dat Ronde 147 als oorzaak van falen
+aanwees. Dit weerlegt Ronde 147's hypothese volledig: LTK-hergebruik werkt
+prima voor xDrip+.
+
+Het cruciale verschil: in xDrip+'s geslaagde, snelle reconnect staan er
+GEEN schrijfacties naar de ExtraData-characteristic vóór de auth-aanvraag
+— xDrip+ slaat de VOLLEDIGE ronde 0-3 J-PAKE-handshake over en schrijft
+rechtstreeks de auth-aanvraag (opcode 0x02) naar Authentication. Dit is
+xDrip+'s eigen `Plugin.java`-gedrag (`context.savedKey`/"RoundStart ->
+meteen RequestAuth"), dat al in Ronde 112's klasse-kdoc bewust NIET
+geport was — toen ingeschat als "puur een performance-optimalisatie, geen
+correctheids-vereiste". Die inschatting blijkt onjuist: het lijkt
+vereist te zijn om binnen de tijd te blijven die de sensor toestaat
+tussen verbinden en het vrijgeven van een meting (consistent met Ronde
+146's timing-observatie, die de symptomen zag maar de verkeerde oorzaak
+identificeerde).
+
+`DexcomG7Crypto.kt`'s `calculateHash()` ondersteunde hergebruik van
+`context.savedKey` overigens al (geport, maar nooit door de driver
+gebruikt) — de driver deed altijd de volledige handshake.
+
+**`sensor/dexcomg7/DexcomG7Driver.kt`.** Nieuwe velden `savedSessionKey`/
+`savedSessionKeyDeviceAddress` (in-memory, geldig voor de levensduur van
+de driver-instantie). `runPairingHandshake()`: als er voor dit toestel al
+een opgeslagen sleutel is ÉN Android het toestel nog `BOND_BONDED` acht,
+worden ronde 0-3 (Stap A/B/C) overgeslagen, `ctx.savedKey` gezet, en gaat
+Stap D rechtstreeks de auth-aanvraag sturen (zonder het niet-bestaande
+ronde-3-pakket). Bij een mislukte auth-aanvraag/uitdaging-verificatie met
+een hergebruikte sleutel wordt de cache gewist, zodat de eerstvolgende
+poging weer de volledige handshake doet. Na een geslaagde VOLLEDIGE
+handshake wordt de afgeleide sleutel opgeslagen voor de volgende
+reconnect.
+
+Ronde 147's wijzigingen teruggedraaid: de `removeBond()`-reflectie-aanroep
+verwijderd, en de TIME_EXTENDED-wacht/`createBond()`-stap weer terug
+binnen de `if (!status.isBonded)`-tak (was: altijd) — xDrip+'s eigen
+capture toont deze stap simpelweg niet op een geslaagde, snelle reconnect.
+
+**Verificatie.** Balance-checker: 223/223 accolades, 745/745 haakjes. Geen
+Gradle/Android-SDK beschikbaar om te compileren — handmatige review i.p.v.
+build. Nog niet zelf getest — v161 is NIET getest (op mijn advies eerst
+deze analyse), v162 bevat zowel de terugdraai van Ronde 147 als de nieuwe
+J-PAKE-sleutelhergebruik-fix.
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Driver.kt`, `app/build.gradle.kts`.
+
+versionCode 162, versionName "0.9.63-g7-jpake-session-key-reuse".
+
+## Ronde 149 (28/08/2026) — echte oorzaak van de onregelmatige verbindings-
+cadans: een zelfopgelegde Android-scanplafond-deadlock, niet de sensor
+
+**Aanleiding.** Na Ronde 148 concludeerde ik te snel dat het software-deel
+"klaar" was omdat de sensor consequent "Sensor Failed 7" rapporteerde —
+de gebruiker wees er terecht op dat dit te makkelijk was: xDrip+ maakt wél
+betrouwbaar elke 5 minuten opnieuw contact (en geeft dus consequent door
+wat de sensor OOK aan xDrip+ meldt), terwijl FCLGlucoLink dat niet deed.
+Dat is een aparte, legitieme bug, los van de kapotte sensor.
+
+**Diagnose.** Met het door de gebruiker meegestuurde eigen diagnostiek-
+logbestand (`fclglucolink_2026-08-28 16.40.txt`, niet alleen de bugreport)
+kon de VOLLEDIGE verbindingsgeschiedenis van de dag gereconstrueerd
+worden. Succesvolle uitwisselingen (elke keer met glucosewaarde 48,
+state=SensorFailed7 — consistent, dus wél degelijk de sensor, geen bug in
+de interpretatie daarvan) kwamen sterk onregelmatig binnen: 13:30, 13:57,
+14:18, 15:01, 16:25, 16:32, 16:42 — gaten van 7 tot 84 minuten, in plaats
+van de bedoelde 5.
+
+Tussen de pogingen door stonden herhaalde `"scan failed code=2"`-regels
+(Android's eigen `SCAN_FAILED_APPLICATION_REGISTRATION_FAILED` — het
+systeembrede plafond op hoe vaak een app scans mag starten/stoppen binnen
+een tijdvenster), in uitbarstingen van ruim 2 minuten, elke 5-10 seconden
+herhaald. `onScanFailed()` riep echter dezelfde `backoffAndRetry()` aan als
+een gewone mislukte GATT-verbinding (marge 1-10s) — veel te kort om
+Android's eigen teller te laten leeglopen, dus de code probeerde binnen
+hetzelfde plafond-venster gewoon opnieuw en hield het plafond zelf in
+stand: falen -> snel opnieuw -> nog steeds geblokkeerd -> falen -> ...
+Tussen zulke uitbarstingen door: complete stiltes van 5-10 minuten zonder
+ENIGE logregel, vermoedelijk `scheduleRearm()`'s eigen 390-seconden-
+wachttijd die afloopt zonder dat `onScanResult` ooit vuurt (Android's
+achtergrond-scanbeperkingen leveren soms stilzwijgend geen resultaten,
+zonder foutcode) — een stille periode betekent hier dus niet "er gebeurde
+niets", maar "er was niets te loggen".
+
+**`sensor/dexcomg7/DexcomG7Driver.kt`.** Nieuwe constante
+`SCAN_THROTTLE_BACKOFF_MS = 90_000L` (ruim voorbij `ScanRateLimiter`'s
+eigen 31-seconden-venster). `onScanFailed()`: bij foutcode 2
+(`SCAN_FAILED_APPLICATION_REGISTRATION_FAILED`) of 6
+(`SCAN_FAILED_SCANNING_TOO_FREQUENTLY`, API 30+) wordt nu deze veel
+langere marge gebruikt i.p.v. de korte, gewone foutmarge — andere
+scanfouten (bijvoorbeeld een tijdelijke hardware-fout) blijven de
+bestaande korte marge gebruiken.
+
+**Kanttekening.** Dit verklaart een deel van de waargenomen onregel-
+matigheid met directe logbewijs; of dit de VOLLEDIGE verklaring is (met
+name de stille 390-seconden-gaten, waar geen directe foutcode-logregel
+voor bestaat) is aannemelijk maar niet 100% bevestigd. `DexcomG6Driver.kt`/
+`CareSensAirDriver.kt` delen dezelfde `backoffAndRetry()`-aanpak bij
+scanfouten en zijn hier bewust NIET meegenomen — dit was gericht op de
+concrete G7-klacht, een vergelijkbare fix daar is een aparte, latere
+afweging.
+
+**Verificatie.** Balance-checker: 226/226 accolades, 762/762 haakjes. Geen
+Gradle/Android-SDK beschikbaar om te compileren — handmatige review i.p.v.
+build. Nog niet zelf getest.
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Driver.kt`, `app/build.gradle.kts`.
+
+versionCode 163, versionName "0.9.64-g7-scan-throttle-backoff".
+
+## Ronde 150 (28/08/2026) — G7 batterij-/firmwareversie-uitvraag (mirror van
+xDrip+'s "Firmware Version"/"Voltage A"/"Voltage B"-velden)
+
+**Aanleiding.** Vraag van de gebruiker: "en een aanvullende vraag als hij
+dan verbind geeft hij dan ook de data als batterij en firmware version
+terug zoals xdrip ook netjes doet ondanks een error in de Bg waarde van de
+sensor die bij mij bekend is." — xDrip+'s eigen statusscherm toont voor
+dezelfde sensor "Firmware Version: 32.192.109.40", "Voltage A: 286",
+"Voltage B: 266", onafhankelijk van de bekende "Sensor Failed 7"-status.
+FCLGlucoLink's G7-driver deed nog helemaal geen batterij-/firmware-
+uitvraag (DexcomG7StatusScreen.kt toonde deze velden al wel als "—"-
+placeholders sinds Ronde 130, met de aantekening "NIET GEPORT").
+
+**Onderzoek.** xDrip+'s eigen broncode (`g5model/BatteryInfoTxMessage.
+java`/`BatteryInfoRxMessage.java`/`VersionRequestTxMessage.java`/
+`VersionRequestRxMessage.java`, plus `Ob1G5StateMachine.
+checkVersionAndBattery()`) bevestigt dat G7 hiervoor het KLASSIEKE
+G5/G6-berichtenstel hergebruikt: opcode(1) + CRC16(2, little-endian) over
+hetzelfde `Control`-kanaal dat al voor het glucoseverzoek gebruikt wordt.
+`checkVersionAndBattery()` is onvoorwaardelijk gedeeld tussen G5/G6/G7
+(bevestigd via een nabijgelegen commentaar dat G5/G6/G7 onderscheidt via
+`usingG6() ? (shortTxId() ? "G7" : "G6") : "G5"` — G7 is een `usingG6()`-
+tak, geen aparte G7-only code). Dit is dus GEEN gok: hetzelfde patroon is
+al bewezen werkend voor onze eigen G6-driver (`DexcomG6Protocol.kt`'s
+`buildBatteryInfoRequest`/`parseBatteryInfo`, `DexcomG6Driver.kt`'s
+batterij-uitvraag), inclusief de herbruikbare CRC16-implementatie
+(`DexcomG6Crypto.crc16`, dezelfde CCITT-16-tabel).
+
+**Wijziging.**
+
+- `sensor/dexcomg7/DexcomG7Protocol.kt`: nieuwe sectie met een eigen
+  `appendCrc()`-helper (hergebruikt `DexcomG6Crypto.crc16`, cross-package
+  — bewust ANDERS dan de rest van dit bestand, dat voor de auth-handshake
+  bewust GEEN CRC gebruikt, zie klasse-kdoc) plus
+  `buildBatteryInfoRequest()`/`BatteryInfoRx`/`parseBatteryInfo()` (opcode
+  0x22 aanvraag, 0x22/0x23 antwoord — letterlijke mirror van
+  `DexcomG6Protocol.kt`) en `buildFirmwareVersionRequest()`/
+  `FirmwareVersionRx`/`parseFirmwareVersion()` (opcode 0x20 aanvraag,
+  0x21 antwoord — dotted-string-firmwarevelden, xDrip+'s "versie 0"-
+  variant, ANDERS dan G6's bestaande `buildVersionRequest2()`/opcode 0x52,
+  dat opwarmtijd/sensor-levensduur opvraagt, geen firmwarestring).
+- `data/AppSettings.kt`: `setDexcomG7BatteryInfo`/`dexcomG7BatteryInfo`/
+  `getDexcomG7LastBatteryQueryAtMsOnce` en `setDexcomG7FirmwareInfo`/
+  `dexcomG7FirmwareInfo`/`getDexcomG7LastFirmwareQueryAtMsOnce` — letter-
+  lijke mirror van de bestaande G6-tegenhangers, per-slot opgeslagen.
+- `sensor/dexcomg7/DexcomG7Driver.kt`: twee nieuwe pending-deferred-velden
+  (`pendingBatteryDeferred`/`pendingFirmwareDeferred`, opgeruimd in
+  `resetAuthState()`), twee nieuwe opcodes in `handleControlNotification()`
+  (0x22/0x23 -> batterij, 0x21 -> firmware), en `queryBatteryIfStale()`/
+  `queryFirmwareIfStale()` — aangeroepen vanuit `requestGlucose()`, VÓÓR
+  het glucoseverzoek (zelfde volgorde als `DexcomG6Driver.kt`'s
+  `runControlSequence()`, mirror van xDrip+'s eigen
+  checkVersionAndBattery()-vóór-doGetData()-volgorde). Batterij: elke 8
+  uur opnieuw (`BATTERY_QUERY_INTERVAL_MS`, zelfde als G6). Firmware: elke
+  30 dagen (`FIRMWARE_QUERY_INTERVAL_MS`) — verandert nooit tussen
+  verbindingen, dus puur een "opnieuw proberen als het nog niet lukte"-
+  interval, geen periodieke verversing. Beide zijn NIET blokkerend voor de
+  glucose-uitwisseling: een timeout/`null`-antwoord wordt alleen gelogd,
+  geen `gatt.disconnect()` — de nieuwe, nog ongeverifieerde code kan de
+  net gestabiliseerde (Ronde 148/149) kernfunctionaliteit dus niet in
+  gevaar brengen.
+- `ui/DexcomG7StatusScreen.kt`: "Firmware version"/"Battery last
+  queried"/"Voltage A"/"Voltage B" tonen nu de echte waarden i.p.v. altijd
+  "—" (via de nieuwe `AppSettings`-Flows). "Sensor status"/"Brain
+  state"/"Transmitter days" blijven bewust "—" — vallen buiten dit
+  batterij-/firmwareverzoek.
+
+**Vertrouwensniveau — EXPLICIET LAGER dan het glucoseverzoek zelf.** Dit
+is architectuur-bewijs uit xDrip+'s gedeelde broncode (dezelfde opcodes/
+CRC-envelop/Control-kanaal als het al meerdere keren in de gebruiker's
+eigen bugreports teruggeziene glucoseverzoek) en hetzelfde patroon dat al
+bewezen werkt voor G6 — maar NOG NIET byte-voor-byte bevestigd tegen een
+echte G7-sensor via een HCI-capture. Als de sensor niet reageert (verkeerd
+opcode, ander antwoordformaat) blijft de rij gewoon "—" staan — geen crash,
+geen verbroken verbinding, geen effect op de glucosecyclus.
+
+**Kanttekening.** Dit voegt twee extra schrijf-/wacht-rondes toe aan het
+venster waarin de verbinding open moet blijven per cyclus (tot
+`BATTERY_TIMEOUT_MS`/`FIRMWARE_TIMEOUT_MS` = 10s elk, alleen bij een
+"stale" cache — de meeste cycli slaan dit dus over). In combinatie met
+Ronde 149's nog niet zelf bevestigde cadans-fix is dit iets om in dezelfde
+volgende testronde in de gaten te houden: mocht de cadans na deze ronde
+juist weer onregelmatiger worden, is dit de eerste plek om te verdenken.
+
+**Verificatie.** Balance-checker op alle vier gewijzigde bestanden: alle
+accolades/haakjes in balans. Geen Gradle/Android-SDK beschikbaar om te
+compileren (geen `kotlinc` in deze sandbox) — handmatige review van
+signatures/aanroepen i.p.v. build. Nog niet zelf getest tegen een echte
+G7-sensor.
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Protocol.kt`,
+`sensor/dexcomg7/DexcomG7Driver.kt`, `data/AppSettings.kt`,
+`ui/DexcomG7StatusScreen.kt`, `app/build.gradle.kts`.
+
+versionCode 164, versionName "0.9.65-g7-battery-firmware-query".
+
+## Ronde 151 (28/08/2026) — KRITIEKE FIX: Ronde 150's firmwareverzoek maakte
+vrijwel elke reconnect na de eerste kapot
+
+**Aanleiding.** De gebruiker testte v164 en meldde: "Hij geeft maar 1 keer
+bij opstarten connectie." Ik sloot niet te snel af dit keer — de
+gebruiker stuurde meteen het eigen diagnostiek-logbestand mee
+(`fclglucolink_2026-08-28 17.58.txt`), waarmee de oorzaak binnen enkele
+minuten rechtstreeks uit de logregels af te lezen was.
+
+**Diagnose — dit was MIJN fout, niet de sensor.** Het log toont het
+volledige patroon:
+
+```
+17:47:54.025 battery voltageA=288 voltageB=268 temp=0        <- batterij werkte
+17:47:54.107 write ok for f8083534-...                       <- firmwareverzoek verstuurd (opcode 0x20)
+17:47:54.110 unhandled Control opcode=32 bytes=32,2           <- sensor wijst het af (2-byte echo, GEEN opcode 0x21)
+17:48:04.057 firmware query timed out of niet ondersteund     <- volle 10s gewacht op een antwoord dat nooit kwam
+17:48:04.157 write ok for f8083534-...                        <- pas NU het glucoseverzoek — dit keer nog op tijd
+17:48:04.169 glucose value 48 IGNORED ... state=SensorFailed7 <- gelukt
+17:48:04.189 STATE_DISCONNECTED status=0                      <- nette eigen disconnect
+```
+
+Deze specifieke G7-sensor accepteert het firmwareverzoek (opcode 0x20,
+xDrip+'s "versie 0"-variant) dus simpelweg niet — antwoordt met een
+2-byte echo van ons eigen opcode i.p.v. het verwachte opcode 0x21 met
+18+ bytes. Op zich onschuldig (Ronde 150 se code disconnect't niet bij
+een timeout), MAAR: Ronde 150's `queryFirmwareIfStale()` schreef de
+"laatst opgevraagd"-tijdstempel ALLEEN weg bij een GESLAAGDE parse
+(`setDexcomG7FirmwareInfo()`). Omdat deze sensor nooit een geldig
+antwoord geeft, bleef die tijdstempel voor altijd `null` — dus werd de
+afgewezen aanvraag bij ELKE volgende reconnect herhaald, in plaats van
+eens per 30 dagen zoals bedoeld. Erger nog, in alle volgende cycli
+(17:52-17:58) bleek de sensor zelf, ~3,3 seconden na de afwijzing, de
+verbinding te verbreken (status=19) — VOORDAT het glucoseverzoek ooit
+verstuurd kon worden:
+
+```
+17:52:38.668 unhandled Control opcode=32 bytes=32,2
+17:52:41.950 STATE_DISCONNECTED status=19                     <- sensor verbreekt zelf, glucose nooit gevraagd
+17:52:41.954 firmware query timed out of niet ondersteund
+```
+
+Dit herhaalde zich vrijwel elke cyclus tot het einde van het log —
+precies het gemelde "verbindt maar 1x". De gebruiker's eigen observatie
+("als dit de bluetooth communicatie nu niet in de weg zit hoef je het
+niet gelijk aan te passen [...] als de communicatie wel correct
+verloopt") was dus terecht een impliciete vraag: het zat wél in de weg,
+dus meteen gefixt, niet uitgesteld.
+
+**Wijziging.**
+
+- `data/AppSettings.kt`: nieuwe, APARTE "laatst GEPROBEERD"-tijdstempels
+  (`setDexcomG7BatteryQueryAttemptAtMs`/`getDexcomG7BatteryQueryAttemptAtMsOnce`,
+  idem voor firmware) — onafhankelijk van of de uitvraag ooit slaagde.
+  Mirror van `DexcomG6Driver.kt`'s `setDexcomG6LastVersion2QueryAtMs`-
+  patroon, dat dit al goed deed (vóór de schrijf-/wachtstap gezet, niet
+  pas na succes) — Ronde 150's G7-code miste dat onderscheid.
+- `sensor/dexcomg7/DexcomG7Driver.kt`: `queryBatteryIfStale()`/
+  `queryFirmwareIfStale()` toetsen nu tegen de nieuwe attempt-tijdstempel
+  (geschreven vóór de write) i.p.v. de succes-tijdstempel. Daarnaast:
+  `handleControlNotification()`'s `else`-tak geeft een onherkend opcode nu
+  DIRECT door aan een op dat moment wachtende batterij-/firmware-deferred
+  (`complete(null)`, fail-fast) i.p.v. de volle 10-seconden-timeout te
+  laten aflopen — verkort de "verspilde" verbindingstijd bij een
+  afwijzing van ~3-10s naar vrijwel 0, en verkleint het risico dat de
+  sensor zelf ongeduldig de verbinding verbreekt vóórdat het
+  glucoseverzoek aan de beurt is.
+
+**Kanttekening.** Batterij werkte in het geanalyseerde log gewoon (1x
+succesvol, daarna terecht 8u niet opnieuw geprobeerd) — dit blijft
+ongewijzigd functioneel. Firmwareversie zelf blijft voor DEZE sensor
+waarschijnlijk permanent "—" (de sensor accepteert opcode 0x20 niet) —
+dat is een aanvaardbare, cosmetische beperking, geen bug meer: de
+uitvraag gebeurt nu nog maar eens per 30 dagen, faalt vrijwel instant,
+en kan de glucose-cyclus niet meer ophouden. Een andere
+VersionRequestTxMessage-variant (xDrip+ kent er vier: opcodes
+0x20/0x4A/0x52+3/0x52+4) proberen is een mogelijke toekomstige
+verbetering, maar niet urgent nu het geen schade meer aanricht.
+
+Ook meegenomen uit de gebruiker's melding, nog NIET onderzocht/
+geïmplementeerd: het vermoeden dat de G7 (net als G6) op vaste,
+activatietijdstip-gebonden zendmomenten werkt (waargenomen in xDrip als
+verbindingstijden die steeds op :3 of :8 minuten eindigen, ongeacht de
+koppeling zelf) — een interessant aanknopingspunt voor een preciezere
+`computeReconnectCooldownMs()`-voorspelling, apart van deze fix.
+
+**Verificatie.** Balance-checker: DexcomG7Driver.kt 245/245 accolades,
+843/843 haakjes; AppSettings.kt 251/251 accolades, 796/796 haakjes. Geen
+Gradle/Android-SDK beschikbaar om te compileren — handmatige review.
+Nog niet zelf getest (deze fix reageert rechtstreeks op v164's
+testresultaat, dus het volgende log zal moeten bevestigen dat reconnects
+nu weer normaal doorgaan).
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Driver.kt`, `data/AppSettings.kt`,
+`app/build.gradle.kts`.
+
+versionCode 165, versionName "0.9.66-g7-firmware-query-retry-storm-fix".
+
+## Ronde 152 (28/08/2026) — echte xDrip-opcode-volgorde voor firmware +
+batterij-/firmwarecache resetten bij nieuwe G7-sensor
+
+**Aanleiding.** De gebruiker testte v165 en stelde drie scherpe vragen op
+basis van het resultaat:
+1. "Je geeft nu aan dat de firmware maar 1 keer per 30 dagen wordt
+   gelezen, een g7 gaat 10 dagen mee, dat zou dus sowieso bij iedere
+   nieuwe sensor start moeten worden uitgevraagd."
+2. "Dan staat er ergens in de cache ook nog data want bij eerste opstart
+   vult hij direct de batterij met ook de datum van de vorige test."
+3. "Hoe kan het dat xdrip wel de frimware invult en dat fclglucolink een
+   fout geeft [...] xdrip bij de koppeling ook nog niks maar wordt het
+   pas gevuld bij de eerst verversing."
+
+Ook meegestuurd: een fris logcat-fragment na v165, dat bevestigde dat
+Ronde 151's fix werkt (batterij ok, firmwareverzoek faalt nu vrijwel
+instant i.p.v. de verbinding op te houden, en wordt bij de eerstvolgende
+reconnect terecht NIET herhaald) — maar de firmwaregegevens zelf bleven
+"—".
+
+**Diagnose (vraag 3 — waarom xDrip wél lukt).** Rechtstreeks nagelezen in
+xDrip+'s eigen `Ob1G5StateMachine.requiredNextFirmwareDetailsType()`
+(vendored bron, `uploads/xDrip-2026.08.08.zip`): xDrip+ probeert helemaal
+niet "versie 0" (opcode 0x20) als eerste keus, zoals Ronde 150 aannam —
+de ECHTE volgorde is **versie 1 (opcode 0x4A) altijd eerst**, voor élke
+transmitter; pas als dat nog niet gelukt is EN de transmitter-ID 6 tekens
+lang is (xDrip+'s eigen manier om een G7 te herkennen,
+`txid.length() == 6`) volgt versie 0 (opcode 0x20) als tweede poging, en
+versie 2 (opcode 0x52) als laatste redmiddel. Ronde 150's keuze voor
+versie 0 als "eenvoudigste/meest-compatibele variant" was dus een
+ongeverifieerde aanname — en precies de variant die xDrip+ zelf als
+LAATST-KANS-tweede-poging behandelt, niet als eerste keus. Dat verklaart
+waarschijnlijk waarom deze sensor 'm afwees terwijl xDrip+ (die versie 1
+eerst probeert) wel data terugkrijgt.
+
+**Diagnose (vraag 1+2 — stale cache).** Terechte constatering: de
+batterij-/firmware-tijdstempels en -waarden worden per SLOT bijgehouden
+in `AppSettings` (DataStore), niet per fysieke sensor. Zonder een reset
+bij een nieuwe koppelcode zou (a) een gebruiker die een nieuwe G7 plakt de
+batterij-/firmwaregegevens van de VORIGE sensor blijven zien totdat er
+toevallig een nieuwe uitvraag plaatsvindt, en (b) firmware — met zijn
+30-dagen-interval — voor de VOLLEDIGE levensduur van een nieuwe sensor
+(10 dagen) nooit opnieuw uitgevraagd worden. Vraag 2's waarneming ("bij
+eerste opstart vult hij direct de batterij [...] met de datum van de
+vorige test") is deels verwacht gedrag (het statusscherm toont bewust de
+laatst bekende waarde tijdens het herverbinden, zelfde patroon als
+"Last connected" — dat is GEEN bug op zich) — maar wordt pas een
+probleem in combinatie met (a): bij een sensorWISSEL hoort die
+"laatst bekende waarde" niet de vorige sensor's waarde te zijn.
+
+**Wijziging.**
+
+- `sensor/dexcomg7/DexcomG7Protocol.kt`: `buildFirmwareVersionRequest()`
+  krijgt een `version`-parameter (0/1/2, opcodes 0x20/0x4A/0x52) i.p.v.
+  altijd opcode 0x20.
+- `sensor/dexcomg7/DexcomG7Driver.kt`: nieuwe constante
+  `FIRMWARE_REQUEST_VERSION_ORDER = listOf(1, 0, 2)` (xDrip+'s echte
+  volgorde). `queryFirmwareIfStale()` probeert deze drie na elkaar,
+  stopt bij de eerste geslaagde parse — dankzij Ronde 151's fail-fast-
+  dispatch resolvet een afgewezen variant vrijwel instant, dus drie
+  pogingen kosten in de praktijk nauwelijks extra verbindingstijd.
+- `data/AppSettings.kt`: nieuwe `clearDexcomG7BatteryAndFirmwareInfo(slot)`
+  — verwijdert alle 10 gerelateerde DataStore-sleutels (spanning/temp/
+  firmwarevelden + beide "laatst geprobeerd"-tijdstempels).
+- `ui/FclGlucoLinkNavHost.kt`: `ROUTE_DEXCOM_G7_SETUP`'s `onConfirmed`
+  roept deze nieuwe functie nu aan, op dezelfde plek waar een nieuwe
+  koppelcode al `clearDeviceAddress`/`setDexcomG7PairingCode` triggert —
+  een nieuwe koppelcode betekent vrijwel altijd een nieuwe fysieke
+  sensor.
+
+**Over de gemelde "10-minuten-cadans".** Het meegestuurde logcat-fragment
+toont twee opeenvolgende geslaagde cycli: 18:24:53 (disconnect, voorspelde
+cooldown ~4min) en de volgende connectie pas om 18:32:37 — dat is 7:44
+later dan voorspeld. Te weinig data (1 interval) om hier een harde
+conclusie aan te verbinden; dit past zowel bij het al bekende, nog niet
+volledig opgeloste cadans-vraagstuk (Ronde 149) als bij de eerder
+geopperde hypothese van de gebruiker (G7 zendt mogelijk op vaste,
+activatietijdstip-gebonden momenten, los van de pogingen van de app) —
+geen van beide is met dit ene datapunt te bevestigen of te verwerpen.
+
+**Verificatie.** Balance-checker op alle vier gewijzigde bestanden: alle
+accolades/haakjes in balans. Geen Gradle/Android-SDK beschikbaar om te
+compileren — handmatige review. Nog niet zelf getest (opcode 0x4A is,
+net als indertijd 0x20, architectuur-bewijs uit xDrip+'s bron — nu wel
+met bewijs dat het xDrip+'s EIGEN eerste keus is, maar nog niet
+rechtstreeks tegen deze sensor bevestigd).
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Protocol.kt`,
+`sensor/dexcomg7/DexcomG7Driver.kt`, `data/AppSettings.kt`,
+`ui/FclGlucoLinkNavHost.kt`, `app/build.gradle.kts`.
+
+versionCode 166, versionName "0.9.67-g7-firmware-opcode-order-and-cache-reset".
+
+## Ronde 153 (28/08/2026) — KRITIEKE FIX: twee gelijktijdig gekoppelde sensoren van hetzelfde type vloeiden samen in de grafiek
+
+**Aanleiding.** Live-melding tijdens een tussentijdse test (de G7-
+dataverzameling stond op dat moment bewust even stil — "ik wacht nog even
+met meer data verzamelen met de g7 sensor"): "Iemand heeft 2 caresens air
+sensoren simultaan gekoppeld ze updaten wel verschillend geven ook een
+verschillende caresens nummer en ook verschillende Bg waarden maar in de
+grafiek lijken de wwarden weer samen te vleien en er geen goede schijding
+te zij tussen de beide slots, net zoals bij mij toen we met 2 slots
+begonnen." Beide fysieke sensoren rapporteerden dus zichtbaar correcte,
+onafhankelijke data (elk zijn eigen CareSens-serienummer, elk zijn eigen
+BG-waarde) — het probleem zat in de app's eigen opslag/weergave, niet in
+de sensoren of hun drivers.
+
+**Diagnose.** Sinds "RONDE 79 — 2-sensoren-architectuur" (een veel eerdere
+ronde) filterden `GlucoseReadingEntity`/`GlucoseReadingDao`/
+`GlucoseReadingStore` per-slot grafiek-/statusdata uitsluitend op
+`sensorType: String` (bv. "CARESENS_AIR", "DEXCOM_G6") — er bestond
+HELEMAAL GEEN kolom die vastlegde uit welke fysieke `SensorSlot` (A/B) een
+meting daadwerkelijk kwam. Dat werkte toevallig zolang de twee actieve
+slots verschillende sensortypes draaiden (precies de oorspronkelijke
+opstelling van de gebruiker zelf, G6 + CareSens Air) — `sensorType` was
+dan toevallig ook altijd een geldige slot-discriminator. Zodra beide slots
+HETZELFDE sensortype draaien (zoals hier: CareSens Air + CareSens Air),
+komen beide fysieke sensoren se metingen onder EXACT dezelfde
+`sensorType`-waarde binnen, en kan geen enkele sensorType-gefilterde query
+ze nog uit elkaar houden — precies het gemelde "samen vloeien". Dit was
+geen regressie van een recente ronde, maar een sinds Ronde 79 latent
+aanwezige architecturale aanname (sensorType ≈ slot-identiteit) die pas nu,
+met de eerste test van twee identieke sensortypes tegelijk, zichtbaar werd.
+
+**Wijziging.**
+
+- `data/GlucoseReadingEntity.kt`: nieuwe nullable kolom `slot: String?`.
+  `GlucoseReading.toEntity()` vereist nu een `slot: SensorSlot`-parameter.
+- `data/FclGlucoLinkDatabase.kt`: `MIGRATION_7_8` (versie 7 → 8) —
+  `ALTER TABLE glucose_readings ADD COLUMN slot TEXT`, zelfde nullable-
+  zonder-default-patroon als eerdere migraties (rawSensorMgdl/
+  calibratedMgdl) — geen destructieve migratie.
+- `data/GlucoseReadingDao.kt`: de oude `recentReadingsForSensorType()`/
+  `latestReadingForSensorType()`/`deleteFromForSensorType()` (sensorType-
+  gefilterd) zijn VERWIJDERD, vervangen door `recentReadingsForSlot()`/
+  `latestReadingForSlot()`/`deleteFromForSlot()` (slot-gefilterd).
+- `data/GlucoseReadingStore.kt`: `record()`/`recentReadings()`/
+  `latestReading()`/`trimFrom()` nemen nu allemaal een `SensorSlot`-
+  parameter i.p.v. `SensorType`.
+- Alle aanroeppunten omgezet van `sensorType =`/`SensorType.X` naar
+  `slot =`/`SensorSlot.X`: `sensor/ble/BleConnectionService.kt` (de
+  `record()`- en `trimFrom()`-aanroep in de opslag-pijplijn),
+  `ui/CombiScreen.kt` (4 plekken), `ui/StatusScreen.kt` (3 plekken),
+  `ui/CalibrationScreen.kt` (3 plekken), `ui/CareSensAirStatusScreen.kt`,
+  `ui/DexcomG6StatusScreen.kt`, `alarm/AlarmMonitor.kt`,
+  `alarm/AlarmActivity.kt`.
+
+**Migratie-afweging.** De nieuwe `slot`-kolom is nullable zonder default —
+bestaande rijen van vóór deze migratie krijgen `NULL` (geen bekende slot)
+i.p.v. te worden gewist. Omdat de nieuwe per-slot-queries exact op
+`slot = :slot` filteren (NULL komt daar niet in mee), verdwijnen die oude
+rijen simpelweg tijdelijk uit de per-slot-tabbladen (Slot A/Slot B) totdat
+ze het bestaande 48-uurs-opruimvenster uitgroeien — de ongefilterde
+"Combi"-tab blijft ze gewoon tonen. Een kortstondig, zichzelf herstellend
+gat in de historie, geen blijvend dataverlies — zelfde soort afweging als
+eerdere nullable-kolom-migraties in dit project (rawSensorMgdl,
+calibratedMgdl).
+
+**Bekende, NOG NIET gefixte follow-up.** `SensorSwitchEventEntity`/
+`SensorSwitchEventStore` (de wisselmarkers die op de grafiek verschijnen
+bij een nieuwe sensorsessie) hebben EXACT dezelfde architecturale
+tekortkoming — alleen een `sensorType`-kolom, geen `slot`-kolom. Bewust
+NIET meegenomen in deze ronde om de scope beperkt te houden tot de
+daadwerkelijk gemelde bug (de BG-grafiek/status-data zelf); met twee
+gelijktijdig actieve slots van hetzelfde sensortype zouden wisselmarkers
+van de ene sensor dus in theorie ook op de andere sensor's grafiek kunnen
+verschijnen. Opgemerkt als bekend openstaand punt voor een volgende ronde.
+
+**Verificatie.** Alle 12 gewijzigde bestanden gecontroleerd met een
+Python-tokenizer die string-literalen en comments correct negeert (i.p.v.
+een simpele grep-telling, die door de vele Nederlandse toelichtingen met
+haakjes onbetrouwbaar bleek) — alle accolades/haakjes in balans, geen
+open constructies. Geen Gradle/Android-SDK beschikbaar om te compileren —
+handmatige review. Nog niet door de gebruiker zelf getest tegen de
+daadwerkelijke 2×-CareSens-Air-opstelling die de bug meldde.
+
+Gewijzigd: `data/GlucoseReadingEntity.kt`, `data/GlucoseReadingDao.kt`,
+`data/FclGlucoLinkDatabase.kt`, `data/GlucoseReadingStore.kt`,
+`sensor/ble/BleConnectionService.kt`, `ui/CombiScreen.kt`,
+`ui/StatusScreen.kt`, `ui/CalibrationScreen.kt`,
+`ui/CareSensAirStatusScreen.kt`, `ui/DexcomG6StatusScreen.kt`,
+`alarm/AlarmMonitor.kt`, `alarm/AlarmActivity.kt`, `app/build.gradle.kts`.
+
+versionCode 167, versionName "0.9.68-glucose-slot-separation-fix".
+
+## Ronde 154 (28/08/2026) — KRITIEKE FIX: CareSens Air toonde de start-/eindtijd van de vórige sensor na het koppelen van een nieuwe
+
+**Aanleiding.** Live-melding: "bij het koppelen van een nieuwe caresens
+sensor bakt hij de start en einde tijd van de oude vorige sensor nog op."
+Gevraagd om dit eerst in de code te bevestigen vóór er iets gefixt werd.
+
+**Diagnose (bevestigd).** `careSensAirSensorStartedAtMs(slot)` — de enige
+bron voor zowel de Start-tijd als de afgeleide "End (est.)"-tijd (start +
+15 dagen) op `CareSensAirStatusScreen.kt`/het compacte kaartje op
+`StatusScreen.kt` — wordt uitsluitend geschreven vanuit
+`CareSensAirDriver.kt`'s handler voor het 0xC0/2-antwoord
+(StartSensorResponse), dus pas zodra de NIEUWE fysieke sensor
+daadwerkelijk een live GATT-uitwisseling heeft voltooid. De koppel-/
+wisselflow zelf (`FclGlucoLinkNavHost.kt`'s `ROUTE_CARESENS_AIR_CHOICE`/
+`ROUTE_CARESENS_AIR_SCAN`) deed al wel een paar opruimstappen (oude BLE-
+verbinding stoppen, status op Disconnected, device-adres wissen,
+sensortype/scanresultaat vastleggen), maar riep nergens een reset aan
+voor `careSensAirSensorStartedAtMs`/`careSensAirLastConnectedAtMs`. Dus
+bleef de VORIGE sensor's Start-/End-tijd (en "Last connected") gewoon
+zichtbaar vanaf het moment van koppelen tot de eerste geslaagde
+GATT-uitwisseling met de nieuwe sensor — bij een haperende verbinding kan
+dat een tijd aanhouden. Zelfde bugklasse als Dexcom G7's stale batterij-/
+firmwarecache (Ronde 152), alleen was daar destijds al een proactieve
+reset voor gebouwd en voor CareSens Air nog niet.
+
+**Wijziging.**
+
+- `data/AppSettings.kt`: nieuwe `clearCareSensAirSensorSession(slot)` —
+  verwijdert de `caresens_sensor_started_at_ms`- en
+  `caresens_last_connected_at_ms`-sleutels uit DataStore.
+- `ui/FclGlucoLinkNavHost.kt`: beide CareSens Air-koppelpaden
+  (`ROUTE_CARESENS_AIR_CHOICE`'s `onExistingSensor` én
+  `ROUTE_CARESENS_AIR_SCAN`'s `onScanned`) roepen deze nieuwe functie nu
+  aan, vóór de navigatie naar `PairingScreen` — zelfde plek/patroon als de
+  bestaande `clearDeviceAddress(slot)`-aanroep ernaast.
+
+**Bekend, NOG NIET meegenomen randgeval.** Bij de "Already-running
+sensor"-route wordt `saveCareSensAirScan(slot, ...)` bewust NIET
+opnieuw aangeroepen (er is geen barcode-scanresultaat) — het oude,
+gescande serienummer (`scan?.serial`, getoond in `SensorInfoBlock` op
+`CareSensAirStatusScreen.kt`) kan daardoor in theorie nog even de vorige
+sensor's serienummer tonen totdat er iets anders het overschrijft. Dit
+scherm toont in de praktijk vooral het via GATT rechtstreeks van de
+sensor gelezen serienummer voor de actieve verbinding, dus de praktische
+impact lijkt kleiner dan bij de Start-/End-tijd — niet in deze ronde
+onderzocht/gefixt, genoteerd als mogelijk vervolgpunt.
+
+**Verificatie.** Beide gewijzigde bestanden gecontroleerd met dezelfde
+Python-tokenizer als Ronde 153 (negeert string-literalen/comments correct)
+— accolades/haakjes in balans. Geen Gradle/Android-SDK beschikbaar om te
+compileren — handmatige review. Nog niet door de gebruiker zelf getest
+tegen een daadwerkelijke sensorwissel.
+
+Gewijzigd: `data/AppSettings.kt`, `ui/FclGlucoLinkNavHost.kt`,
+`app/build.gradle.kts`.
+
+versionCode 168, versionName "0.9.69-caresens-stale-session-cache-fix".
+
+## Ronde 155 (28/08/2026) — KRITIEKE FIX: reconnect-cadans liep vast op 10 minuten i.p.v. 5 (G6, G7 én CareSens Air) + app opent nu op de AAPS-zendende slot
+
+**Aanleiding.** De gebruiker had specifiek gevraagd om de G7 een aantal uren
+te laten draaien om de al sinds Ronde 149/151/152 vermoede "10-minuten-
+cyclus" eindelijk met genoeg data te kunnen bevestigen of weerleggen — niet
+om de sensor zelf te testen (die geeft al de hele dag geen echte BG-waarde
+meer door, bekend en irrelevant voor deze test, de sensor bleef bruikbaar
+genoeg om de verbinding zelf mee te meten). Een eerste analyse van de
+meegestuurde log ging hier volledig aan voorbij en focuste per ongeluk op
+een zijspoor (een CareSens-update die tegelijk was geïnstalleerd) — terecht
+teruggefloten: de vraag zelf bevatte het antwoord al ("hij netjes 6 minuten
+laat wachten" is per definitie fout voor een 5-minuten-sensor).
+
+**Diagnose (bevestigd met uren data, 16:25–22:07, stabiele periode vóór de
+CareSens-herstart).** De eigen diagnostiekregel `computeReconnectCooldownMs`
+toont `periodsElapsed` steeds in sprongen van 2 (0, 2, 4, 6, 8, ...), nooit
+1 — de app verbond dus feitelijk elke 10 minuten, niet elke 5.
+
+Root cause, gevonden in `DexcomG7Driver.kt` (en identiek gekopieerd naar
+`DexcomG6Driver.kt` en `CareSensAirDriver.kt`): `computeReconnectCooldownMs()`
+rekende met `Math.round((laatste meting − anker) / 5 min)` om te bepalen in
+welk vast 5-minuten-vak (sinds een sessie-anker) de laatste meting viel. Elke
+connectiecyclus kwam consistent ~2,57 minuten LATER binnen dan zijn eigen
+beoogde tijdstip (BLE-scan-/verbindingsoverhead die meer tijd kost dan de
+marge ervoor). Zodra die vertraging over de helft van een vak (2,5 min) heen
+ging, rondde `Math.round` naar het VOLGENDE vak i.p.v. het vak waar de
+meting echt bij hoorde — het volgende doel werd dan 10 min verder i.p.v. 5,
+wat op zijn beurt weer ~2,57 min te laat binnenkwam en dus OPNIEUW naar het
+volgende vak afrondde. Eenmaal over die afrondingsgrens heen herhaalt de
+fout zichzelf daardoor oneindig (tot de eerstvolgende ankerreset bij een
+driver-herstart) — geen sensor-eigenaardigheid, een reproduceerbare
+rekenfout, en aanwezig in alle drie de sensordrivers.
+
+**Wijziging.**
+
+- `sensor/dexcomg7/DexcomG7Driver.kt`, `sensor/dexcomg6/DexcomG6Driver.kt`,
+  `sensor/caresensair/CareSensAirDriver.kt`: `computeReconnectCooldownMs()`'s
+  `Math.round(...)` vervangen door `Math.floor(...)` — kent een late meting
+  toe aan het LAATST al verstreken vak i.p.v. het dichtstbijzijnde, zodat
+  een eenmalige (of structurele) vertraging van een paar minuten niet meer
+  permanent een heel extra vak doorschuift. Bij CareSens Air is bewust
+  ALLEEN deze aanroep aangepast — de losse `periodsFromOther`-berekening
+  verderop in datzelfde bestand (voor de botsingsafstand tot de ANDERE
+  slot's raster) hoort wél de dichtstbijzijnde afstand te zoeken, in beide
+  richtingen, en is dus terecht op `Math.round` blijven staan.
+- `ui/CombiScreen.kt`, op verzoek — "neem dan gelijk de aaps actieve sensor
+  als open slot mee": het starttabblad (`tabIndex`) begint nu op een
+  sentinel (-1) i.p.v. altijd 0 (Slot A); een nieuwe `LaunchedEffect(Unit)`
+  zet 'm éénmalig, alleen bij een ECHTE koude start, op de AAPS-zendende
+  slot (`AppSettings.getAapsActiveSlotOnce()`) — Slot B als díe zendt,
+  anders Slot A (dus ook wanneer geen van beide zendt, zoals nu, blijft het
+  vertrouwde Slot A-gedrag gewoon behouden). Bij rotatie of gewoon
+  achtergrond/voorgrond binnen hetzelfde process staat `tabIndex` al vast
+  (door deze effect zelf of een latere handmatige tik) en springt het
+  scherm niet meer terug.
+
+**Verificatie.** Alle vier gewijzigde bestanden gecontroleerd met dezelfde
+Python-tokenizer als Ronde 153/154 — accolades/haakjes in balans. Geen
+Gradle/Android-SDK beschikbaar om te compileren — handmatige review. De
+cadans-fix is met de bestaande, meegestuurde data doorgerekend (dezelfde
+~2,57 min consistente vertraging per cyclus geeft met `floor` een echte
+5-minuten-cadans i.p.v. 10) maar nog niet zelf tegen een levende sensor
+getest — dat vergt een nieuwe, vergelijkbaar lange log.
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Driver.kt`,
+`sensor/dexcomg6/DexcomG6Driver.kt`,
+`sensor/caresensair/CareSensAirDriver.kt`, `ui/CombiScreen.kt`,
+`app/build.gradle.kts`.
+
+versionCode 169, versionName "0.9.70-reconnect-cadence-rounding-fix".
+
+## Ronde 156 (29/08/2026) — diagnostisch: proces-instantie-tag toegevoegd aan elke logregel (nog GEEN fix)
+
+**Aanleiding.** Live-melding na het installeren van v169: "hij start wel op
+en koppelt maar blijft vervolgens bijna een kwartier op connecting staan".
+De meegestuurde log (`fclglucolink_2026-08-28 23.59.txt`) toont tussen
+23:45:58 en 23:48:09 een korte, chaotische reeks mislukte herverbindingen
+(waaronder een niet eerder geziene `status=133`), gevolgd door VOLLEDIGE
+stilte — geen enkele `DexcomG7:`-regel meer, terwijl de disconnect-handler
+in `DexcomG7Driver.kt` na ELKE disconnect onvoorwaardelijk een nieuwe
+scanpoging inplant (`onConnectionStateChange`'s `STATE_DISCONNECTED`-tak
+roept altijd `scheduleScanAttempt()` aan, tenzij de gebruiker zelf stopte).
+Zo'n totale stilte, i.p.v. herhaalde foutregels, wijst eerder op een
+plotseling gecancelde coroutine-scope dan op een normaal falende
+retry-lus.
+
+**Diagnose (hypothese, NIET bevestigd).** Het patroon lijkt sterk op een
+eerder al bevestigd scenario, gedocumenteerd in `BleConnectionService.kt`'s
+Ronde 59-kdoc: "TWEE gelijktijdige BluetoothGatt-verbindingen naar hetzelfde
+toestel... transmitter raakte in de war, beide verbraken meteen weer". De
+bestaande bescherming daartegen (`startCommandMutex` + de
+`stillWorking`-check in `ensureSlotConnected()`) werkt overtuigend BINNEN
+één service-/procesexemplaar, maar beschermt niet tegen het geval dat de
+update-herstart kortstondig TWEE APARTE PROCESSEN met elk hun eigen
+`BleConnectionService`-instantie oplevert (bv. een korte
+PACKAGE_REPLACED-herstart náást het handmatig heropenen van de app) — elk
+proces heeft dan zijn eigen mutex, driver en sessiesleutel, en beide zouden
+onafhankelijk van elkaar naar dezelfde fysieke sensor proberen te
+verbinden. Dit is vooralsnog NIET hard te bewijzen: de huidige diagnose-log
+bevat nergens een proces-ID, dus twee gelijktijdige processen zijn met de
+huidige logregels niet van gewoon-na-elkaar te onderscheiden.
+
+**Wijziging (puur diagnostisch, geen gedragswijziging).**
+
+- `logging/DiagnosticFileLogger.kt`: een `instanceTag` (proces-ID + korte
+  random suffix) wordt precies één keer aangemaakt bij de eerste aanraking
+  van dit object — in de praktijk dus hoogstens één keer per Android-proces
+  (elk nieuw proces = een verse class-initialisatie van deze singleton).
+  Deze tag wordt nu voorin elke geschreven logregel gezet (`writeLine()` en
+  `logFatal()`), en dus automatisch meegenomen door ELKE bestaande
+  `DiagnosticFileLogger.log(...)`/`logError(...)`-aanroep door de hele app
+  heen — geen van de honderden bestaande aanroepen zelf hoefde aangepast.
+  Ziet een volgende log twee verschillende tags door elkaar heen lopen
+  binnen hetzelfde tijdsbestek, dan is het duale-proces-vermoeden bevestigd;
+  blijft het overal dezelfde ene tag, dan ligt de oorzaak ergens anders en
+  moet dat spoor losgelaten worden.
+
+**Verificatie.** Gewijzigde bestand gecontroleerd met dezelfde
+Python-tokenizer als voorgaande rondes — accolades/haakjes in balans (de
+eerste run gaf een vals alarm door een los apostrof-teken in Nederlandse
+kdoc-proza — "geen `'`-sluiting" — de tokenizer stript nu eerst
+blok-/regelcommentaar vóór ze naar losse aanhalingstekens kijkt). Geen
+Gradle/Android-SDK beschikbaar om te compileren — handmatige review. GEEN
+enkele bestaande log-aanroep of gedragspad aangeraakt — dit is uitsluitend
+extra informatie in de uitvoerregel zelf. Nog geen conclusie of fix voor de
+"stuck on Connecting"-melding zelf — dat vergt een nieuwe log, gemaakt ná
+deze wijziging, tijdens (of vlak na) eenzelfde soort update-herstart.
+
+Gewijzigd: `logging/DiagnosticFileLogger.kt`, `app/build.gradle.kts`.
+
+versionCode 170, versionName "0.9.71-diagnostic-instance-tag".
+
 versionCode 117, versionName `0.9.20-alarm-alert-mode-fix`.

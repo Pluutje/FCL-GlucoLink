@@ -193,6 +193,40 @@ import kotlin.math.sqrt
  * en bij elke aanroep van [smooth] meegegeven, zodat een wijziging in
  * Settings direct op de eerstvolgende meting doorwerkt, zonder de sensor
  * opnieuw te hoeven koppelen of de service te herstarten.
+ *
+ * 24/08/2026 (editor, RONDE 125, op verzoek: "een breakout filter wat
+ * eigenlijk precies omgekeerd werkt tov de breakin [...] boven op de basis
+ * (ongeacht welke stand gekozen is) en even sterk als break in dus in
+ * principe een omgekeerde kopie" — na CareSens Air-meldingen dat sensoren
+ * de laatste dagen van hun looptijd weer instabiel worden) — [smooth] krijgt
+ * er een tweede, gelijkwaardig parameter [breakOutDecayFactor] bij. Beide
+ * factoren worden gecombineerd tot één `edgeStrength` (het maximum van de
+ * twee — ze horen bij niet-overlappende delen van de looptijd, begin resp.
+ * eind, dus er is nooit een reden om ze op te tellen) en delen vanaf daar
+ * LETTERLIJK dezelfde twee ingrepen ([breakInExtraRMgdlSq]/
+ * [breakInThresholdBoost]) als de bestaande inloop-demping — een spiegel-
+ * kopie in tijd, geen los mechanisme met eigen constantes. Net als
+ * [breakInDecayFactor] wordt [breakOutDecayFactor] zelf BUITEN deze klasse
+ * berekend (BleConnectionService.kt's `computeBreakOutDecayFactor()`), nu
+ * uit het aantal uren TOT een geschatte eind-datum i.p.v. uren SINDS de
+ * start — zie die functie's kdoc voor hoe die einddatum per sensortype
+ * bepaald wordt (vaste looptijd voor CareSens Air/stock-G6, een handmatig
+ * ingestelde verwachte looptijd voor een G6 met Anubis-transmitter).
+ *
+ * Tweede uitbreiding uit hetzelfde verzoek, na doorvragen ("Nu, dit lezende
+ * denk ik toch alleen beide op de stijging, en de dalingen als die verdacht
+ * ogen"): naast stijgingen dempen beide edge-filters nu ook "verdachte"
+ * dalingen. Bewust GEEN nieuwe, aparte grootte-drempel hiervoor uitgevonden
+ * — "verdacht" hergebruikt de al bestaande 2-van-3-tekenbevestiging
+ * ([sameSignCount]/[qInflateAllowed] in [smooth]): een dalende afwijking telt
+ * als verdacht zolang de laatste 2 van 3 grote afwijkingen NIET ook een
+ * bevestigde daling laten zien, en verliest die status zodra dat wél zo is.
+ * Dat behoudt precies de veiligheidsafweging uit de klasse-kdoc hierboven
+ * (een echte, aanhoudende daling mag nooit lang vertraagd worden — hooguit
+ * de eerste, nog onbevestigde meting van een nieuwe daling krijgt de extra
+ * R-demping/hogere trigger-drempel, niet de daaropvolgende bevestigende
+ * metingen) terwijl een geïsoleerde ruis-uitschieter naar beneden tijdens
+ * het inloop-/uitloop-venster wél gedempt wordt, net als bij stijgingen.
  */
 enum class SmoothingStrength(val qScale: Double, val displayLabel: String) {
     WEAK(1.8, "Weak"),
@@ -237,13 +271,13 @@ class KalmanSmoother {
     private val immediateQRateScale = 50.0
 
     // ---- RONDE 111: inloop-demping voor een nog niet gestabiliseerde
-    // (net geplaatste) sensor — zie klasse-kdoc. Alleen bij STIJGENDE
-    // afwijkingen (normRaw > 0); dalingen blijven volledig ongemoeid, op
-    // uitdrukkelijk verzoek ("dalingen zijn in mijn ogen dus minder van
-    // belang"). [breakInDecayFactor] (0..1, door de aanroeper meegegeven —
-    // zie [smooth]'s kdoc) bepaalt de sterkte; beide constantes hieronder
-    // gelden bij volledige sterkte (breakInDecayFactor = 1.0, vlak na
-    // sensorstart) en schalen daarmee lineair mee naar 0 af.
+    // (net geplaatste) sensor — zie klasse-kdoc. Bij volledige sterkte
+    // (edgeStrength = 1.0, vlak na sensorstart of vlak vóór het geschatte
+    // einde) gelden beide constantes hieronder; ze schalen lineair mee naar
+    // 0 af. RONDE 125 — hergebruikt ONGEWIJZIGD door de nieuwe uitloop-
+    // demping (spiegelkopie in tijd) en uitgebreid van "alleen stijgingen"
+    // naar "stijgingen + verdachte (nog onbevestigde) dalingen" — zie
+    // klasse-kdoc's RONDE-125-paragraaf voor de precieze afweging.
     private val breakInExtraRMgdlSq = 80.0     // extra meetruis-variantie (mg/dL²) bovenop de normale rEff.
     private val breakInThresholdBoost = 2.0    // onmiddellijke-trigger-drempel wordt tot ×3 (1 + 2×1.0) hoger.
 
@@ -295,7 +329,16 @@ class KalmanSmoother {
      *        Wordt BUITEN deze klasse berekend (BleConnectionService.kt, uit
      *        de sensor-startsleutel + de ingestelde duur — zie klasse-kdoc)
      *        zodat deze klasse zelf geen kennis van instellingen/klok nodig
-     *        heeft. Alleen van invloed op STIJGENDE afwijkingen.
+     *        heeft. Van invloed op stijgingen en verdachte dalingen (zie
+     *        klasse-kdoc's RONDE-125-paragraaf).
+     * @param breakOutDecayFactor RONDE 125 — zelfde schaal/betekenis als
+     *        [breakInDecayFactor] (0.0..1.0), maar dan voor de UITLOOP-
+     *        demping richting een geschat einde van de sensor-looptijd.
+     *        Wordt eveneens BUITEN deze klasse berekend
+     *        (BleConnectionService.kt's `computeBreakOutDecayFactor()`) en
+     *        met [breakInDecayFactor] gecombineerd tot één `edgeStrength`
+     *        (zie klasse-kdoc) — beide delen dezelfde constantes en dezelfde
+     *        stijging-plus-verdachte-daling-logica.
      * @param strength RONDE 114 — schaalt [qGlucose]/[qRate] (zie
      *        [SmoothingStrength]'s kdoc voor waarom Q i.p.v. R). Default
      *        [SmoothingStrength.MEDIUM] (schaal ×1.0) — exact het bestaande,
@@ -306,6 +349,7 @@ class KalmanSmoother {
         measurementMgdl: Double,
         timestampMs: Long,
         breakInDecayFactor: Double = 0.0,
+        breakOutDecayFactor: Double = 0.0,
         strength: SmoothingStrength = SmoothingStrength.MEDIUM
     ): SmoothingOutput {
         val effQGlucose = qGlucose * strength.qScale
@@ -365,21 +409,34 @@ class KalmanSmoother {
         val sameSignCount = if (sign == 0) 0 else recentSigns.count { it == sign }
         val qInflateAllowed = sameSignCount >= 2
 
-        // RONDE 111 — inloop-demping (zie klasse-kdoc): alleen bij een
-        // STIJGENDE afwijking, en alleen zolang [breakInDecayFactor] > 0.
+        // RONDE 111 — inloop-/uitloop-demping (zie klasse-kdoc): een
+        // STIJGENDE afwijking wordt altijd meegeteld; een DALENDE afwijking
+        // alleen zolang die nog "verdacht" is (RONDE 125 — nog niet door de
+        // 2-van-3-poort hierboven bevestigd als aanhoudende trend). Zodra
+        // sameSignCount voor een dalend teken >=2 haalt, is de daling
+        // bevestigd en telt 'ie niet langer mee — zo wordt een échte,
+        // aanhoudende daling nooit langer dan de eerste, nog onbevestigde
+        // meting vertraagd.
         val risingDeviation = normRaw > 0.0
-        val breakInStrength = breakInDecayFactor.coerceIn(0.0, 1.0)
+        val fallingDeviation = normRaw < 0.0
+        val suspiciousFallingDeviation = fallingDeviation && !(sign == -1 && qInflateAllowed)
+        val edgeTriggered = risingDeviation || suspiciousFallingDeviation
+        // RONDE 125 — inloop- en uitloop-demping delen dezelfde sterkte-
+        // schaal: het maximum van beide (nooit opgeteld, ze horen bij
+        // niet-overlappende delen van de looptijd — zie klasse-kdoc).
+        val edgeStrength = max(breakInDecayFactor, breakOutDecayFactor).coerceIn(0.0, 1.0)
 
         // RONDE 109 — onmiddellijke trigger: één enkele meting die al meer
         // dan [immediateTriggerThreshold] afwijkt hoeft niet op de 2-van-3-
         // bevestiging hierboven te wachten (zie klasse-kdoc voor de
         // doorgerekende cijfers). Symmetrisch — beide richtingen tellen mee.
-        // RONDE 111: tijdens de inloopperiode ligt die drempel voor de
-        // STIJGENDE kant tijdelijk hoger (tot ×3 bij volle sterkte) — een
-        // ruisgevoelige sensor moet een veel grotere, hardnekkigere afwijking
-        // laten zien voordat deze trigger 'm alsnog gelooft.
-        val immediateEffectiveThreshold = if (risingDeviation) {
-            immediateTriggerThreshold * (1.0 + breakInThresholdBoost * breakInStrength)
+        // RONDE 111/125: tijdens de inloop-/uitloopperiode ligt die drempel
+        // voor stijgingen en verdachte dalingen tijdelijk hoger (tot ×3 bij
+        // volle sterkte) — een ruisgevoelige sensor moet een veel grotere,
+        // hardnekkigere afwijking laten zien voordat deze trigger 'm alsnog
+        // gelooft.
+        val immediateEffectiveThreshold = if (edgeTriggered) {
+            immediateTriggerThreshold * (1.0 + breakInThresholdBoost * edgeStrength)
         } else {
             immediateTriggerThreshold
         }
@@ -390,11 +447,12 @@ class KalmanSmoother {
         // snelle daling/stijging kunnen missen).
         val rScale = 1.0 + max(0.0, absNorm - 2.0)
         var rEff = min(learnedR * rScale, min(learnedR + 100.0, rEffMax))
-        // RONDE 111: extra, tijdelijke meetruis bovenop rEff — alleen bij
-        // een stijgende afwijking — zodat ook de gewone (niet-getriggerde)
-        // Kalman-winst minder ver "meetrekt" op een ruisgevoelige stijging.
-        if (risingDeviation) {
-            rEff += breakInExtraRMgdlSq * breakInStrength
+        // RONDE 111/125: extra, tijdelijke meetruis bovenop rEff — bij een
+        // stijgende afwijking of een nog onbevestigde ("verdachte") daling —
+        // zodat ook de gewone (niet-getriggerde) Kalman-winst minder ver
+        // "meetrekt" op een ruisgevoelige afwijking.
+        if (edgeTriggered) {
+            rEff += breakInExtraRMgdlSq * edgeStrength
         }
 
         val zScore = absNorm.coerceAtLeast(1.0)

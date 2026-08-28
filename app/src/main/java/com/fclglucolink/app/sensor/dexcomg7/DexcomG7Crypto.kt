@@ -1,5 +1,10 @@
 package com.fclglucolink.app.sensor.dexcomg7
 
+import org.bouncycastle.asn1.pkcs.PrivateKeyInfo
+import org.bouncycastle.crypto.digests.SHA256Digest
+import org.bouncycastle.crypto.params.ECPrivateKeyParameters
+import org.bouncycastle.crypto.signers.ECDSASigner
+import org.bouncycastle.crypto.util.PrivateKeyFactory
 import org.bouncycastle.jce.ECNamedCurveTable
 import org.bouncycastle.jce.spec.ECNamedCurveParameterSpec
 import org.bouncycastle.math.ec.ECCurve
@@ -70,15 +75,15 @@ import javax.crypto.spec.SecretKeySpec
  *   `d` in [1, Q-1] kiezen en het publieke punt berekenen als `G·d` — exact
  *   wat die SPI-klassen ONDER DE MOTORKAP ook doen, maar zonder de
  *   Android-gevoelige provider-cast (zie hieronder).
- * - De QR-code-certificaat-koppelroute (`DSAChallenger.java`,
- *   `CertInfoTxMessage.java`/`CertInfoRxMessage.java` in de Java-bron) is
- *   NIET geport — dat is xDrip+'s fallback-pad voor het zeldzame geval dat
- *   de normale PIN-koppeling ondanks succesvolle authenticatie geen OS-bond
- *   oplevert, en vereist een los, met een QR-scan verkregen fabrieks-
- *   certificaat. Zelfs xDrip+'s eigen `Plugin.java` behandelt dit als
- *   duidelijk secundair pad (`throw new InvalidParameterException("Missing
- *   QR code")` als het niet beschikbaar is). Bewust uitgesteld, zie
- *   DexcomG7PairingStateMachine.kt's kdoc.
+ * - De certificaat-koppelroute (`DSAChallenger.java`, `CertInfoTxMessage.
+ *   java`/`CertInfoRxMessage.java`/`SignChallengeTxMessage.java` in de
+ *   Java-bron) bleek NIET zeldzaam maar juist STANDAARD nodig voor deze
+ *   sensor (Ronde 141-143's live-tests: authenticatie lukte altijd, bonden
+ *   nooit — xDrip+'s eigen `Plugin.java` schakelt naar precies deze extra
+ *   stap zodra dat zich voordoet, zie DexcomG7CertMaterial.kt's kdoc voor
+ *   het volledige feitenrelaas). [signWithCertPrivateKey] hieronder port
+ *   `DSAChallenger.response()` (gewone, niet-deterministische ECDSA-SHA256,
+ *   r/s als vast-lange 32-byte waarden i.p.v. DER — zie die functie se kdoc).
  *
  * BELANGRIJKE ANDROID-VAL, BEWUST VERMEDEN: Android heeft van huis uit een
  * eigen, uitgeklede "BC"-provider ingebouwd die in naam conflicteert met
@@ -114,9 +119,50 @@ internal object DexcomG7Curve {
     fun randomExponent(): BigInteger = BigIntegers.createRandomInRange(BigInteger.ONE, qMinus1, random)
 }
 
+/**
+ * 28/08/2026 (editor, RONDE 144) — `DSAChallenger.java`, letterlijk geport.
+ * Ondertekent [challenge] (16 bytes — de sensor se "sign challenge"-
+ * indicatie, ná aftrek van de eerste 2 header-bytes, zie
+ * DexcomG7Driver.kt's `runCertificateExchange`) met de EC-privésleutel in
+ * [privateKeyDer] (PKCS8-DER, secp256r1, zie DexcomG7CertMaterial.PART_C se
+ * kdoc voor herkomst): gewone (niet-deterministische) SHA-256-ECDSA, exact
+ * zoals BouncyCastle's eigen `SignatureSpi.ecDSA256`-JCA-implementatie die
+ * de Java-bron via `DSAChallenger extends SignatureSpi.ecDSA256.ecDSA256`
+ * hergebruikt — hier rechtstreeks met BC's kale (niet-JCE-geregistreerde)
+ * klassen, zelfde "geen provider-lookup"-patroon als de rest van dit
+ * bestand (zie klasse-kdoc). Het resultaat is GEEN DER-gecodeerde
+ * handtekening — `DSAChallenger.sequenceToBytes()` haalt r en s uit de
+ * DER-SEQUENCE en plakt ze als twee vast-lange 32-byte unsigned-big-endian
+ * waarden aan elkaar (64 bytes totaal); dat wordt hier direct zo
+ * opgebouwd i.p.v. via een tussenstap met een DER-sequence.
+ */
+internal fun signWithCertPrivateKey(privateKeyDer: ByteArray, challenge: ByteArray): ByteArray {
+    require(challenge.size == 16) { "challenge moet 16 bytes zijn" }
+    val privateKeyInfo = PrivateKeyInfo.getInstance(privateKeyDer)
+    val keyParams = PrivateKeyFactory.createKey(privateKeyInfo) as ECPrivateKeyParameters
+
+    val digest = SHA256Digest()
+    digest.update(challenge, 0, challenge.size)
+    val hash = ByteArray(digest.digestSize)
+    digest.doFinal(hash, 0)
+
+    val signer = ECDSASigner()
+    signer.init(true, keyParams)
+    val signature = signer.generateSignature(hash)
+    val r = signature[0]
+    val s = signature[1]
+
+    val response = ByteArray(64)
+    BigIntegers.asUnsignedByteArray(32, r).copyInto(response, 0)
+    BigIntegers.asUnsignedByteArray(32, s).copyInto(response, 32)
+    return response
+}
+
 /** KeyPair.java — hier alleen de databehouder + verse-generatie-functie;
- *  de DER-(de)serialisatie-constructors (nodig voor de QR-cert-route) zijn
- *  bewust niet geport, zie klasse-kdoc hierboven. */
+ *  de DER-(de)serialisatie-constructors (nodig voor de PIN-route se eigen
+ *  sleutelparen) zijn bewust niet geport, zie klasse-kdoc hierboven —
+ *  [signWithCertPrivateKey] hierboven doet zijn eigen DER-parsing, specifiek
+ *  voor de certificaat-koppelroute. */
 internal class DexcomG7KeyPair(val privateKey: BigInteger, val publicKey: ECPoint) {
     companion object {
         /** Vers, willekeurig sleutelpaar — zie klasse-kdoc voor waarom dit
@@ -203,11 +249,35 @@ internal class DexcomG7Packet(val hash: BigInteger, val point1: ECPoint, val poi
  */
 internal class DexcomG7JpakeContext(pairingCode: String) {
 
-    /** Vaste, protocol-brede party-ID's — letterlijke bytes uit Config.java's
-     *  ALICE_B/BOB_B ("wij" resp. "de sensor"), puur gebruikt als domain-
-     *  separation-input in de zero-knowledge-hash, geen geheime waarde. */
-    val alice: ByteArray = hexToBytes("36C69656E647")
-    val bob: ByteArray = hexToBytes("375627675627")
+    /** Vaste, protocol-brede party-ID's — puur gebruikt als domain-
+     *  separation-input in de zero-knowledge-hash, geen geheime waarde.
+     *
+     * 27/08/2026 (editor, RONDE 134, na exhaustieve verificatie in Ronde
+     * 130-133 die de crypto/protocolvolgorde al schoon had gewassen, en na
+     * live-tests die — nu de verbinding dankzij Ronde 133 stabiel bleef —
+     * lieten zien dat ronde 1 ALTIJD faalt, zelfs met genoeg tijd/pogingen)
+     * — DE BUG GEVONDEN: Config.java's ALICE_B/BOB_B zijn hex-STRINGS
+     * ("36C69656E647"/"375627675627") die niet met standaard hex-parsing
+     * gedecodeerd worden, maar via jamorham.keks.util.Util's eigen
+     * `hexStringToByteArray()`:
+     *   data[i/2] = (digit(str[i+1]) << 4) + digit(str[i])
+     * — dat verwisselt de twee hex-cijfers van elk bytepaar t.o.v. standaard
+     * parsing (str[i] zou normaal de HOGE nibble zijn, hier is het de LAGE).
+     * Met die verwisseling gedecodeerd blijken ALICE_B/BOB_B doodgewoon de
+     * ASCII-tekst "client"/"server" te zijn (0x63,0x6c,0x69,0x65,0x6e,0x74
+     * resp. 0x73,0x65,0x72,0x76,0x65,0x72) — een voor de hand liggende
+     * keuze voor J-PAKE-partij-ID's. Onze eerdere `hexToBytes()`-functie
+     * (nu verwijderd) deed STANDAARD nibble-parsing en produceerde dus
+     * 6 volstrekt andere, niet-ASCII bytes. Die partij-ID gaat rechtstreeks
+     * de zero-knowledge-hash in (getZeroKnowledgeHash's `party`-parameter)
+     * — met de verkeerde bytes daar kan de bewijsvergelijking nooit kloppen,
+     * ongeacht hoe correct de rest van de wiskunde is. Dit verklaart precies
+     * waarom eerdere Python-kruisverificatie (party=bob/alice omwisselen,
+     * point1/point2 omwisselen) niets vond: geen van die hypotheses raakte
+     * aan HOE de constanten zelf gedecodeerd werden. Nu rechtstreeks als
+     * ASCII-letterlijke tekst geschreven — geen hex-parsing meer nodig. */
+    val alice: ByteArray = "client".toByteArray(StandardCharsets.US_ASCII)
+    val bob: ByteArray = "server".toByteArray(StandardCharsets.US_ASCII)
 
     val keyA: DexcomG7KeyPair = DexcomG7KeyPair.generate()
     val keyB: DexcomG7KeyPair = DexcomG7KeyPair.generate()
@@ -232,18 +302,6 @@ internal class DexcomG7JpakeContext(pairingCode: String) {
      *  [DexcomG7Jpake.getShortSharedKey]. Bewaard zodat een volgende
      *  verbinding met dezelfde sensor niet opnieuw hoeft te onderhandelen. */
     var savedKey: ByteArray? = null
-
-    companion object {
-        private fun hexToBytes(hex: String): ByteArray {
-            val clean = hex.trim().uppercase()
-            val out = ByteArray(clean.length / 2)
-            for (i in out.indices) {
-                val idx = i * 2
-                out[i] = ((Character.digit(clean[idx], 16) shl 4) + Character.digit(clean[idx + 1], 16)).toByte()
-            }
-            return out
-        }
-    }
 }
 
 /**

@@ -12,8 +12,8 @@
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.fclglucolink.app"
-    android:versionCode="136"
-    android:versionName="0.9.37-g6-dextime-and-started-fallback" >
+    android:versionCode="170"
+    android:versionName="0.9.71-diagnostic-instance-tag" >
 
     <uses-sdk
         android:minSdkVersion="26"

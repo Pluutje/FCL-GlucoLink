@@ -77,7 +77,16 @@ fun CareSensAirStatusScreen(
     // (zie FclGlucoLinkNavHost.kt's statusBaseFor()), dus rechtstreeks scopen op
     // SensorType.CARESENS_AIR i.p.v. eerst nog selectedSensor(slot) op te
     // vragen.
-    val latest by store.latestReading(sensorType = SensorType.CARESENS_AIR).collectAsState(initial = null)
+    //
+    // 28/08/2026 (editor, RONDE 153, CRITIEKE FIX — live-melding: twee
+    // gelijktijdig gekoppelde CareSens Air-sensoren "lijken weer samen te
+    // vloeien") — was `sensorType = SensorType.CARESENS_AIR`: exact de
+    // situatie die GlucoseReadingStore.kt's kdoc bij latestReading()
+    // beschrijft — met TWEE CareSens Air-sensoren tegelijk (slot A + slot B)
+    // filtert `sensorType` niets meer, beide fysieke sensoren delen immers
+    // dezelfde `sensorType`-waarde. Nu gescoped op [slot] zelf, per
+    // definitie uniek ongeacht welk sensortype er toevallig draait.
+    val latest by store.latestReading(slot = slot).collectAsState(initial = null)
     val connectionState by ConnectionStatusBridge.state(slot).collectAsState()
     val scan by settings.careSensAirScan(slot).collectAsState(initial = null)
     val sensorStartedAtMs by settings.careSensAirSensorStartedAtMs(slot).collectAsState(initial = null)

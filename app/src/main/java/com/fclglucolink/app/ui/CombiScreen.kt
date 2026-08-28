@@ -31,6 +31,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -129,7 +130,26 @@ fun CombiScreen(
     val aapsActiveSlot by settings.aapsActiveSlot.collectAsState(initial = null)
     // rememberSaveable i.p.v. gewone remember: overleeft een configuratie-
     // wijziging (bv. rotatie) zonder terug te vallen naar tabblad 0.
-    var tabIndex by rememberSaveable { mutableStateOf(0) }
+    //
+    // 28/08/2026 (editor, RONDE 155, op verzoek — "neem dan gelijk de aaps
+    // actieve sensor als open slot mee") — start-sentinel -1 i.p.v.
+    // meteen 0: op een ECHTE koude start (nieuw process, geen bewaarde
+    // staat) triggert de LaunchedEffect hieronder dan éénmalig de opening
+    // op de AAPS-zendende slot (Slot B als díe zendt, anders Slot A —
+    // inclusief het geval dat geen van beide zendt, zoals nu). Bij een
+    // configuratiewijziging (rotatie) of gewoon achtergrond/voorgrond
+    // binnen hetzelfde process is [tabIndex] allang gezet (door deze
+    // effect zelf of door een latere handmatige tik van de gebruiker), dus
+    // blijft die staat gewoon behouden i.p.v. steeds terug te springen.
+    var tabIndex by rememberSaveable { mutableStateOf(-1) }
+    LaunchedEffect(Unit) {
+        if (tabIndex == -1) {
+            tabIndex = when (settings.getAapsActiveSlotOnce()) {
+                SensorSlot.B -> 1
+                else -> 0
+            }
+        }
+    }
 
     val labelA = selectedSensorA?.displayName ?: SensorSlot.A.displayLabel
     val labelB = selectedSensorB?.displayName ?: SensorSlot.B.displayLabel
@@ -345,13 +365,18 @@ private fun CombiTabChip(
  * erboven".
  *
  * Zie CalibrationScreen.kt's kdoc (RONDE 80) voor de reden dat hier expliciet
- * `selectedSensorX?.let { store.recentReadings(sensorType = it) } ?: flowOf(
- * emptyList())` staat i.p.v. gewoon altijd `store.recentReadings(sensorType =
- * selectedSensorX)` aan te roepen: als er voor deze slot geen sensor gekozen
- * is, is `selectedSensorX` `null`, en `sensorType = null` is bij
- * GlucoseReadingStore geen "geen filter" maar "toon ALLES" (de gecombineerde
- * stream van BEIDE slots) — exact dezelfde bugklasse die eerder deze ronde in
- * CalibrationScreen.kt gevonden is. Hier expliciet vermeden.
+ * `selectedSensorX?.let { store.recentReadings(slot = SensorSlot.X) } ?: flowOf(
+ * emptyList())` staat i.p.v. onvoorwaardelijk te queryen: als er voor deze
+ * slot geen sensor gekozen is, is `selectedSensorX` `null`, en moet dat een
+ * lege lijst geven i.p.v. de query alsnog uit te voeren — exact dezelfde
+ * bugklasse die eerder deze ronde in CalibrationScreen.kt gevonden is. Hier
+ * expliciet vermeden.
+ *
+ * 28/08/2026 (editor, RONDE 153, CRITIEKE FIX) — de query zelf is nu
+ * gescoped op `slot = SensorSlot.A`/`SensorSlot.B` i.p.v. `sensorType = it`
+ * — zie GlucoseReadingStore.kt's kdoc bij recentReadings()/latestReading()
+ * voor de volledige analyse (twee gelijktijdig gekoppelde sensoren van
+ * HETZELFDE type konden hun metingen anders niet meer uit elkaar houden).
  *
  * 10/08/2026 (editor, RONDE 81, letterlijk verzoek — "het combi tabblad mag
  * boven de grafiek wel een tabelletje krijgen met de volgende data: slot A /
@@ -452,11 +477,17 @@ private fun CombiTabContent(
     // per-sensor schermen) gebruikt hier al `hours = 48`
     // (GlucoseReadingStore.kt's eigen default is ook 48), de Combi-tab
     // stond nog op de oudere `hours = 24`. Gelijkgetrokken.
+    // 28/08/2026 (editor, RONDE 153, CRITIEKE FIX) — was `sensorType = it`:
+    // zie GlucoseReadingStore.kt's kdoc bij recentReadings()/latestReading()
+    // voor de volledige analyse. De null-guard op selectedSensorA/B blijft
+    // ONGEWIJZIGD nodig — "geen sensor gekozen voor deze slot" moet nog
+    // steeds een lege lijst geven i.p.v. de ongefilterde combinatie van
+    // beide slots (slot = null).
     val readingsAFlow = remember(store, selectedSensorA) {
-        selectedSensorA?.let { store.recentReadings(hours = 48, sensorType = it) } ?: flowOf(emptyList())
+        selectedSensorA?.let { store.recentReadings(hours = 48, slot = SensorSlot.A) } ?: flowOf(emptyList())
     }
     val readingsBFlow = remember(store, selectedSensorB) {
-        selectedSensorB?.let { store.recentReadings(hours = 48, sensorType = it) } ?: flowOf(emptyList())
+        selectedSensorB?.let { store.recentReadings(hours = 48, slot = SensorSlot.B) } ?: flowOf(emptyList())
     }
     val readingsA by readingsAFlow.collectAsState(initial = emptyList())
     val readingsB by readingsBFlow.collectAsState(initial = emptyList())
@@ -466,10 +497,10 @@ private fun CombiTabContent(
     // store.latestReading(sensorType=...) opvragen is hier duidelijker.
     // Zelfde null-guard-reden als hierboven bij readingsAFlow/readingsBFlow.
     val latestAFlow = remember(store, selectedSensorA) {
-        selectedSensorA?.let { store.latestReading(sensorType = it) } ?: flowOf(null)
+        selectedSensorA?.let { store.latestReading(slot = SensorSlot.A) } ?: flowOf(null)
     }
     val latestBFlow = remember(store, selectedSensorB) {
-        selectedSensorB?.let { store.latestReading(sensorType = it) } ?: flowOf(null)
+        selectedSensorB?.let { store.latestReading(slot = SensorSlot.B) } ?: flowOf(null)
     }
     val latestA by latestAFlow.collectAsState(initial = null)
     val latestB by latestBFlow.collectAsState(initial = null)

@@ -37,14 +37,14 @@ public final class FclGlucoLinkDatabase_Impl extends FclGlucoLinkDatabase {
   @Override
   @NonNull
   protected SupportSQLiteOpenHelper createOpenHelper(@NonNull final DatabaseConfiguration config) {
-    final SupportSQLiteOpenHelper.Callback _openCallback = new RoomOpenHelper(config, new RoomOpenHelper.Delegate(7) {
+    final SupportSQLiteOpenHelper.Callback _openCallback = new RoomOpenHelper(config, new RoomOpenHelper.Delegate(8) {
       @Override
       public void createAllTables(@NonNull final SupportSQLiteDatabase db) {
-        db.execSQL("CREATE TABLE IF NOT EXISTS `glucose_readings` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `glucoseMgdl` REAL NOT NULL, `trendMgdlPerMin` REAL NOT NULL, `timestampMs` INTEGER NOT NULL, `sensorStartedAtMs` INTEGER NOT NULL, `sensorType` TEXT NOT NULL, `rawSensorMgdl` REAL, `calibratedMgdl` REAL)");
+        db.execSQL("CREATE TABLE IF NOT EXISTS `glucose_readings` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `glucoseMgdl` REAL NOT NULL, `trendMgdlPerMin` REAL NOT NULL, `timestampMs` INTEGER NOT NULL, `sensorStartedAtMs` INTEGER NOT NULL, `sensorType` TEXT NOT NULL, `rawSensorMgdl` REAL, `calibratedMgdl` REAL, `slot` TEXT)");
         db.execSQL("CREATE TABLE IF NOT EXISTS `calibration_entries` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `timestampMs` INTEGER NOT NULL, `fingerstickMgdl` REAL NOT NULL, `sensorMgdlAtPairing` REAL NOT NULL, `sensorType` TEXT, `otherSensorType` TEXT, `otherSensorMgdlAtPairing` REAL, `includedForOriginSensor` INTEGER NOT NULL, `includedForOtherSensor` INTEGER NOT NULL)");
         db.execSQL("CREATE TABLE IF NOT EXISTS `sensor_switch_events` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `timestampMs` INTEGER NOT NULL, `crossType` INTEGER NOT NULL, `sensorType` TEXT)");
         db.execSQL("CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)");
-        db.execSQL("INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '83ba757b6047f7797f61971f5d69dee7')");
+        db.execSQL("INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '4abc0565d9dc40c64568f0887bafb9a9')");
       }
 
       @Override
@@ -95,7 +95,7 @@ public final class FclGlucoLinkDatabase_Impl extends FclGlucoLinkDatabase {
       @NonNull
       public RoomOpenHelper.ValidationResult onValidateSchema(
           @NonNull final SupportSQLiteDatabase db) {
-        final HashMap<String, TableInfo.Column> _columnsGlucoseReadings = new HashMap<String, TableInfo.Column>(8);
+        final HashMap<String, TableInfo.Column> _columnsGlucoseReadings = new HashMap<String, TableInfo.Column>(9);
         _columnsGlucoseReadings.put("id", new TableInfo.Column("id", "INTEGER", true, 1, null, TableInfo.CREATED_FROM_ENTITY));
         _columnsGlucoseReadings.put("glucoseMgdl", new TableInfo.Column("glucoseMgdl", "REAL", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
         _columnsGlucoseReadings.put("trendMgdlPerMin", new TableInfo.Column("trendMgdlPerMin", "REAL", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
@@ -104,6 +104,7 @@ public final class FclGlucoLinkDatabase_Impl extends FclGlucoLinkDatabase {
         _columnsGlucoseReadings.put("sensorType", new TableInfo.Column("sensorType", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
         _columnsGlucoseReadings.put("rawSensorMgdl", new TableInfo.Column("rawSensorMgdl", "REAL", false, 0, null, TableInfo.CREATED_FROM_ENTITY));
         _columnsGlucoseReadings.put("calibratedMgdl", new TableInfo.Column("calibratedMgdl", "REAL", false, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsGlucoseReadings.put("slot", new TableInfo.Column("slot", "TEXT", false, 0, null, TableInfo.CREATED_FROM_ENTITY));
         final HashSet<TableInfo.ForeignKey> _foreignKeysGlucoseReadings = new HashSet<TableInfo.ForeignKey>(0);
         final HashSet<TableInfo.Index> _indicesGlucoseReadings = new HashSet<TableInfo.Index>(0);
         final TableInfo _infoGlucoseReadings = new TableInfo("glucose_readings", _columnsGlucoseReadings, _foreignKeysGlucoseReadings, _indicesGlucoseReadings);
@@ -148,7 +149,7 @@ public final class FclGlucoLinkDatabase_Impl extends FclGlucoLinkDatabase {
         }
         return new RoomOpenHelper.ValidationResult(true, null);
       }
-    }, "83ba757b6047f7797f61971f5d69dee7", "fc46a633fd8e7c8f844ae9b5aa88b1e7");
+    }, "4abc0565d9dc40c64568f0887bafb9a9", "2d305ce4bf85a1b2ce747c80ff604c0f");
     final SupportSQLiteOpenHelper.Configuration _sqliteConfig = SupportSQLiteOpenHelper.Configuration.builder(config.context).name(config.name).callback(_openCallback).build();
     final SupportSQLiteOpenHelper _helper = config.sqliteOpenHelperFactory.create(_sqliteConfig);
     return _helper;

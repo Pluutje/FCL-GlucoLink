@@ -118,6 +118,23 @@ class AppSettings(private val context: Context) {
         // verschil"-patroon van de oude raw-indicator in BgRingDisplay).
         val SMOOTHING_SHOW_PIPELINE_ON_MAIN_SCREEN = booleanPreferencesKey("smoothing_show_pipeline_on_main_screen")
 
+        // 24/08/2026 (editor, RONDE 125, op verzoek: "een breakout filter wat
+        // eigenlijk precies omgekeerd werkt tov de breakin" — na CareSens
+        // Air-meldingen dat sensoren de laatste dagen van hun looptijd weer
+        // instabiel worden) — spiegelbeeld van SMOOTHING_BREAK_IN_FILTER_*
+        // hierboven, app-breed net als die twee. Zie
+        // BleConnectionService.kt's computeBreakOutDecayFactor() voor hoe de
+        // "einde van de looptijd"-schatting per sensortype bepaald wordt en
+        // smoothing/KalmanSmoother.kt's klasse-kdoc voor het volledige,
+        // gedeelde demp-mechanisme.
+        val SMOOTHING_BREAK_OUT_FILTER_ENABLED = booleanPreferencesKey("smoothing_breakout_filter_enabled")
+
+        // Duur in uren VOOR het geschatte einde waarop de extra uitloop-
+        // demping begint op te bouwen — zelfde exponentiële opbouw als
+        // SMOOTHING_BREAK_IN_FILTER_DURATION_HOURS, alleen in de tijd
+        // omgekeerd. UI-max 96u (SettingsScreen.kt).
+        val SMOOTHING_BREAK_OUT_FILTER_DURATION_HOURS = doublePreferencesKey("smoothing_breakout_filter_duration_hours")
+
         // 13/08/2026 (editor, RONDE 104 — Fase 1, op verzoek: "een mg/dl vs
         // mmol/l knop") — app-breed, geen per-slot: de weergave-eenheid is een
         // voorkeur van de gebruiker, geen eigenschap van een fysieke sensor
@@ -428,6 +445,33 @@ class AppSettings(private val context: Context) {
     suspend fun getBreakInFilterDurationHoursOnce(): Double =
         context.dataStore.data.first()[Keys.SMOOTHING_BREAK_IN_FILTER_DURATION_HOURS] ?: 24.0
 
+    /** RONDE 125 — zie [Keys.SMOOTHING_BREAK_OUT_FILTER_ENABLED]'s kdoc.
+     *  Default UIT, zelfde reden als break-in: een gedragswijziging voor
+     *  bestaande gebruikers moet bewust aangezet worden. */
+    val breakOutFilterEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.SMOOTHING_BREAK_OUT_FILTER_ENABLED] ?: false
+    }
+
+    suspend fun setBreakOutFilterEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[Keys.SMOOTHING_BREAK_OUT_FILTER_ENABLED] = enabled }
+    }
+
+    suspend fun isBreakOutFilterEnabledOnce(): Boolean =
+        context.dataStore.data.first()[Keys.SMOOTHING_BREAK_OUT_FILTER_ENABLED] ?: false
+
+    /** RONDE 125 — default 48 uur, een middenwaarde binnen de 0-96u-range
+     *  die in het gesprek als max genoemd werd. */
+    val breakOutFilterDurationHours: Flow<Double> = context.dataStore.data.map { prefs ->
+        prefs[Keys.SMOOTHING_BREAK_OUT_FILTER_DURATION_HOURS] ?: 48.0
+    }
+
+    suspend fun setBreakOutFilterDurationHours(hours: Double) {
+        context.dataStore.edit { prefs -> prefs[Keys.SMOOTHING_BREAK_OUT_FILTER_DURATION_HOURS] = hours }
+    }
+
+    suspend fun getBreakOutFilterDurationHoursOnce(): Double =
+        context.dataStore.data.first()[Keys.SMOOTHING_BREAK_OUT_FILTER_DURATION_HOURS] ?: 48.0
+
     /** RONDE 113 — zie [Keys.SMOOTHING_SHOW_PIPELINE_ON_MAIN_SCREEN]'s kdoc.
      *  Default UIT: net als de andere smoothing-gerelateerde togglegs hierboven
      *  is dit een bewuste opt-in, geen gedragswijziging voor bestaande
@@ -701,6 +745,29 @@ class AppSettings(private val context: Context) {
     suspend fun getCareSensAirLastConnectedAtMsOnce(slot: SensorSlot): Long? =
         context.dataStore.data.first()[slotLong("caresens_last_connected_at_ms", slot)]
 
+    /** 28/08/2026 (editor, RONDE 154, CRITIEKE FIX — live-melding: "bij het
+     *  koppelen van een nieuwe caresens sensor bakt hij de start en einde
+     *  tijd van de oude vorige sensor nog op") — [careSensAirSensorStartedAtMs]
+     *  wordt uitsluitend geschreven vanuit CareSensAirDriver.kt's handler
+     *  voor het 0xC0/2-antwoord (StartSensorResponse), dus pas zodra de
+     *  NIEUWE fysieke sensor daadwerkelijk een live GATT-uitwisseling heeft
+     *  voltooid. De koppel-/wisselflow zelf (FclGlucoLinkNavHost.kt's
+     *  ROUTE_CARESENS_AIR_CHOICE/ROUTE_CARESENS_AIR_SCAN) riep tot deze
+     *  ronde nergens een reset aan — dus bleven de VORIGE sensor's Start-/
+     *  End-tijd (en "Last connected") gewoon zichtbaar op
+     *  CareSensAirStatusScreen.kt/StatusScreen.kt totdat die eerste nieuwe
+     *  GATT-uitwisseling voltooid was. Zelfde soort proactieve
+     *  cache-reset-bij-nieuwe-koppeling als Dexcom G7's
+     *  [clearDexcomG7BatteryAndFirmwareInfo] (Ronde 152) — hier aangeroepen
+     *  vanuit beide CareSens Air-koppelpaden (nieuw + al-lopend), vóór de
+     *  navigatie naar PairingScreen. */
+    suspend fun clearCareSensAirSensorSession(slot: SensorSlot) {
+        context.dataStore.edit { prefs ->
+            prefs.remove(slotLong("caresens_sensor_started_at_ms", slot))
+            prefs.remove(slotLong("caresens_last_connected_at_ms", slot))
+        }
+    }
+
     // ============================================================
     // Dexcom G6 — per slot
     // ============================================================
@@ -908,6 +975,31 @@ class AppSettings(private val context: Context) {
     suspend fun getDexcomG6TypicalSensorDaysOnce(slot: SensorSlot): Int? =
         context.dataStore.data.first()[slotInt("dexcom_g6_typical_sensor_days", slot)]
 
+    /** RONDE 125 — voor een G6 met Anubis-transmitter is de door de
+     *  transmitter zelf gerapporteerde `typicalSensorDays` niet te
+     *  vertrouwen (zie DexcomG6TransmitterType's kdoc — kan tot 60 dagen
+     *  melden terwijl gebruikers in de praktijk 14-20+ dagen ervaren).
+     *  Voor de uitloop-demping (computeBreakOutDecayFactor in
+     *  BleConnectionService.kt) gebruiken we voor dat geval daarom deze
+     *  PER-SLOT, door de gebruiker zelf ingestelde verwachte looptijd i.p.v.
+     *  het transmitter-getal. Bewust per slot (niet app-breed, in
+     *  tegenstelling tot de break-out-instellingen hierboven): dit is een
+     *  eigenschap van DIT specifieke fysieke transmitter-exemplaar, geen
+     *  algemene voorkeur — zie DexcomG6StatusScreen.kt waar dit veld getoond
+     *  wordt (alleen zichtbaar als deze slot's transmitter als Anubis
+     *  herkend is). Default 14 dagen, het eigen praktijkgetal uit het
+     *  gesprek dat dit verzoek startte. */
+    fun dexcomG6ExpectedLifespanDays(slot: SensorSlot): Flow<Int> = context.dataStore.data.map { prefs ->
+        prefs[slotInt("dexcom_g6_expected_lifespan_days", slot)] ?: 14
+    }
+
+    suspend fun setDexcomG6ExpectedLifespanDays(slot: SensorSlot, days: Int) {
+        context.dataStore.edit { prefs -> prefs[slotInt("dexcom_g6_expected_lifespan_days", slot)] = days }
+    }
+
+    suspend fun getDexcomG6ExpectedLifespanDaysOnce(slot: SensorSlot): Int =
+        context.dataStore.data.first()[slotInt("dexcom_g6_expected_lifespan_days", slot)] ?: 14
+
     suspend fun getDexcomG6LastVersion2QueryAtMsOnce(slot: SensorSlot): Long? =
         context.dataStore.data.first()[slotLong("dexcom_g6_last_version2_query_at_ms", slot)]
 
@@ -988,6 +1080,18 @@ class AppSettings(private val context: Context) {
     suspend fun hasKnownDexcomG7PairingCodeOnce(slot: SensorSlot): Boolean =
         getDexcomG7PairingCodeOnce(slot) != null
 
+    /** 27/08/2026 (editor, RONDE 129, op verzoek na live-tests waarbij een
+     *  opgeslagen koppelcode niet meer zichtbaar of controleerbaar was —
+     *  zie DexcomG7StatusScreen.kt's "Forget pairing code"-knop) — expliciete
+     *  tegenhanger van [setDexcomG7PairingCode]: verwijdert de opgeslagen
+     *  code weer, zodat [hasKnownDexcomG7PairingCodeOnce] weer `false`
+     *  oplevert en de gebruiker bij de volgende koppelpoging gewoon opnieuw
+     *  om de code gevraagd wordt (zie ROUTE_SENSOR_SELECTION's
+     *  `onSensorChosen`-tak voor DEXCOM_G7 in FclGlucoLinkNavHost.kt). */
+    suspend fun clearDexcomG7PairingCode(slot: SensorSlot) {
+        context.dataStore.edit { prefs -> prefs.remove(slotString("dexcom_g7_pairing_code", slot)) }
+    }
+
     suspend fun setDexcomG7LastConnectedAtMs(slot: SensorSlot, value: Long) {
         context.dataStore.edit { prefs -> prefs[slotLong("dexcom_g7_last_connected_at_ms", slot)] = value }
     }
@@ -998,6 +1102,128 @@ class AppSettings(private val context: Context) {
 
     suspend fun getDexcomG7LastConnectedAtMsOnce(slot: SensorSlot): Long? =
         context.dataStore.data.first()[slotLong("dexcom_g7_last_connected_at_ms", slot)]
+
+    /** 28/08/2026 (editor, RONDE 150) — letterlijke mirror van
+     *  [setDexcomG6BatteryInfo]/[dexcomG6BatteryInfo]/
+     *  [getDexcomG6LastBatteryQueryAtMsOnce] hierboven, alleen voor G7 — zie
+     *  DexcomG7Protocol.kt's kdoc bij `buildBatteryInfoRequest`/
+     *  `parseBatteryInfo` voor de protocol-herkomst en DexcomG7Driver.kt
+     *  voor de aanroep/cache-gating. */
+    suspend fun setDexcomG7BatteryInfo(slot: SensorSlot, voltageA: Int, voltageB: Int, temperatureC: Int, atMs: Long) {
+        context.dataStore.edit { prefs ->
+            prefs[slotInt("dexcom_g7_voltage_a", slot)] = voltageA
+            prefs[slotInt("dexcom_g7_voltage_b", slot)] = voltageB
+            prefs[slotInt("dexcom_g7_temperature_c", slot)] = temperatureC
+            prefs[slotLong("dexcom_g7_last_battery_query_at_ms", slot)] = atMs
+        }
+    }
+
+    data class DexcomG7BatteryInfo(val voltageA: Int, val voltageB: Int, val temperatureC: Int, val queriedAtMs: Long)
+
+    fun dexcomG7BatteryInfo(slot: SensorSlot): Flow<DexcomG7BatteryInfo?> = context.dataStore.data.map { prefs ->
+        val a = prefs[slotInt("dexcom_g7_voltage_a", slot)]
+        val b = prefs[slotInt("dexcom_g7_voltage_b", slot)]
+        val t = prefs[slotInt("dexcom_g7_temperature_c", slot)]
+        val at = prefs[slotLong("dexcom_g7_last_battery_query_at_ms", slot)]
+        if (a != null && b != null && t != null && at != null) DexcomG7BatteryInfo(a, b, t, at) else null
+    }
+
+    suspend fun getDexcomG7LastBatteryQueryAtMsOnce(slot: SensorSlot): Long? =
+        context.dataStore.data.first()[slotLong("dexcom_g7_last_battery_query_at_ms", slot)]
+
+    /** 28/08/2026 (editor, RONDE 151, CRITIEKE FIX — na live-test van v164:
+     *  de gebruiker's eigen sensor bleek het firmwareverzoek af te wijzen
+     *  (zie DexcomG7Driver.kt's kdoc bij [queryFirmwareIfStale]), waardoor
+     *  [getDexcomG7LastFirmwareQueryAtMsOnce] — die tot deze ronde alleen
+     *  gevuld werd bij een GESLAAGDE uitvraag — never gevuld raakte, en de
+     *  mislukte poging dus bij ELKE reconnect herhaald werd i.p.v. eens per
+     *  30 dagen) — een APARTE "laatst GEPROBEERD"-tijdstempel, onafhankelijk
+     *  van of het antwoord ooit succesvol geparsed werd. Mirror van
+     *  DexcomG6Driver.kt's `setDexcomG6LastVersion2QueryAtMs`-patroon (die
+     *  WEL al vóór het schrijven/wachten gezet wordt, precies om deze reden
+     *  — dit bestand se G7-tegenhanger miste dat onderscheid abusievelijk). */
+    suspend fun setDexcomG7BatteryQueryAttemptAtMs(slot: SensorSlot, value: Long) {
+        context.dataStore.edit { prefs -> prefs[slotLong("dexcom_g7_battery_query_attempt_at_ms", slot)] = value }
+    }
+
+    suspend fun getDexcomG7BatteryQueryAttemptAtMsOnce(slot: SensorSlot): Long? =
+        context.dataStore.data.first()[slotLong("dexcom_g7_battery_query_attempt_at_ms", slot)]
+
+    suspend fun setDexcomG7FirmwareQueryAttemptAtMs(slot: SensorSlot, value: Long) {
+        context.dataStore.edit { prefs -> prefs[slotLong("dexcom_g7_firmware_query_attempt_at_ms", slot)] = value }
+    }
+
+    suspend fun getDexcomG7FirmwareQueryAttemptAtMsOnce(slot: SensorSlot): Long? =
+        context.dataStore.data.first()[slotLong("dexcom_g7_firmware_query_attempt_at_ms", slot)]
+
+    /** 28/08/2026 (editor, RONDE 152, op verzoek — "een g7 gaat 10 dagen
+     *  mee, dat zou dus sowieso bij iedere nieuwe sensor start moeten
+     *  worden uitgevraagd [...] bij eerste opstart vult hij direct de
+     *  batterij met ook de datum van de vorige test") — de gebruiker wees
+     *  er terecht op dat [BATTERY_QUERY_INTERVAL_MS]/
+     *  [FIRMWARE_QUERY_INTERVAL_MS] (8u/30 dagen) alleen zinnig zijn
+     *  BINNEN het leven van ÉÉN fysieke sensor — zonder deze reset zou een
+     *  NIEUWE G7 (elke ~10 dagen) de batterij-/firmwaregegevens van de VORIGE
+     *  sensor blijven tonen, en bij firmware zelfs tot 30 dagen lang niet
+     *  opnieuw uitgevraagd worden (langer dan de nieuwe sensor zélf meegaat).
+     *  Aangeroepen vanuit `FclGlucoLinkNavHost.kt`'s
+     *  ROUTE_DEXCOM_G7_SETUP-`onConfirmed`, op dezelfde plek waar
+     *  [clearDeviceAddress] en [setDexcomG7PairingCode] al gebeuren voor een
+     *  nieuwe koppelpoging. */
+    suspend fun clearDexcomG7BatteryAndFirmwareInfo(slot: SensorSlot) {
+        context.dataStore.edit { prefs ->
+            prefs.remove(slotInt("dexcom_g7_voltage_a", slot))
+            prefs.remove(slotInt("dexcom_g7_voltage_b", slot))
+            prefs.remove(slotInt("dexcom_g7_temperature_c", slot))
+            prefs.remove(slotLong("dexcom_g7_last_battery_query_at_ms", slot))
+            prefs.remove(slotLong("dexcom_g7_battery_query_attempt_at_ms", slot))
+            prefs.remove(slotString("dexcom_g7_firmware_version", slot))
+            prefs.remove(slotString("dexcom_g7_bt_firmware_version", slot))
+            prefs.remove(slotInt("dexcom_g7_hardware_version", slot))
+            prefs.remove(slotLong("dexcom_g7_last_firmware_query_at_ms", slot))
+            prefs.remove(slotLong("dexcom_g7_firmware_query_attempt_at_ms", slot))
+        }
+    }
+
+    /** 28/08/2026 (editor, RONDE 150) — firmware-versiestring (xDrip+'s
+     *  "Firmware Version"-label, bv. "32.192.109.40"), zie
+     *  DexcomG7Protocol.buildFirmwareVersionRequest()/parseFirmwareVersion()
+     *  voor de protocol-herkomst. Eenmalig per transmitter genoeg (een
+     *  firmwareversie verandert niet tussen verbindingen) — vandaar dezelfde
+     *  "laatst-opgevraagd"-staleness-aanpak als batterij/versie2 hierboven,
+     *  zie DexcomG7Driver.kt. */
+    suspend fun setDexcomG7FirmwareInfo(
+        slot: SensorSlot,
+        firmwareVersion: String,
+        bluetoothFirmwareVersion: String,
+        hardwareVersion: Int,
+        atMs: Long
+    ) {
+        context.dataStore.edit { prefs ->
+            prefs[slotString("dexcom_g7_firmware_version", slot)] = firmwareVersion
+            prefs[slotString("dexcom_g7_bt_firmware_version", slot)] = bluetoothFirmwareVersion
+            prefs[slotInt("dexcom_g7_hardware_version", slot)] = hardwareVersion
+            prefs[slotLong("dexcom_g7_last_firmware_query_at_ms", slot)] = atMs
+        }
+    }
+
+    data class DexcomG7FirmwareInfo(
+        val firmwareVersion: String,
+        val bluetoothFirmwareVersion: String,
+        val hardwareVersion: Int,
+        val queriedAtMs: Long
+    )
+
+    fun dexcomG7FirmwareInfo(slot: SensorSlot): Flow<DexcomG7FirmwareInfo?> = context.dataStore.data.map { prefs ->
+        val fw = prefs[slotString("dexcom_g7_firmware_version", slot)]
+        val bt = prefs[slotString("dexcom_g7_bt_firmware_version", slot)]
+        val hw = prefs[slotInt("dexcom_g7_hardware_version", slot)]
+        val at = prefs[slotLong("dexcom_g7_last_firmware_query_at_ms", slot)]
+        if (fw != null && bt != null && hw != null && at != null) DexcomG7FirmwareInfo(fw, bt, hw, at) else null
+    }
+
+    suspend fun getDexcomG7LastFirmwareQueryAtMsOnce(slot: SensorSlot): Long? =
+        context.dataStore.data.first()[slotLong("dexcom_g7_last_firmware_query_at_ms", slot)]
 
     // ============================================================
     // Kalibratie-/sessie-bookkeeping — per slot (was device-adres-gated,

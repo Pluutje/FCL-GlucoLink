@@ -212,8 +212,11 @@ fun CalibrationScreen(onBack: () -> Unit, slot: SensorSlot = SensorSlot.A) {
     // filter" — dus weer de VOLLE, gecombineerde stream van beide slots
     // i.p.v. terecht niets. Nu expliciet: alleen bij een echt gekozen
     // sensorType een query doen, anders een vaste lege/`null`-flow.
+    // 28/08/2026 (editor, RONDE 153, CRITIEKE FIX) — was `sensorType = it`:
+    // zie GlucoseReadingStore.kt's kdoc bij latestReading() voor de volledige
+    // analyse. De null-guard op sensorType blijft ongewijzigd nodig.
     val latestReadingFlow = remember(readingStore, sensorType) {
-        sensorType?.let { readingStore.latestReading(sensorType = it) } ?: flowOf(null)
+        sensorType?.let { readingStore.latestReading(slot = slot) } ?: flowOf(null)
     }
     val latestReading by latestReadingFlow.collectAsState(initial = null)
 
@@ -411,8 +414,11 @@ fun CalibrationScreen(onBack: () -> Unit, slot: SensorSlot = SensorSlot.A) {
                     // gebeuren dat de dialoog hier open staat zonder gekozen
                     // sensor, zie de sensorType?.let hieronder bij Accepted,
                     // maar defensief consistent met latestReadingFlow).
-                    val recentRaw = sensorType?.let { type ->
-                        readingStore.recentReadings(hours = 1, sensorType = type).first()
+                    // 28/08/2026 (editor, RONDE 153, CRITIEKE FIX) — was
+                    // `sensorType = type`: zie GlucoseReadingStore.kt's kdoc
+                    // bij recentReadings() voor de volledige analyse.
+                    val recentRaw = sensorType?.let {
+                        readingStore.recentReadings(hours = 1, slot = slot).first()
                     }.orEmpty()
                         .filter { it.timestampMs >= since }
                         .map { it.timestampMs to it.rawSensorMgdl }
@@ -429,8 +435,11 @@ fun CalibrationScreen(onBack: () -> Unit, slot: SensorSlot = SensorSlot.A) {
                     // 'm zelf pas later expliciet aan.
                     val otherSlot = if (slot == SensorSlot.A) SensorSlot.B else SensorSlot.A
                     val otherSensorType = settings.selectedSensor(otherSlot).first()
-                    val otherRecentRaw = otherSensorType?.let { type ->
-                        readingStore.recentReadings(hours = 1, sensorType = type).first()
+                    // 28/08/2026 (editor, RONDE 153, CRITIEKE FIX) — zelfde
+                    // reden als recentRaw hierboven, nu gescoped op
+                    // [otherSlot] i.p.v. [otherSensorType].
+                    val otherRecentRaw = otherSensorType?.let {
+                        readingStore.recentReadings(hours = 1, slot = otherSlot).first()
                     }.orEmpty()
                         .filter { it.timestampMs >= since }
                         .maxByOrNull { it.timestampMs }

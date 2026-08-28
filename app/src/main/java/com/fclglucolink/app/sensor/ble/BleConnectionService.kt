@@ -28,6 +28,7 @@ import com.fclglucolink.app.sensor.SensorSlot
 import com.fclglucolink.app.sensor.SensorType
 import com.fclglucolink.app.sensor.simulator.PersistedSimulatorMode
 import com.fclglucolink.app.sensor.simulator.SimulatorControlBridge
+import com.fclglucolink.app.sensor.dexcomg6.DexcomG6TransmitterType
 import com.fclglucolink.app.sensor.simulator.readMmolValuesFromUri
 import com.fclglucolink.app.smoothing.KalmanSmoother
 import com.fclglucolink.app.ui.formatForDisplayWithUnit
@@ -448,7 +449,15 @@ class BleConnectionService : Service() {
                         val alreadyHandledForThisDevice =
                             settings.getSensorSessionStartedForDeviceAddressOnce(slot) == deviceAddress
                         if (!alreadyHandledForThisDevice) {
-                            readingStore.trimFrom(stableReading.timestampMs, sensorType)
+                            // 28/08/2026 (editor, RONDE 153, CRITIEKE FIX) —
+                            // was `trimFrom(timestampMs, sensorType)`: met
+                            // twee gelijktijdig actieve slots van HETZELFDE
+                            // sensortype (bv. CareSens Air + CareSens Air)
+                            // zou een trim op deze slot ook de nog geldige
+                            // historie van de ANDERE slot van datzelfde type
+                            // hebben weggeveegd — zie GlucoseReadingStore.kt's
+                            // kdoc bij trimFrom() voor de volledige analyse.
+                            readingStore.trimFrom(stableReading.timestampMs, slot)
                             // 09/08/2026 (editor, RONDE 64, op verzoek: "een
                             // sensor wissel icoontje op de grafiek [...] wat
                             // dan bv binnen het zelfde sensor type minder
@@ -574,7 +583,10 @@ class BleConnectionService : Service() {
                     // gekozen actieve slot is; `null` (of de ANDERE slot)
                     // betekent gewoon niet zenden, zonder dat dat de lokale
                     // opslag/UI voor deze slot raakt.
-                    readingStore.record(smoothedReading)
+                    // 28/08/2026 (editor, RONDE 153, CRITIEKE FIX) — [slot]
+                    // nu meegegeven, zie GlucoseReadingStore.kt's kdoc bij
+                    // record()/GlucoseReadingEntity.kt's kdoc bij `slot`.
+                    readingStore.record(smoothedReading, slot)
                     if (settings.getAapsActiveSlotOnce() == slot) {
                         // 20/08/2026 (editor, RONDE 115) — zie
                         // XDripBroadcaster.kt's kdoc bij sourceInfo(): AAN ->
@@ -772,8 +784,9 @@ class BleConnectionService : Service() {
     ): GlucoseReading {
         if (!settings.isSmoothingEnabled()) return reading
         val breakInDecayFactor = computeBreakInDecayFactor(reading.timestampMs, slot, sensorType)
+        val breakOutDecayFactor = computeBreakOutDecayFactor(reading.timestampMs, slot, sensorType)
         val strength = settings.getSmoothingStrengthOnce()
-        val output = smoother.smooth(reading.glucoseMgdl, reading.timestampMs, breakInDecayFactor, strength)
+        val output = smoother.smooth(reading.glucoseMgdl, reading.timestampMs, breakInDecayFactor, breakOutDecayFactor, strength)
         return reading.copy(glucoseMgdl = output.glucoseMgdl)
     }
 
@@ -810,6 +823,68 @@ class BleConnectionService : Service() {
 
         val tau = durationHours / 5.0 // zie KalmanSmoother.kt's klasse-kdoc: na "duur" nog ~0,7% over.
         return exp(-hoursSinceStart / tau).coerceIn(0.0, 1.0)
+    }
+
+    /**
+     * 24/08/2026 (editor, RONDE 125, op verzoek: "een breakout filter wat
+     * eigenlijk precies omgekeerd werkt tov de breakin" — na CareSens
+     * Air-meldingen dat sensoren de laatste dagen van hun looptijd weer
+     * instabiel worden) — spiegelbeeld van [computeBreakInDecayFactor]
+     * hierboven: in plaats van uren SINDS de start telt deze functie uren
+     * TOT een geschat EINDE van de sensor-looptijd, met dezelfde
+     * exponentiële opbouw (τ = duur/5) maar dan aflopend naar het einde toe
+     * i.p.v. aflopend vanaf het begin.
+     *
+     * De geschatte einddatum is bewust per sensortype anders bepaald, omdat
+     * er geen universeel betrouwbare bron voor "hoeveel dagen gaat deze
+     * sensor nog mee" bestaat:
+     * - CareSens Air: vaste 15 dagen na sessiestart — zelfde constante als
+     *   CareSensAirStatusScreen.kt's "End (est.)"-veld, voor consistentie
+     *   tussen wat de gebruiker ziet en wat hier gebruikt wordt.
+     * - Dexcom G6, Original-transmitter (fromTypicalSensorDays() == ORIGINAL
+     *   of nog onbekend maar wél een typicalSensorDays-waarde): gebruikt de
+     *   door de transmitter zelf gerapporteerde `typicalSensorDays` — voor
+     *   deze hardware is dat getal betrouwbaar (stock G6 rapporteert
+     *   consistent 10).
+     * - Dexcom G6, Anubis-transmitter: het transmitter-gerapporteerde getal
+     *   is voor DEZE hardware juist NIET te vertrouwen (kan tot 60 dagen
+     *   melden, zie DexcomG6TransmitterType's kdoc) — gebruikt in plaats
+     *   daarvan [AppSettings.dexcomG6ExpectedLifespanDays], een per-slot,
+     *   door de gebruiker zelf ingestelde verwachting (default 14 dagen).
+     * - Overige sensortypes (G7/ONE+, simulator): bewust nog buiten scope
+     *   dit ronde (expliciete keuze in het gesprek: "CareSens Air + G6"),
+     *   geeft 0.0 terug (geen uitloop-demping) tot dat later uitgebreid
+     *   wordt.
+     *
+     * Als het typicalSensorDays-getal voor een G6 nog helemaal niet bekend
+     * is (nog geen VersionRequest2-antwoord binnengekomen), kan er nog geen
+     * zinnige einddatum bepaald worden — geeft dan ook 0.0 terug i.p.v. te
+     * gokken.
+     */
+    private suspend fun computeBreakOutDecayFactor(nowMs: Long, slot: SensorSlot, sensorType: SensorType): Double {
+        if (!settings.isBreakOutFilterEnabledOnce()) return 0.0
+        val durationHours = settings.getBreakOutFilterDurationHoursOnce()
+        if (durationHours <= 0.0) return 0.0
+
+        val startedAtMs = settings.effectiveSensorSessionStartedAtMs(slot, sensorType)
+        val expectedLifespanDays: Double = when (sensorType) {
+            SensorType.CARESENS_AIR -> 15.0
+            SensorType.DEXCOM_G6 -> {
+                val typicalSensorDays = settings.getDexcomG6TypicalSensorDaysOnce(slot) ?: return 0.0
+                when (DexcomG6TransmitterType.fromTypicalSensorDays(typicalSensorDays)) {
+                    DexcomG6TransmitterType.ANUBIS -> settings.getDexcomG6ExpectedLifespanDaysOnce(slot).toDouble()
+                    else -> typicalSensorDays.toDouble()
+                }
+            }
+            else -> return 0.0 // RONDE 125: G7/ONE+ en simulator bewust nog buiten scope.
+        }
+        val endAtMs = startedAtMs + (expectedLifespanDays * 24.0 * 3_600_000.0).toLong()
+
+        val hoursUntilEnd = (endAtMs - nowMs) / 3_600_000.0
+        if (hoursUntilEnd <= 0.0) return 1.0 // op of voorbij het geschatte einde: veiligst volle demping aannemen.
+
+        val tau = durationHours / 5.0
+        return exp(-hoursUntilEnd / tau).coerceIn(0.0, 1.0)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
