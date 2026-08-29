@@ -30,6 +30,7 @@ import com.fclglucolink.app.data.AppSettings
 import com.fclglucolink.app.sensor.ConnectionState
 import com.fclglucolink.app.sensor.SensorSlot
 import com.fclglucolink.app.sensor.ble.ConnectionStatusBridge
+import com.fclglucolink.app.sensor.dexcomg7.DexcomG7Protocol
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -134,6 +135,13 @@ fun DexcomG7StatusScreen(
     // vandaan komen; mirror van DexcomG6StatusScreen.kt's batteryInfo-regel.
     val batteryInfo by settings.dexcomG7BatteryInfo(slot).collectAsState(initial = null)
     val firmwareInfo by settings.dexcomG7FirmwareInfo(slot).collectAsState(initial = null)
+    // 29/08/2026 (editor, RONDE 158) — zie AppSettings.kt's kdoc bij
+    // setDexcomG7SensorStatus/setDexcomG7LastRawGlucose: gevuld door
+    // DexcomG7Driver.kt's handleGlucoseResult() bij ELKE ontvangen meting,
+    // los van de hoofdscherm-/AAPS-keten.
+    val sensorStatusInfo by settings.dexcomG7SensorStatus(slot).collectAsState(initial = null)
+    val lastRawGlucose by settings.dexcomG7LastRawGlucose(slot).collectAsState(initial = null)
+    val displayUnit by settings.displayUnit.collectAsState(initial = GlucoseUnit.MMOL)
 
     val dateFormat = SimpleDateFormat("dd-MM HH:mm", Locale.getDefault())
     val statusText = dexcomG7StatusText(connectionState, lastConnectedAtMs)
@@ -155,6 +163,47 @@ fun DexcomG7StatusScreen(
     val batteryLastQueriedText = batteryInfo?.queriedAtMs?.let { dateFormat.format(Date(it)) } ?: "—"
     val voltageAText = batteryInfo?.voltageA?.let { "$it mV" } ?: "—"
     val voltageBText = batteryInfo?.voltageB?.let { "$it mV" } ?: "—"
+    // 29/08/2026 (editor, RONDE 158) — [sensorStatusInfo] toont de sensor
+    // se eigen statusbyte (bv. "SensorFailed7") zoals al die hele tijd al
+    // in het diagnose-logboek stond, nu ook zichtbaar op dit scherm.
+    val sensorStatusText = sensorStatusInfo?.status ?: "—"
+    // "Last Bg" — BEWUST ongeacht geaccepteerd/genegeerd getoond (met een
+    // duidelijk "(genegeerd)"-label als dat zo is), zie AppSettings.kt's
+    // kdoc: dit is puur informatief voor dit scherm, de waarde stroomt
+    // NOOIT door naar hoofdscherm/AAPS als ze genegeerd is — dat blijft
+    // ongewijzigd via de bestaande [_readings]-keten geregeld.
+    val lastBgText = lastRawGlucose?.let { raw ->
+        val valueText = raw.mgdl.formatForDisplayWithUnit(displayUnit)
+        val atText = dateFormat.format(Date(raw.atMs))
+        if (raw.accepted) "$valueText ($atText)" else "$valueText — genegeerd ($atText)"
+    } ?: "—"
+    val lastBgIsRejected = lastRawGlucose?.accepted == false
+
+    // 29/08/2026 (editor, RONDE 159, op verzoek — "Ik wil hier in principe
+    // alle info getoond kunnen hebben die de sensor zelf terug geeft") —
+    // "—" overal waar het veld niet in het ontvangen antwoord aanwezig was
+    // (-1/""), zelfde conventie als de rest van dit scherm.
+    val transmitterStatusText = lastRawGlucose?.transmitterStatusText?.takeIf { it.isNotBlank() } ?: "—"
+    val trendText = lastRawGlucose?.trendMgdlPerMin?.let { "%+.2f mg/dL/min".format(it) } ?: "—"
+    val predictedGlucoseText = lastRawGlucose?.predictedGlucoseMgdl?.takeIf { it >= 0 }
+        ?.let { it.toDouble().formatForDisplayWithUnit(displayUnit) } ?: "—"
+    val sequenceText = lastRawGlucose?.sequence?.takeIf { it >= 0 }?.toString() ?: "—"
+
+    val batteryStatusText = batteryInfo?.status?.takeIf { it >= 0 }
+        ?.let { DexcomG7Protocol.transmitterStatusText(it) } ?: "—"
+    val batteryResistanceText = batteryInfo?.resistance?.takeIf { it >= 0 }?.let { "$it Ω" } ?: "—"
+    val transmitterDaysText = batteryInfo?.runtimeDays?.takeIf { it >= 0 }?.toString() ?: "—"
+
+    val btFirmwareVersionText = firmwareInfo?.bluetoothFirmwareVersion?.takeIf { it.isNotBlank() } ?: "—"
+    val hardwareVersionText = firmwareInfo?.hardwareVersion?.takeIf { it > 0 }?.toString() ?: "—"
+    val otherFirmwareVersionText = firmwareInfo?.otherFirmwareVersion?.takeIf { it.isNotBlank() } ?: "—"
+    val asicText = firmwareInfo?.asic?.takeIf { it >= 0 }?.toString() ?: "—"
+    val buildVersionText = firmwareInfo?.buildVersion?.takeIf { it >= 0 }?.toString() ?: "—"
+    val versionCodeText = firmwareInfo?.versionCode?.takeIf { it >= 0 }?.toString() ?: "—"
+    val inactiveDaysText = firmwareInfo?.inactiveDays?.takeIf { it >= 0 }?.toString() ?: "—"
+    val maxRuntimeDaysText = firmwareInfo?.maxRuntimeDays?.takeIf { it >= 0 }?.toString() ?: "—"
+    val maxInactiveDaysText = firmwareInfo?.maxInactiveDays?.takeIf { it >= 0 }?.toString() ?: "—"
+    val serialText = firmwareInfo?.serial?.takeIf { it >= 0 }?.toString() ?: "—"
 
     Scaffold(
         topBar = {
@@ -208,22 +257,54 @@ fun DexcomG7StatusScreen(
                     InfoRow("Address", deviceAddress ?: "—")
                     InfoRow("Pairing code", pairingCode ?: "—")
                     InfoRow("Last connected", lastConnectedText)
-                    // RONDE 130: "Sensor status"/"Brain state"/"Transmitter
-                    // days" nog niet door DexcomG7Driver.kt uitgevraagd (die
-                    // horen niet bij dit batterij-/firmwareverzoek, zie
-                    // klasse-kdoc punt 5) — bewust WEL getoond als "—"
-                    // i.p.v. weggelaten, expliciet zo gevraagd.
-                    InfoRow("Sensor status", "—")
-                    InfoRow("Brain state", "—")
-                    // RONDE 150: deze drie komen nu WEL uit de driver, zie
+                    // 29/08/2026 (editor, RONDE 158/159) — "Sensor status"
+                    // komt uit DexcomG7Driver.kt's handleGlucoseResult() (zie
+                    // AppSettings.kt's kdoc bij setDexcomG7SensorStatus) —
+                    // toont de sensor se eigen statusbyte (bv.
+                    // "SensorFailed7"), rood zolang die geen bruikbare
+                    // meting toestaat. "Brain state" (Ronde 130) bleek bij
+                    // nazoeken GEEN sensor-eigen gegeven te zijn — puur
+                    // xDrip+'s eigen UI-label voor DEZELFDE calibratiestatus
+                    // die hier al als "Sensor status" staat (zie
+                    // `Ob1G5CollectionService.java`'s "Brain State"-regel,
+                    // gebruikt exact dezelfde `state`) — op verzoek
+                    // verwijderd i.p.v. als dubbele "—"-rij te laten staan.
+                    InfoRow(
+                        "Sensor status",
+                        sensorStatusText,
+                        valueColor = if (lastRawGlucose?.accepted == false) MaterialTheme.colorScheme.error else null
+                    )
+                    InfoRow(
+                        "Last Bg",
+                        lastBgText,
+                        valueColor = if (lastBgIsRejected) MaterialTheme.colorScheme.error else null
+                    )
+                    InfoRow("Trend", trendText)
+                    InfoRow("Predicted Bg", predictedGlucoseText)
+                    InfoRow("Transmitter status", transmitterStatusText)
+                    InfoRow("Sequence", sequenceText)
+                    // RONDE 150: deze drie komen uit de driver, zie
                     // DexcomG7Driver.kt's queryBatteryIfStale()/
                     // queryFirmwareIfStale() en klasse-kdoc punt 5 voor het
                     // vertrouwensniveau (architectuur-bewijs uit xDrip+'s
                     // gedeelde broncode, nog niet HCI-bevestigd tegen een
-                    // echte G7).
+                    // echte G7). RONDE 159: de rest van wat deze twee
+                    // antwoorden al meegaven, nu ook zichtbaar.
                     InfoRow("Firmware version", firmwareVersionText)
+                    InfoRow("BT firmware version", btFirmwareVersionText)
+                    InfoRow("Hardware version", hardwareVersionText)
+                    InfoRow("Other firmware version", otherFirmwareVersionText)
+                    InfoRow("ASIC", asicText)
+                    InfoRow("Build version", buildVersionText)
+                    InfoRow("Version code", versionCodeText)
+                    InfoRow("Inactive days", inactiveDaysText)
+                    InfoRow("Max runtime days", maxRuntimeDaysText)
+                    InfoRow("Max inactive days", maxInactiveDaysText)
+                    InfoRow("Serial", serialText)
                     InfoRow("Battery last queried", batteryLastQueriedText)
-                    InfoRow("Transmitter days", "—")
+                    InfoRow("Battery status", batteryStatusText)
+                    InfoRow("Battery resistance", batteryResistanceText)
+                    InfoRow("Transmitter days", transmitterDaysText)
                     InfoRow("Voltage A", voltageAText)
                     InfoRow("Voltage B", voltageBText)
                 }

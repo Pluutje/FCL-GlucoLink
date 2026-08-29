@@ -1363,8 +1363,14 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
             val battery = withTimeoutOrNull(BATTERY_TIMEOUT_MS) { deferred.await() }
             pendingBatteryDeferred = null
             if (battery != null) {
-                DiagnosticFileLogger.log("DexcomG7: battery voltageA=${battery.voltageA} voltageB=${battery.voltageB} temp=${battery.temperatureC}")
-                settings.setDexcomG7BatteryInfo(slot, battery.voltageA, battery.voltageB, battery.temperatureC, System.currentTimeMillis())
+                DiagnosticFileLogger.log("DexcomG7: battery voltageA=${battery.voltageA} voltageB=${battery.voltageB} temp=${battery.temperatureC} status=${battery.status} resistance=${battery.resistance} runtimeDays=${battery.runtimeDays}")
+                // 29/08/2026 (editor, RONDE 159) — status/resistance/
+                // runtimeDays waren al langer beschikbaar in BatteryInfoRx,
+                // nu ook opgeslagen — zie AppSettings.kt's kdoc.
+                settings.setDexcomG7BatteryInfo(
+                    slot, battery.voltageA, battery.voltageB, battery.temperatureC, System.currentTimeMillis(),
+                    battery.status, battery.resistance, battery.runtimeDays
+                )
             } else {
                 DiagnosticFileLogger.log("DexcomG7: battery query timed out of niet ondersteund (pas over ${BATTERY_QUERY_INTERVAL_MS / 60_000}min weer geprobeerd)")
             }
@@ -1396,9 +1402,18 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
                 val firmware = withTimeoutOrNull(FIRMWARE_TIMEOUT_MS) { deferred.await() }
                 pendingFirmwareDeferred = null
                 if (firmware != null) {
-                    DiagnosticFileLogger.log("DexcomG7: firmware=${firmware.firmwareVersion} bt=${firmware.bluetoothFirmwareVersion} hw=${firmware.hardwareVersion} (versie=$version)")
+                    DiagnosticFileLogger.log(
+                        "DexcomG7: firmware=${firmware.firmwareVersion} bt=${firmware.bluetoothFirmwareVersion} hw=${firmware.hardwareVersion} " +
+                            "other=${firmware.otherFirmwareVersion} asic=${firmware.asic} build=${firmware.buildVersion} versionCode=${firmware.versionCode} " +
+                            "inactiveDays=${firmware.inactiveDays} maxRuntimeDays=${firmware.maxRuntimeDays} maxInactiveDays=${firmware.maxInactiveDays} serial=${firmware.serial} (versie=$version)"
+                    )
+                    // 29/08/2026 (editor, RONDE 159) — alle velden die
+                    // FirmwareVersionRx meegeeft nu doorgegeven, niet meer
+                    // alleen de eerste drie — zie AppSettings.kt's kdoc.
                     settings.setDexcomG7FirmwareInfo(
-                        slot, firmware.firmwareVersion, firmware.bluetoothFirmwareVersion, firmware.hardwareVersion, System.currentTimeMillis()
+                        slot, firmware.firmwareVersion, firmware.bluetoothFirmwareVersion, firmware.hardwareVersion, System.currentTimeMillis(),
+                        firmware.otherFirmwareVersion, firmware.asic, firmware.buildVersion, firmware.versionCode,
+                        firmware.inactiveDays, firmware.maxRuntimeDays, firmware.maxInactiveDays, firmware.serial
                     )
                     return
                 }
@@ -1567,6 +1582,30 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
             val calibrationState = DexcomG6CalibrationState.fromRaw(rx.calibrationStateRaw)
             val glucoseUsable = (calibrationState.usableGlucose() || calibrationState.insufficientCalibration()) &&
                 !rx.glucoseIsDisplayOnly
+
+            // 29/08/2026 (editor, RONDE 158, op verzoek — "Deze sensor geeft
+            // een error het zou goed zijn als die bij sensor status getoond
+            // wordt" + "ik dacht dat er wel een Bg waarde uit het Bg slot in
+            // de sensor wordt doorgegeven het zou fijn zijn die ook op het
+            // status overzicht te tonen [...] maar als het een foutieve
+            // waarde is niet door te zetten naar het hoofdscherm en ook niet
+            // naar AAPS") — zie AppSettings.kt's kdoc bij
+            // setDexcomG7SensorStatus/setDexcomG7LastRawGlucose: BEWUST een
+            // aparte opslag, los van [_readings.emit] hieronder — dit
+            // schrijft ELKE ontvangen meting weg (geaccepteerd of genegeerd),
+            // puur voor het statusscherm, en raakt de daadwerkelijke
+            // hoofdscherm-/AAPS-keten niet aan.
+            scope.launch {
+                settings.setDexcomG7SensorStatus(slot, calibrationState.toString(), nowMs)
+                // 29/08/2026 (editor, RONDE 159) — trend/predictedGlucose/
+                // transmitterStatus/sequence waren al beschikbaar in [rx],
+                // nu ook meegegeven — zie AppSettings.kt's kdoc.
+                settings.setDexcomG7LastRawGlucose(
+                    slot, rx.glucoseMgdl.toDouble(), nowMs, glucoseUsable,
+                    rx.trendMgdlPerMin, rx.predictedGlucoseMgdl,
+                    DexcomG7Protocol.transmitterStatusText(rx.statusRaw), rx.sequence
+                )
+            }
 
             _connectionState.value = ConnectionState.Connected(gatt.device.address, gatt.device.name)
             if (glucoseUsable) {

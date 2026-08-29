@@ -1,1 +1,5 @@
-generate_error_reason: NO_VALID_GIT_FOUND
+repositories {
+  system: GIT
+  local_root_path: "$PROJECT_DIR"
+  revision: "073258bf8eacc8c50cdb0f59245d753185a9dc00"
+}

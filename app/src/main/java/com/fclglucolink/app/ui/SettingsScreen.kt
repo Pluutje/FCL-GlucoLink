@@ -85,6 +85,9 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit) {
     val calibrationEnabled by settings.calibrationEnabled.collectAsState(initial = false)
     // 06/08/2026 (editor, RONDE 49) — zie smoothing/KalmanSmoother.kt's kdoc.
     val smoothingEnabled by settings.smoothingEnabled.collectAsState(initial = false)
+    // 29/08/2026 (editor, RONDE 160) — zie AppSettings.kt's
+    // PREDICTION_ENABLED-kdoc en de nieuwe "Bg prediction"-kaart hieronder.
+    val predictionEnabled by settings.predictionEnabled.collectAsState(initial = false)
     // 18/08/2026 (editor, RONDE 114) — zie SmoothingStrength's kdoc in
     // KalmanSmoother.kt.
     val smoothingStrength by settings.smoothingStrength.collectAsState(initial = SmoothingStrength.MEDIUM)
@@ -715,6 +718,49 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit) {
                             enabled = smoothingEnabled,
                             onCheckedChange = { enabled ->
                                 scope.launch { settings.setShowFilteredPipelineOnMainScreen(enabled) }
+                            }
+                        )
+                    }
+                }
+            }
+
+            // 29/08/2026 (editor, RONDE 160, op verzoek: "een voorspelling
+            // van de Bg wil zien waar die het komende uur naar toe kan
+            // gaan [...] Aan/uit bij de settings is een goede aanvulling")
+            // — zelfde Card-/Switch-opzet als de Smoothing-schakelaar
+            // hierboven. Geldt voor de grafiek op ELK per-slot-tabblad EN de
+            // Combi-tab (zie GlucoseChart.kt/CombiScreen.kt) — één globale
+            // instelling, geen per-slot-keuze, want de gebruiker vroeg dit
+            // expliciet "voor de beide slots" tegelijk.
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Bg prediction", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Shows a 1-hour forecast on the glucose graph: a vertical line at " +
+                            "the last reading, and two diverging bounds showing the likely " +
+                            "range the Bg could move into. Based only on the recent trend " +
+                            "and its volatility (no IOB/meal data is available), so treat it " +
+                            "as a rough indication, not a precise prediction.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Show Bg prediction", style = MaterialTheme.typography.bodyMedium)
+                        Switch(
+                            checked = predictionEnabled,
+                            onCheckedChange = { enabled ->
+                                scope.launch { settings.setPredictionEnabled(enabled) }
                             }
                         )
                     }

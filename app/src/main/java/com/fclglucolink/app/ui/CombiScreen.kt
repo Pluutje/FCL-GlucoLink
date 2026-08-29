@@ -404,6 +404,9 @@ private fun CombiTabContent(
     // 13/08/2026 (editor, RONDE 104, Fase 1) — zie ui/Units.kt's
     // [GlucoseUnit]-kdoc.
     val displayUnit by settings.displayUnit.collectAsState(initial = GlucoseUnit.MMOL)
+    // 29/08/2026 (editor, RONDE 160) — zie prediction/GlucosePrediction.kt en
+    // AppSettings.kt's PREDICTION_ENABLED-kdoc.
+    val predictionEnabled by settings.predictionEnabled.collectAsState(initial = false)
 
     // 11/08/2026 (editor, RONDE 90, op verzoek: "de ingevoerde vingerprik
     // voor de calibraties ook zichtbaar te maken in de combi curve") —
@@ -536,6 +539,7 @@ private fun CombiTabContent(
                 colorB = colorB,
                 fingerstickPoints = fingerstickPoints,
                 unit = displayUnit,
+                predictionEnabled = predictionEnabled,
                 modifier = Modifier.fillMaxWidth()
             )
         }

@@ -80,6 +80,17 @@ class AppSettings(private val context: Context) {
         val CALIBRATION_ENABLED = booleanPreferencesKey("calibration_enabled")
         val SMOOTHING_ENABLED = booleanPreferencesKey("smoothing_enabled")
 
+        // 29/08/2026 (editor, RONDE 160, op verzoek: "Aan/uit bij de settings
+        // is een goede aanvulling" — voor de nieuwe 1-uur-Bg-voorspellingsband
+        // op de grafiek, zie prediction/GlucosePrediction.kt) — app-breed
+        // (geen per-slot), net als SMOOTHING_ENABLED/CALIBRATION_ENABLED
+        // hierboven: dezelfde toggle geldt voor GlucoseChart (per-slot) EN
+        // DualGlucoseChart (Combi-tab). Default UIT — zelfde conventie als
+        // elke andere gedragswijzigende toggle in dit bestand (smoothing/
+        // calibratie/break-in-filter): een bestaande gebruiker die de knop
+        // niet aanraakt, ziet niets veranderen.
+        val PREDICTION_ENABLED = booleanPreferencesKey("prediction_enabled")
+
         // 18/08/2026 (editor, RONDE 114, op verzoek: "een algemene filtering
         // sterkte 3 keuze schakelaar [...] onder de enable smoothing die dan
         // indien enable uitgeschakeld ook grijs wordt") — zie
@@ -396,6 +407,15 @@ class AppSettings(private val context: Context) {
 
     suspend fun isSmoothingEnabled(): Boolean =
         context.dataStore.data.first()[Keys.SMOOTHING_ENABLED] ?: false
+
+    /** RONDE 160 — zie [Keys.PREDICTION_ENABLED]'s kdoc. */
+    val predictionEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.PREDICTION_ENABLED] ?: false
+    }
+
+    suspend fun setPredictionEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[Keys.PREDICTION_ENABLED] = enabled }
+    }
 
     /** RONDE 114 — zie [Keys.SMOOTHING_STRENGTH]'s kdoc en
      *  [SmoothingStrength]'s kdoc in KalmanSmoother.kt. Default MEDIUM
@@ -1109,23 +1129,46 @@ class AppSettings(private val context: Context) {
      *  DexcomG7Protocol.kt's kdoc bij `buildBatteryInfoRequest`/
      *  `parseBatteryInfo` voor de protocol-herkomst en DexcomG7Driver.kt
      *  voor de aanroep/cache-gating. */
-    suspend fun setDexcomG7BatteryInfo(slot: SensorSlot, voltageA: Int, voltageB: Int, temperatureC: Int, atMs: Long) {
+    /**
+     * 29/08/2026 (editor, RONDE 159, op verzoek — "Ik wil hier in principe
+     * alle info getoond kunnen hebben die de sensor zelf terug geeft") —
+     * [status]/[resistance]/[runtimeDays] waren al langer beschikbaar in
+     * DexcomG7Protocol.BatteryInfoRx (zie [parseBatteryInfo]) maar werden
+     * hier nooit opgeslagen — alleen voltageA/voltageB/temperatureC. -1
+     * betekent "niet aanwezig in dit antwoord" (10-byte "rev2"-lay-out, zie
+     * die kdoc), niet "genegeerd".
+     */
+    suspend fun setDexcomG7BatteryInfo(
+        slot: SensorSlot, voltageA: Int, voltageB: Int, temperatureC: Int, atMs: Long,
+        status: Int = -1, resistance: Int = -1, runtimeDays: Int = -1
+    ) {
         context.dataStore.edit { prefs ->
             prefs[slotInt("dexcom_g7_voltage_a", slot)] = voltageA
             prefs[slotInt("dexcom_g7_voltage_b", slot)] = voltageB
             prefs[slotInt("dexcom_g7_temperature_c", slot)] = temperatureC
             prefs[slotLong("dexcom_g7_last_battery_query_at_ms", slot)] = atMs
+            prefs[slotInt("dexcom_g7_battery_status", slot)] = status
+            prefs[slotInt("dexcom_g7_battery_resistance", slot)] = resistance
+            prefs[slotInt("dexcom_g7_battery_runtime_days", slot)] = runtimeDays
         }
     }
 
-    data class DexcomG7BatteryInfo(val voltageA: Int, val voltageB: Int, val temperatureC: Int, val queriedAtMs: Long)
+    data class DexcomG7BatteryInfo(
+        val voltageA: Int, val voltageB: Int, val temperatureC: Int, val queriedAtMs: Long,
+        val status: Int = -1, val resistance: Int = -1, val runtimeDays: Int = -1
+    )
 
     fun dexcomG7BatteryInfo(slot: SensorSlot): Flow<DexcomG7BatteryInfo?> = context.dataStore.data.map { prefs ->
         val a = prefs[slotInt("dexcom_g7_voltage_a", slot)]
         val b = prefs[slotInt("dexcom_g7_voltage_b", slot)]
         val t = prefs[slotInt("dexcom_g7_temperature_c", slot)]
         val at = prefs[slotLong("dexcom_g7_last_battery_query_at_ms", slot)]
-        if (a != null && b != null && t != null && at != null) DexcomG7BatteryInfo(a, b, t, at) else null
+        val status = prefs[slotInt("dexcom_g7_battery_status", slot)] ?: -1
+        val resistance = prefs[slotInt("dexcom_g7_battery_resistance", slot)] ?: -1
+        val runtimeDays = prefs[slotInt("dexcom_g7_battery_runtime_days", slot)] ?: -1
+        if (a != null && b != null && t != null && at != null) {
+            DexcomG7BatteryInfo(a, b, t, at, status, resistance, runtimeDays)
+        } else null
     }
 
     suspend fun getDexcomG7LastBatteryQueryAtMsOnce(slot: SensorSlot): Long? =
@@ -1192,18 +1235,46 @@ class AppSettings(private val context: Context) {
      *  firmwareversie verandert niet tussen verbindingen) — vandaar dezelfde
      *  "laatst-opgevraagd"-staleness-aanpak als batterij/versie2 hierboven,
      *  zie DexcomG7Driver.kt. */
+    /**
+     * 29/08/2026 (editor, RONDE 159, op verzoek — "Ik wil hier in principe
+     * alle info getoond kunnen hebben die de sensor zelf terug geeft") —
+     * zeven nieuwe optionele velden, mirror van
+     * DexcomG7Protocol.FirmwareVersionRx's RONDE-159-uitbreiding: dekt zowel
+     * de 0x21-antwoordvariant (otherFirmwareVersion/asic) als de 0x4A/0x4B-
+     * variant (buildVersion/versionCode/inactiveDays/maxRuntimeDays/
+     * maxInactiveDays/serial) — welke velden daadwerkelijk gevuld zijn hangt
+     * af van welke variant deze specifieke sensor accepteert (zie
+     * queryFirmwareIfStale()'s prioriteitsvolgorde), -1/"" betekent "niet in
+     * dit antwoord aanwezig".
+     */
     suspend fun setDexcomG7FirmwareInfo(
         slot: SensorSlot,
         firmwareVersion: String,
         bluetoothFirmwareVersion: String,
         hardwareVersion: Int,
-        atMs: Long
+        atMs: Long,
+        otherFirmwareVersion: String = "",
+        asic: Int = -1,
+        buildVersion: Long = -1,
+        versionCode: Long = -1,
+        inactiveDays: Int = -1,
+        maxRuntimeDays: Int = -1,
+        maxInactiveDays: Int = -1,
+        serial: Long = -1
     ) {
         context.dataStore.edit { prefs ->
             prefs[slotString("dexcom_g7_firmware_version", slot)] = firmwareVersion
             prefs[slotString("dexcom_g7_bt_firmware_version", slot)] = bluetoothFirmwareVersion
             prefs[slotInt("dexcom_g7_hardware_version", slot)] = hardwareVersion
             prefs[slotLong("dexcom_g7_last_firmware_query_at_ms", slot)] = atMs
+            prefs[slotString("dexcom_g7_other_firmware_version", slot)] = otherFirmwareVersion
+            prefs[slotInt("dexcom_g7_asic", slot)] = asic
+            prefs[slotLong("dexcom_g7_build_version", slot)] = buildVersion
+            prefs[slotLong("dexcom_g7_version_code", slot)] = versionCode
+            prefs[slotInt("dexcom_g7_inactive_days", slot)] = inactiveDays
+            prefs[slotInt("dexcom_g7_max_runtime_days", slot)] = maxRuntimeDays
+            prefs[slotInt("dexcom_g7_max_inactive_days", slot)] = maxInactiveDays
+            prefs[slotLong("dexcom_g7_serial", slot)] = serial
         }
     }
 
@@ -1211,7 +1282,15 @@ class AppSettings(private val context: Context) {
         val firmwareVersion: String,
         val bluetoothFirmwareVersion: String,
         val hardwareVersion: Int,
-        val queriedAtMs: Long
+        val queriedAtMs: Long,
+        val otherFirmwareVersion: String = "",
+        val asic: Int = -1,
+        val buildVersion: Long = -1,
+        val versionCode: Long = -1,
+        val inactiveDays: Int = -1,
+        val maxRuntimeDays: Int = -1,
+        val maxInactiveDays: Int = -1,
+        val serial: Long = -1
     )
 
     fun dexcomG7FirmwareInfo(slot: SensorSlot): Flow<DexcomG7FirmwareInfo?> = context.dataStore.data.map { prefs ->
@@ -1219,11 +1298,117 @@ class AppSettings(private val context: Context) {
         val bt = prefs[slotString("dexcom_g7_bt_firmware_version", slot)]
         val hw = prefs[slotInt("dexcom_g7_hardware_version", slot)]
         val at = prefs[slotLong("dexcom_g7_last_firmware_query_at_ms", slot)]
-        if (fw != null && bt != null && hw != null && at != null) DexcomG7FirmwareInfo(fw, bt, hw, at) else null
+        if (fw != null && bt != null && hw != null && at != null) {
+            DexcomG7FirmwareInfo(
+                firmwareVersion = fw,
+                bluetoothFirmwareVersion = bt,
+                hardwareVersion = hw,
+                queriedAtMs = at,
+                otherFirmwareVersion = prefs[slotString("dexcom_g7_other_firmware_version", slot)] ?: "",
+                asic = prefs[slotInt("dexcom_g7_asic", slot)] ?: -1,
+                buildVersion = prefs[slotLong("dexcom_g7_build_version", slot)] ?: -1,
+                versionCode = prefs[slotLong("dexcom_g7_version_code", slot)] ?: -1,
+                inactiveDays = prefs[slotInt("dexcom_g7_inactive_days", slot)] ?: -1,
+                maxRuntimeDays = prefs[slotInt("dexcom_g7_max_runtime_days", slot)] ?: -1,
+                maxInactiveDays = prefs[slotInt("dexcom_g7_max_inactive_days", slot)] ?: -1,
+                serial = prefs[slotLong("dexcom_g7_serial", slot)] ?: -1
+            )
+        } else null
     }
 
     suspend fun getDexcomG7LastFirmwareQueryAtMsOnce(slot: SensorSlot): Long? =
         context.dataStore.data.first()[slotLong("dexcom_g7_last_firmware_query_at_ms", slot)]
+
+    /**
+     * 29/08/2026 (editor, RONDE 158, op verzoek — "Deze sensor geeft een
+     * error het zou goed zijn als die bij sensor status getoond wordt") —
+     * DexcomG7Driver.kt's `handleGlucoseResult()` berekende al ELKE cyclus
+     * een `DexcomG6CalibrationState` (hergebruikt van G6, zie die klasse se
+     * kdoc) uit de sensor se eigen statusbyte — precies de "SensorFailed7"
+     * die in het diagnose-logboek al zichtbaar was — maar schreef die tot nu
+     * toe nergens weg, alleen naar het logbestand. Simpele opslag, mirror
+     * van [setDexcomG7FirmwareInfo] hierboven: één string + tijdstip, ELKE
+     * cyclus overschreven (geen staleness-cache nodig, dit is per-cyclus-
+     * informatie, geen eigenschap die stabiel blijft zoals firmware).
+     */
+    suspend fun setDexcomG7SensorStatus(slot: SensorSlot, status: String, atMs: Long) {
+        context.dataStore.edit { prefs ->
+            prefs[slotString("dexcom_g7_sensor_status", slot)] = status
+            prefs[slotLong("dexcom_g7_sensor_status_at_ms", slot)] = atMs
+        }
+    }
+
+    data class DexcomG7SensorStatus(val status: String, val atMs: Long)
+
+    fun dexcomG7SensorStatus(slot: SensorSlot): Flow<DexcomG7SensorStatus?> = context.dataStore.data.map { prefs ->
+        val status = prefs[slotString("dexcom_g7_sensor_status", slot)]
+        val at = prefs[slotLong("dexcom_g7_sensor_status_at_ms", slot)]
+        if (status != null && at != null) DexcomG7SensorStatus(status, at) else null
+    }
+
+    /**
+     * 29/08/2026 (editor, RONDE 158, op verzoek — "ik dacht dat er wel een
+     * Bg waarde uit het Bg slot in de sensor wordt doorgegeven het zou fijn
+     * zijn die ook op het status overzicht te tonen [...] maar als het een
+     * foutieve waarde is niet door te zetten naar het hoofdscherm en ook
+     * niet naar AAPS") — BEWUST een aparte opslagplek, LOS van de normale
+     * [GlucoseReadingStore]/AAPS-broadcast-keten: `handleGlucoseResult()`
+     * schrijft dit voor ELKE ontvangen meting (geaccepteerd of genegeerd,
+     * zie [accepted]), terwijl `_readings.emit(...)` — de daadwerkelijke
+     * weg naar hoofdscherm/grafiek/AAPS — ONVERANDERD alleen gebeurt als
+     * de meting al bruikbaar was bevonden. Dit veld is dus puur diagnostisch/
+     * informatief voor dit statusscherm, en kan NOOIT een foutieve waarde
+     * ergens anders laten doorsijpelen.
+     */
+    /**
+     * 29/08/2026 (editor, RONDE 159, op verzoek — "Ik wil hier in principe
+     * alle info getoond kunnen hebben die de sensor zelf terug geeft") —
+     * vier nieuwe velden, allemaal al aanwezig in
+     * DexcomG7Protocol.GlucoseRx maar tot deze ronde nergens opgeslagen:
+     * [trendMgdlPerMin] (null = "ongeldig/onbekend", zie die klasse se
+     * kdoc), [predictedGlucoseMgdl], [transmitterStatusText] (via
+     * [DexcomG7Protocol.transmitterStatusText], dezelfde statusbyte-
+     * conventie als batterij/firmware) en [sequence] (de transmitter se
+     * eigen oplopende measurement-teller, puur diagnostisch).
+     */
+    suspend fun setDexcomG7LastRawGlucose(
+        slot: SensorSlot, mgdl: Double, atMs: Long, accepted: Boolean,
+        trendMgdlPerMin: Double? = null, predictedGlucoseMgdl: Int = -1,
+        transmitterStatusText: String = "", sequence: Int = -1
+    ) {
+        context.dataStore.edit { prefs ->
+            prefs[slotString("dexcom_g7_last_raw_glucose_mgdl", slot)] = mgdl.toString()
+            prefs[slotLong("dexcom_g7_last_raw_glucose_at_ms", slot)] = atMs
+            prefs[booleanPreferencesKey("dexcom_g7_last_raw_glucose_accepted_${slot.name}")] = accepted
+            prefs[slotString("dexcom_g7_last_raw_glucose_trend", slot)] = trendMgdlPerMin?.toString() ?: ""
+            prefs[slotInt("dexcom_g7_last_raw_glucose_predicted", slot)] = predictedGlucoseMgdl
+            prefs[slotString("dexcom_g7_last_raw_glucose_status", slot)] = transmitterStatusText
+            prefs[slotInt("dexcom_g7_last_raw_glucose_sequence", slot)] = sequence
+        }
+    }
+
+    data class DexcomG7LastRawGlucose(
+        val mgdl: Double, val atMs: Long, val accepted: Boolean,
+        val trendMgdlPerMin: Double? = null, val predictedGlucoseMgdl: Int = -1,
+        val transmitterStatusText: String = "", val sequence: Int = -1
+    )
+
+    fun dexcomG7LastRawGlucose(slot: SensorSlot): Flow<DexcomG7LastRawGlucose?> = context.dataStore.data.map { prefs ->
+        val mgdl = prefs[slotString("dexcom_g7_last_raw_glucose_mgdl", slot)]?.toDoubleOrNull()
+        val at = prefs[slotLong("dexcom_g7_last_raw_glucose_at_ms", slot)]
+        val accepted = prefs[booleanPreferencesKey("dexcom_g7_last_raw_glucose_accepted_${slot.name}")]
+        if (mgdl != null && at != null && accepted != null) {
+            DexcomG7LastRawGlucose(
+                mgdl = mgdl,
+                atMs = at,
+                accepted = accepted,
+                trendMgdlPerMin = prefs[slotString("dexcom_g7_last_raw_glucose_trend", slot)]?.toDoubleOrNull(),
+                predictedGlucoseMgdl = prefs[slotInt("dexcom_g7_last_raw_glucose_predicted", slot)] ?: -1,
+                transmitterStatusText = prefs[slotString("dexcom_g7_last_raw_glucose_status", slot)] ?: "",
+                sequence = prefs[slotInt("dexcom_g7_last_raw_glucose_sequence", slot)] ?: -1
+            )
+        } else null
+    }
 
     // ============================================================
     // Kalibratie-/sessie-bookkeeping — per slot (was device-adres-gated,

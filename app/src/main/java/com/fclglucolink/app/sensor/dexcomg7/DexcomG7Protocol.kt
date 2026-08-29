@@ -258,6 +258,24 @@ object DexcomG7Protocol {
         val trendMgdlPerMin: Double? get() = if (trendRaw != 127) trendRaw / 10.0 else null
     }
 
+    /**
+     * 29/08/2026 (editor, RONDE 159, op verzoek — "Ik wil hier in principe
+     * alle info getoond kunnen hebben die de sensor zelf terug geeft") —
+     * letterlijke poort van xDrip+'s `TransmitterStatus.getBatteryLevel()`
+     * (`g5model/TransmitterStatus.java`): een kleine, vaste 4-waarden-
+     * mapping van [GlucoseRx.statusRaw]/[BatteryInfoRx.status]/
+     * [FirmwareVersionRx.status] (dezelfde statusbyte-conventie, hergebruikt
+     * over alle drie de Control-antwoorden) naar een leesbare tekst. Bewust
+     * GEEN volledige enum-klasse zoals xDrip — dit ene tekstlabel is alles
+     * wat het statusscherm ervan nodig heeft.
+     */
+    fun transmitterStatusText(statusRaw: Int): String = when {
+        statusRaw > 0x81 -> "Bricked"
+        statusRaw == 0x81 -> "Low"
+        statusRaw == 0x00 -> "OK"
+        else -> "Unknown ($statusRaw)"
+    }
+
     fun parseGlucose(packet: ByteArray): GlucoseRx? {
         if (packet.size < 19) return null
         val buffer = ByteBuffer.wrap(packet).order(ByteOrder.LITTLE_ENDIAN)
@@ -420,7 +438,20 @@ object DexcomG7Protocol {
         val bluetoothFirmwareVersion: String,
         val hardwareVersion: Int,
         val otherFirmwareVersion: String,
-        val asic: Int
+        val asic: Int,
+        // 29/08/2026 (editor, RONDE 159) — extra velden die alleen de
+        // 0x4A/0x4B-antwoordvariant (vraag-variant 1, zie
+        // [parseFirmwareVersion1]) meegeeft — xDrip+'s eigen
+        // `VersionRequest1RxMessage` heeft geen bluetoothFirmwareVersion/
+        // hardwareVersion/otherFirmwareVersion/asic, maar wél deze. Default
+        // op "leeg"/-1 zodat de bestaande 0x21-parser hierboven ongewijzigd
+        // kan blijven zonder deze velden zelf te hoeven vullen.
+        val buildVersion: Long = -1,
+        val versionCode: Long = -1,
+        val inactiveDays: Int = -1,
+        val maxRuntimeDays: Int = -1,
+        val maxInactiveDays: Int = -1,
+        val serial: Long = -1
     )
 
     /** Leest [length] bytes vanaf de huidige positie en plakt ze als
@@ -484,6 +515,16 @@ object DexcomG7Protocol {
      * misleidende schijn-precisie geven voor data die nergens gebruikt
      * wordt.
      */
+    /**
+     * 29/08/2026 (editor, RONDE 159, op verzoek — "Ik wil hier in principe
+     * alle info getoond kunnen hebben die de sensor zelf terug geeft") —
+     * vult nu ook de rest van xDrip+'s `VersionRequest1RxMessage`-velden,
+     * i.p.v. alleen [FirmwareVersionRx.firmwareVersion] zoals Ronde 157 deed.
+     * De twee antwoord-opcodes hebben ECHT verschillende lay-outs ná het
+     * gedeelde status+firmwareVersion-stuk (zie xDrip+'s Java-bron,
+     * rechtstreeks overgenomen): 0x4B geeft build/inactive/version/max-
+     * runtime/max-inactive, de 0x4A-echo geeft build/version/serial.
+     */
     fun parseFirmwareVersion1(packet: ByteArray): FirmwareVersionRx? {
         if (packet.size < 18) return null
         val opcode = packet[0]
@@ -492,13 +533,43 @@ object DexcomG7Protocol {
         buf.position(1)
         val status = buf.get().toInt() and 0xff
         val firmwareVersion = dottedStringFromData(buf, 4)
-        return FirmwareVersionRx(
-            status = status,
-            firmwareVersion = firmwareVersion,
-            bluetoothFirmwareVersion = "",
-            hardwareVersion = 0,
-            otherFirmwareVersion = "",
-            asic = 0
-        )
+        return if (opcode == 0x4B.toByte()) {
+            val buildVersion = buf.int.toLong() and 0xffffffffL
+            val inactiveDays = buf.short.toInt() and 0xffff
+            val versionCode = (buf.get().toInt() and 0xff).toLong()
+            val maxRuntimeDays = buf.short.toInt() and 0xffff
+            val maxInactiveDays = buf.short.toInt() and 0xffff
+            FirmwareVersionRx(
+                status = status,
+                firmwareVersion = firmwareVersion,
+                bluetoothFirmwareVersion = "",
+                hardwareVersion = 0,
+                otherFirmwareVersion = "",
+                asic = 0,
+                buildVersion = buildVersion,
+                versionCode = versionCode,
+                inactiveDays = inactiveDays,
+                maxRuntimeDays = maxRuntimeDays,
+                maxInactiveDays = maxInactiveDays
+            )
+        } else {
+            val buildVersion = buf.int.toLong() and 0xffffffffL
+            val versionCode = buf.int.toLong() and 0xffffffffL
+            val serialBytes = ByteArray(6)
+            buf.get(serialBytes)
+            var serial = 0L
+            for (i in 5 downTo 0) serial = (serial shl 8) or (serialBytes[i].toLong() and 0xff)
+            FirmwareVersionRx(
+                status = status,
+                firmwareVersion = firmwareVersion,
+                bluetoothFirmwareVersion = "",
+                hardwareVersion = 0,
+                otherFirmwareVersion = "",
+                asic = 0,
+                buildVersion = buildVersion,
+                versionCode = versionCode,
+                serial = serial
+            )
+        }
     }
 }

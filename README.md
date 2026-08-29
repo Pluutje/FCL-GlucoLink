@@ -9684,4 +9684,279 @@ Gewijzigd: `sensor/dexcomg7/DexcomG7Protocol.kt`,
 
 versionCode 171, versionName "0.9.72-g7-firmware-opcode-fix".
 
+## Ronde 158 (29/08/2026) — "Sensor status" en "Last Bg" op het G7-statusscherm
+
+**Aanleiding.** Na de firmware-fix (Ronde 157) meldde de gebruiker dat
+"Sensor status"/"Brain state" nog steeds leeg blijven, met de wens dat de
+bekende sensor-foutstatus (bv. "SensorFailed7") daar zichtbaar wordt.
+Daarnaast: de laatst ontvangen Bg-waarde uit de sensor tonen op het
+statusoverzicht, maar expliciet NIET doorzetten naar hoofdscherm/AAPS als
+die foutief is.
+
+**Diagnose.** `DexcomG7Driver.kt`'s `handleGlucoseResult()` berekende al
+élke cyclus een `DexcomG6CalibrationState` (hergebruikt van G6) uit de
+sensor se eigen statusbyte — exact de "SensorFailed7" die al die tijd al in
+het diagnose-logboek stond — maar schreef die nergens weg buiten het
+logbestand. "Sensor status"/"Brain state" op het statusscherm waren sinds
+Ronde 130 bewuste "—"-placeholders, nooit gevuld.
+
+**Wijziging.**
+
+- `data/AppSettings.kt`: twee nieuwe, per-slot opgeslagen velden —
+  `setDexcomG7SensorStatus()`/`dexcomG7SensorStatus()` (de
+  calibratiestatus-string + tijdstip, ELKE cyclus overschreven) en
+  `setDexcomG7LastRawGlucose()`/`dexcomG7LastRawGlucose()` (de ruwe
+  Bg-waarde + tijdstip + geaccepteerd-vlag). Beide bewust LOS van de
+  bestaande `GlucoseReadingStore`/AAPS-broadcast-keten.
+- `sensor/dexcomg7/DexcomG7Driver.kt`: `handleGlucoseResult()` schrijft
+  deze twee velden nu weg bij ELKE ontvangen meting (geaccepteerd of
+  genegeerd) — de bestaande `_readings.emit(...)`-aanroep (de daadwerkelijke
+  weg naar hoofdscherm/grafiek/AAPS) blijft ongewijzigd alléén gebeuren bij
+  een bruikbare meting.
+- `ui/DexcomG7StatusScreen.kt`: "Sensor status" toont nu de echte
+  calibratiestatus (rood als de laatste meting genegeerd werd); nieuwe
+  "Last Bg"-rij toont de ruwe waarde (via de bestaande unit-aware
+  `formatForDisplayWithUnit()`) met tijdstip, en "— genegeerd" + rode kleur
+  als de meting niet bruikbaar was. "Brain state" blijft bewust "—" — geen
+  bekende G7-opcode/bron voor dat concept gevonden.
+
+**Verificatie.** Alle drie gewijzigde bestanden gecontroleerd met de
+Python-tokenizer — accolades/haakjes in balans. Geen Gradle/Android-SDK
+beschikbaar om te compileren — handmatige review. Nog niet zelf tegen een
+levende sensor getest.
+
+Gewijzigd: `data/AppSettings.kt`, `sensor/dexcomg7/DexcomG7Driver.kt`,
+`ui/DexcomG7StatusScreen.kt`, `app/build.gradle.kts`.
+
+versionCode 172, versionName "0.9.73-g7-sensor-status-last-bg".
+
+## Ronde 159 (29/08/2026) — alle door de G7-sensor teruggegeven info zichtbaar + "Brain state" verwijderd
+
+**Aanleiding.** Op verzoek, na Ronde 158: "Ik wil hier in principe alle
+info getoond kunnen hebben die de sensor zelf terug geeft", plus: als
+"Brain state" geen sensor-eigen gegeven maar een xDrip-vermelding is, mag
+die weg.
+
+**Diagnose.** "Brain state" bleek bij nazoeken in xDrip+'s eigen bron
+(`Ob1G5CollectionService.java`) inderdaad puur een UI-label voor DEZELFDE
+calibratiestatus die hier al als "Sensor status" wordt getoond — geen apart
+sensor-gegeven. Daarnaast bleken `GlucoseRx`/`BatteryInfoRx`/
+`FirmwareVersionRx` (via de nieuwe 0x4A/0x4B-parser uit Ronde 157) al veel
+meer velden te bevatten dan er tot nu toe werden opgeslagen/getoond: trend,
+voorspelde Bg, transmitter-status, sequence-nummer (glucose); status,
+weerstand, transmitter-dagen (batterij); BT-firmwareversie, hardware-
+versie, build-versie, version code, inactive/max-runtime/max-inactive
+dagen, serienummer (firmware).
+
+**Wijziging.**
+
+- `sensor/dexcomg7/DexcomG7Protocol.kt`: nieuwe `transmitterStatusText()`
+  (poort van xDrip+'s `TransmitterStatus.getBatteryLevel()`, hergebruikt
+  voor glucose/batterij/firmware-status). `FirmwareVersionRx` uitgebreid
+  met buildVersion/versionCode/inactiveDays/maxRuntimeDays/
+  maxInactiveDays/serial; `parseFirmwareVersion1()` vult deze nu voor
+  beide antwoordvarianten (0x4B vs. echo-0x4A hebben een verschillende
+  lay-out, zie xDrip+'s `VersionRequest1RxMessage.java`).
+- `data/AppSettings.kt`: `setDexcomG7BatteryInfo`/`setDexcomG7FirmwareInfo`/
+  `setDexcomG7LastRawGlucose` uitgebreid met de bijbehorende nieuwe velden
+  (allemaal optioneel, terugwaarts compatibel).
+- `sensor/dexcomg7/DexcomG7Driver.kt`: alle drie de call sites
+  (`queryBatteryIfStale`/`queryFirmwareIfStale`/`handleGlucoseResult`)
+  geven nu de volledige set door i.p.v. een deelverzameling.
+- `ui/DexcomG7StatusScreen.kt`: "Brain state"-rij verwijderd; twaalf nieuwe
+  rijen toegevoegd (Trend, Predicted Bg, Transmitter status, Sequence, BT
+  firmware version, Hardware version, Other firmware version, ASIC, Build
+  version, Version code, Inactive days, Max runtime days, Max inactive
+  days, Serial, Battery status, Battery resistance) — "Transmitter days"
+  (al langer een "—"-placeholder) komt nu uit `BatteryInfoRx.runtimeDays`.
+  Overal "—" waar het veld niet in het ontvangen antwoord aanwezig was.
+
+**Verificatie.** Alle vier gewijzigde bestanden gecontroleerd met de
+Python-tokenizer — accolades/haakjes in balans. Byte-lay-out van de nieuwe
+`parseFirmwareVersion1()`-velden handmatig nagerekend tegen xDrip+'s
+`VersionRequest1RxMessage.java`/`BaseMessage.java` (veldvolgorde en
+little-endian-conventie kloppen). Geen Gradle/Android-SDK beschikbaar om
+te compileren — handmatige review. Nog niet zelf tegen een levende sensor
+getest welke van de nieuwe velden deze specifieke sensor daadwerkelijk
+vult (verwacht: vooral de 0x4A/0x4B-firmwarevelden, gezien Ronde 157's
+bevinding dat déze sensor die variant gebruikt).
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Protocol.kt`, `data/AppSettings.kt`,
+`sensor/dexcomg7/DexcomG7Driver.kt`, `ui/DexcomG7StatusScreen.kt`,
+`app/build.gradle.kts`.
+
+versionCode 173, versionName "0.9.74-g7-full-sensor-info".
+
+## Ronde 160 (29/08/2026) — Bg-voorspelling (1 uur vooruit) op de grafiek + instelling
+
+**Aanleiding.** Op verzoek, los van de G7-specifieke rondes hiervoor, voor
+beide slots: "een voorspelling van de Bg wil zien waar die het komende uur
+naar toe kan gaan [...] op de grafiek een vertikale lijn plaatsen op de
+actuele tijd. De x-as dan nog een uur door te tekenen. en 2 lijnen duidelijk
+afwijkend van de echte Bg grafiek vanaf het laatste punt door te tekenen
+waarbinnen de Bg het komende uur naar alle waarschijnlijkheid gaat bewegen
+[...] twee lijnen naar rechts getekend die van uit de oorsprong dus
+divergeren." Nadere instructie: "Aan/uit bij de settings is een goede
+aanvulling. 1 uur vooruit is voldoende [...] De hoeveelheid historische data
+die nodig is laat ik aan jou over."
+
+**Aanpak.** Nieuwe, sensor-onafhankelijke module `prediction/
+GlucosePrediction.kt`: lineaire regressie (kleinste-kwadraten) over de
+laatste 45 minuten metingen bepaalt de trend (mg/dL/minuut); de centrale
+voorspelling past die helling toe VANAF de laatste echte meting (i.p.v. de
+regressielijn zelf door te trekken, wat een zichtbare sprong zou geven op
+het overgangspunt). De onder-/bovengrens groeien uit elkaar evenredig met
+√(verstreken tijd) — de gebruikelijke aanname voor de onzekerheid van een
+random walk (precies de situatie hier: geen IOB/maaltijd-info bekend),
+geschaald met de gemeten spreiding van de recente meetpunten t.o.v. hun
+eigen regressielijn (een rustige periode geeft dus een smallere band dan een
+net doorgemaakte snelle stijging/daling). Op t=0 is de marge exact 0 (de
+band "vertrekt vanuit de oorsprong"). Minimaal 4 recente punten nodig, anders
+geen voorspelling (liever geen band dan een band op 1-2 toevallige punten).
+
+**Wijziging.**
+
+- `prediction/GlucosePrediction.kt` (nieuw): `computeGlucosePrediction()` +
+  `GlucosePredictionPoint`, `PREDICTION_HORIZON_MINUTES` (60).
+- `data/AppSettings.kt`: nieuwe app-brede toggle `predictionEnabled` /
+  `setPredictionEnabled()` (Keys.PREDICTION_ENABLED), default UIT — zelfde
+  conventie als smoothing/calibratie/break-in-filter.
+- `ui/GlucoseChart.kt`: beide composables (`GlucoseChart` per slot,
+  `DualGlucoseChart` voor de Combi-tab) krijgen een nieuwe
+  `predictionEnabled`-parameter (default false). Bij een geldige
+  voorspelling: rechter-asgrens + standaardweergave (zoom/pan) 1 uur verder
+  dan de laatste meting zodat de band standaard in beeld valt, een
+  verticale "nu"-streeplijn op de laatste echte meting, en twee gestippelde
+  grenslijnen ("prediction-upper"/"-lower", per slot met een "-A"/"-B"-
+  suffix op de Combi-grafiek) in een nieuwe, elders niet gebruikte
+  indigo-tint. Y-as-herberekening (`recomputeYAxisMax`) uitgebreid met de
+  nieuwe "prediction-upper"-labels zodat een stijgende band niet boven de
+  as uit geclipt wordt (zelfde soort fix als de fingersticks in Ronde 94).
+- `ui/StatusScreen.kt`, `ui/CombiScreen.kt`: lezen de nieuwe
+  `settings.predictionEnabled` en geven 'm door aan de grafiek.
+- `ui/SettingsScreen.kt`: nieuwe "Bg prediction"-kaart (Switch, zelfde
+  stijl als de Smoothing-kaart) tussen Smoothing en Automatic re-pair.
+
+**Verificatie.** Alle zeven gewijzigde/nieuwe bestanden gecontroleerd met de
+Python-tokenizer — accolades/haakjes in balans. Geen Gradle/Android-SDK
+beschikbaar om te compileren — handmatige review van de nieuwe as-/zoom-/
+dataset-logica tegen de bestaande, al meermaals live-geverifieerde
+pan/zoom/granulariteit-mechanismes in dit bestand (zie de vele eerdere
+RONDE-kdocs in `GlucoseChart.kt`). Nog niet live getest — de regressie-/
+margeconstantes (historievenster 45 min, marge-schaal 3,2×volatiliteit·√t)
+zijn een eerste, beargumenteerde keuze; als de band in de praktijk te breed/
+smal of te traag/snel reagerend aanvoelt, is dat in dit ene bestand
+bij te stellen.
+
+Gewijzigd: `prediction/GlucosePrediction.kt` (nieuw), `data/AppSettings.kt`,
+`ui/GlucoseChart.kt`, `ui/StatusScreen.kt`, `ui/CombiScreen.kt`,
+`ui/SettingsScreen.kt`, `app/build.gradle.kts`.
+
+versionCode 174, versionName "0.9.75-bg-prediction".
+
+## Ronde 161 (29/08/2026) — voorspellingsband versmald (lineaire marge + afvlakkende trend)
+
+**Aanleiding.** Live-melding met screenshots na het testen van v174: "de
+voorspellingen tonen 2 lijnen, maar die liggen nu zover uit elkaar dat het
+geen voorspelling meer is maar een 100% zekerheid dat de waarden het
+komende uur tussen de lijnen blijven. Zeker de eerste 15 minuten moet het
+veel dichter bij elkaar komen. Als ik dit nu zo zie is een lineaire
+minimum en maximum voorspelling al veel beter met een kleinere marge en op
+basis van de buigpunten en afvlakking moet dat ook beter kunnen."
+
+**Diagnose.** De screenshots bevestigden het: bij slechts ~15-20 minuten na
+de laatste meting liepen de grenslijnen al tegen de boven-/onderkant van
+de zichtbare Y-as aan. Oorzaak: de marge groeide evenredig met √(verstreken
+tijd) — statistisch de "juiste" vorm voor een random walk, maar √t stijgt
+juist het SNELST vlak na t=0 (bij 15 minuten was al de helft van de totale
+marge-groei tot een uur verbruikt: √15/√60 = 0,5), precies tegenovergesteld
+aan de wens.
+
+**Wijziging** (`prediction/GlucosePrediction.kt`):
+
+- Marge nu LINEAIR in de tijd (was √t) — op 15 min dus een kwart van de
+  marge op 60 min, niet de helft. `MARGIN_SCALE` bovendien fors verlaagd
+  (3,2 op √t → 5,5 op lineair t/60); bij de meetruisvloer van 4 mg/dL geeft
+  dit nu ~5,5 mg/dL marge op 15 min en ~22 mg/dL op 60 min (was: ~50 resp.
+  ~99 mg/dL).
+- Nieuw: de centrale trendlijn zelf vlakt af ("buigpunten en afvlakking"),
+  i.p.v. de regressiehelling de volle 60 minuten ongewijzigd door te
+  trekken — een exponentiële afbouw met tijdconstante
+  `FLATTENING_TAU_MINUTES` (20 min): cumulatieve verplaatsing =
+  `slope · tau · (1 − e^(−t/tau))`, die voor kleine t nagenoeg lineair
+  gedraagt maar naar een horizontale asymptoot (`slope · tau`) buigt zodra
+  t tau nadert — een kortstondige snelle stijging/daling loopt zo niet meer
+  een vol uur onveranderd door.
+
+**Verificatie.** Balans (accolades/haakjes) gecontroleerd met de
+Python-tokenizer. Nieuwe formule numeriek doorgerekend (Python): bij de
+meetruisvloer (4 mg/dL) is de marge nu 0 / 1,8 / 5,5 / 11,0 / 22,0 mg/dL op
+t = 0 / 5 / 15 / 30 / 60 minuten — een geleidelijke, geen instant-brede
+band. Nog niet live getest; constantes (`FLATTENING_TAU_MINUTES=20`,
+`MARGIN_SCALE=5,5`) zijn een eerste, beargumenteerde bijstelling — verdere
+live-feedback kan hier opnieuw aanleiding toe geven.
+
+Gewijzigd: `prediction/GlucosePrediction.kt`, `app/build.gradle.kts`.
+
+versionCode 175, versionName "0.9.76-bg-prediction-tighter-band".
+
+## Ronde 162 (29/08/2026) — voorspellingsband: langere-termijn-volatiliteit meegewogen (backtest tegen echte FCLvNext-log)
+
+**Aanleiding.** Gebruiker leverde een echte historische FCLvNext-log
+(`FCLvNext_Log_v11.csv`, 22-29 aug, 5-minuten-cadans) aan met het verzoek om
+de voorspelling op een aantal representatieve punten (dal, begin stijging,
+halverwege, tegen het eind, en vergelijkbaar na de top) door te rekenen en te
+vergelijken met wat er daarna werkelijk gebeurde.
+
+**Diagnose (backtest).** Voor 7 momenten in een echte stijg/daal-cyclus
+(dal ~12:58, begin stijging 13:03, halverwege omhoog 13:24, tegen de top
+13:59, net na de top 14:08, halverwege omlaag 14:48, tegen het volgende dal
+15:08) is `computeGlucosePrediction()` (v175-versie) exact nagebouwd in
+Python en telkens gedraaid met UITSLUITEND de op dat moment al bekende
+data. Resultaat: de daadwerkelijke latere meting viel maar in ~19% van de
+gecontroleerde tijdstippen (16 van de 83) binnen de voorspelde band. Oorzaak:
+de marge was uitsluitend gebaseerd op de residue-spreiding van de laatste 45
+minuten — tijdens een rustige periode (vlak vóór een maaltijd, of net na een
+piek/dal) is die per definitie heel klein, ook al kan de Bg daarna prima weer
+gaan bewegen. Alleen tijdens een curve die gewoon doorliep in dezelfde
+richting (halverwege omhoog/omlaag) trof de band wél goed.
+
+**Wijziging** (`prediction/GlucosePrediction.kt`, op verzoek "voer ze allebei
+maar door"):
+
+- Nieuwe LANGERE-termijn-component (3 uur, `LONG_TERM_WINDOW_MINUTES`):
+  zelfde regressie/residue-berekening als de bestaande 45-minuten-termijn,
+  maar dan over 3 uur — de RESIDUE-spreiding daarvan (niet de helling, die
+  blijft kort-termijn) is een veel stabielere maat voor "hoeveel beweegt dit
+  signaal doorgaans" en blijft ook tijdens een toevallig rustig kwartier
+  overeind.
+- Volatiliteit = maximum van (korte-termijn-residue, `0,6 ×`
+  lange-termijn-residue, vloer). `LONG_TERM_VOLATILITY_WEIGHT`=0,6 en
+  `MARGIN_SCALE` (5,5 → 4,5) zijn samen bepaald via een parameterraster over
+  dezelfde backtest-data: gewicht 1,0 gaf >95% dekking maar recreëerde de
+  oorspronkelijke, in Ronde 161 al afgekeurde "100% zekerheid"-band
+  (~11 mmol/L breed op 60 min); gewicht 0,6 gaf een redelijk evenwicht
+  (~58% dekking, ~5,7 mmol/L breed op 60 min i.p.v. ~2,4 bij gewicht 0).
+- `MIN_VOLATILITY_MGDL` licht verhoogd (4 → 5 mg/dL) als achtervang voor het
+  randgeval van minder dan 3 uur sensor-historie.
+- Nieuwe herbruikbare `regressionOverWindow()`-helper (was inline code),
+  gebruikt voor zowel de korte- als de lange-termijn-regressie.
+
+**Verificatie.** Balans (accolades/haakjes) gecontroleerd met de
+Python-tokenizer. Dezelfde Python-nabouw van het algoritme opnieuw gedraaid
+met de nieuwe parameters tegen dezelfde 7 backtestmomenten: dekking steeg
+van 16/83 (~19%) naar 17/27 (~63%, kleinere steekproef in dit specifieke
+doorrekenvoorbeeld omdat alleen op 15/30/45/60 min i.p.v. elke 5 min
+gecontroleerd is — het parameterraster hierboven, over alle 83 punten, gaf
+voor dezelfde instelling 58%). De resterende misses zaten vrijwel allemaal
+op de twee momenten waar een maaltijdstijging vanuit een écht vlakke
+basislijn BEGON — inherent niet uit BG-historie alleen te voorspellen zonder
+IOB/maaltijd-info, dus bewust niet verder proberen op te lossen (dat zou de
+band de rest van de tijd onnodig verbreden voor een fundamentele, niet
+oplosbare beperking). Nog niet live getest in de app zelf.
+
+Gewijzigd: `prediction/GlucosePrediction.kt`, `app/build.gradle.kts`.
+
+versionCode 176, versionName "0.9.77-bg-prediction-longterm-volatility".
+
 versionCode 117, versionName `0.9.20-alarm-alert-mode-fix`.

@@ -11,8 +11,8 @@
       "type": "SINGLE",
       "filters": [],
       "attributes": [],
-      "versionCode": 171,
-      "versionName": "0.9.72-g7-firmware-opcode-fix",
+      "versionCode": 176,
+      "versionName": "0.9.77-bg-prediction-longterm-volatility",
       "outputFile": "resources-release-optimize.ap_"
     }
   ],

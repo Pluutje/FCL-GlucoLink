@@ -12,6 +12,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import android.view.MotionEvent
 import com.fclglucolink.app.data.SensorSwitchEvent
+import com.fclglucolink.app.prediction.GlucosePredictionPoint
+import com.fclglucolink.app.prediction.PREDICTION_HORIZON_MINUTES
+import com.fclglucolink.app.prediction.computeGlucosePrediction
 import com.fclglucolink.app.sensor.GlucoseReading
 import com.github.mikephil.charting.charts.LineChart
 import com.github.mikephil.charting.components.LimitLine
@@ -66,6 +69,23 @@ private const val AXIS_FLOOR_MGDL = 40f
 /** Vloer voor de DYNAMISCHE bovengrens (analoog aan de oude 12f mmol-vloer
  *  in [recomputeYAxisMax]). */
 private const val AXIS_DYNAMIC_MAX_FLOOR_MGDL = 220f
+
+/**
+ * 29/08/2026 (editor, RONDE 160) — kleur voor de twee voorspellings-
+ * grenslijnen (zie prediction/GlucosePrediction.kt): bewust een indigo/
+ * blauwpaars, niet gebruikt door de bestaande bereikskleuring (groen/geel/
+ * oranje/rood), de grijze raw-sensor-indicator, of de paarse/grijze
+ * sensor-wisselmarkers — moet op het eerste gezicht duidelijk een ANDER
+ * soort lijn zijn dan de echte meetdata. Halfdoorzichtig (alpha 190/255)
+ * zodat de band duidelijk ondergeschikt oogt aan de echte BG-lijn.
+ */
+private val PREDICTION_BAND_COLOR_ARGB = android.graphics.Color.argb(190, 92, 107, 192)
+
+/** Kleur voor de verticale "nu"-lijn die de echte data van de voorspelling
+ *  scheidt — neutraal grijs, dashed, subtiel (net als de gelijksoortige
+ *  sensor-wisselmarkers hierboven maar met een eigen, niet eerder gebruikte
+ *  tint zodat 'm niet met een sensorwisseling verward wordt). */
+private val PREDICTION_NOW_LINE_COLOR_ARGB = android.graphics.Color.argb(160, 120, 120, 120)
 
 /** Eenheid-bewuste Y-as-tekstlabel — zie klasse-kdoc hierboven: de
  *  onderliggende as-WAARDEN blijven altijd mg/dL, dit zet alleen de TEKST
@@ -188,6 +208,11 @@ fun GlucoseChart(
     // mg/dL) schaal/pan/zoom-wiskunde. Default MMOL zodat een eventuele
     // andere aanroeper die dit (nog) niet meegeeft niets ziet veranderen.
     unit: GlucoseUnit = GlucoseUnit.MMOL,
+    // 29/08/2026 (editor, RONDE 160) — zie prediction/GlucosePrediction.kt
+    // en de nieuwe "Bg-voorspelling"-instelling in SettingsScreen.kt.
+    // Default false zodat een eventuele andere aanroeper die dit (nog) niet
+    // meegeeft niets ziet veranderen (zelfde conventie als `unit` hierboven).
+    predictionEnabled: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     // 31/07/2026 (editor, ronde 15, na controlevraag: "wordt de Bg-lijn
@@ -306,7 +331,7 @@ fun GlucoseChart(
                         lastPerformedGesture: ChartTouchListener.ChartGesture?
                     ) {
                         applyXAxisGranularity(this@apply)
-                        recomputeYAxisMax(this@apply)
+                        recomputeYAxisMax(this@apply, SINGLE_CHART_Y_AXIS_LABELS)
                     }
                     override fun onChartLongPressed(me: MotionEvent?) {}
                     override fun onChartDoubleTapped(me: MotionEvent?) {}
@@ -327,11 +352,11 @@ fun GlucoseChart(
                         // uitzoomen. axisMinimum/axisMaximum blijven de enige
                         // harde grens (nooit verder dan de geladen 48u).
                         applyXAxisGranularity(this@apply)
-                        recomputeYAxisMax(this@apply)
+                        recomputeYAxisMax(this@apply, SINGLE_CHART_Y_AXIS_LABELS)
                     }
                     override fun onChartTranslate(me: MotionEvent?, dX: Float, dY: Float) {
                         applyXAxisGranularity(this@apply)
-                        recomputeYAxisMax(this@apply)
+                        recomputeYAxisMax(this@apply, SINGLE_CHART_Y_AXIS_LABELS)
                     }
                 })
             }
@@ -369,6 +394,20 @@ fun GlucoseChart(
             val latestX = entries.maxOf { it.x }
             val earliestX = entries.minOf { it.x }
 
+            // 29/08/2026 (editor, RONDE 160) — zie prediction/
+            // GlucosePrediction.kt's klasse-kdoc voor de volledige
+            // berekeningsuitleg. `null` als de instelling uit staat OF er
+            // simpelweg te weinig recente data is voor een zinvolle
+            // regressie (computeGlucosePrediction() bewaakt dat zelf).
+            val predictionPoints = if (predictionEnabled) computeGlucosePrediction(readings) else null
+            // Rechter-asgrens: normaal de laatste meting, maar als er
+            // daadwerkelijk een voorspelling getoond wordt, 1 uur verder
+            // (PREDICTION_HORIZON_MINUTES) zodat die band niet meteen buiten
+            // het geladen as-bereik valt (zie ook de zoom/pan-aanpassing
+            // verderop, die dit nieuwe rechter-uiteinde ook standaard in
+            // beeld brengt).
+            val rightEdgeX = if (predictionPoints != null) latestX + PREDICTION_HORIZON_MINUTES else latestX
+
             // 30/07/2026 (editor, na feedback: "wil tot zeker 24u, liever 48u
             // terug kunnen swipen") — vorige opzet zette axisMinimum vast op
             // "laatste meting min 4 uur", wat een HARDE grens was: verder
@@ -379,9 +418,11 @@ fun GlucoseChart(
             // uur voor het geval er nog weinig data is (bv. vlak na een
             // herstart) — dat voorkomt de eerdere bug dat de as zich bij
             // schaarse data (bv. 2 metingen) volledig samentrekt op die
-            // paar punten. axisMaximum blijft de laatste meting.
+            // paar punten. axisMaximum blijft de laatste meting (of, sinds
+            // RONDE 160, het einde van de voorspellingsband — zie
+            // rightEdgeX hierboven).
             chart.xAxis.axisMinimum = minOf(earliestX, latestX - 240f)
-            chart.xAxis.axisMaximum = latestX
+            chart.xAxis.axisMaximum = rightEdgeX
 
             // Onzichtbare, ruim-buiten-het-venster-lopende lijn op y=10 met
             // een vulling naar y=4 toe — dat geeft het effect van een
@@ -490,7 +531,45 @@ fun GlucoseChart(
                 setHighlightEnabled(false)
             }
 
-            chart.data = LineData(listOf<ILineDataSet>(bandDataSet, dataSet, rawDataSet))
+            // 29/08/2026 (editor, RONDE 160) — de twee divergerende
+            // grenslijnen, zie prediction/GlucosePrediction.kt en de kdoc bij
+            // `predictionPoints` hierboven. x-coördinaat = de as-positie van
+            // de LAATSTE ECHTE meting (latestX) + het aantal minuten dat elk
+            // berekend punt daar vandaan ligt — dat is precies "vanaf het
+            // laatste punt doortekenen", en op minutesFromNow=0 vallen beide
+            // lijnen samen met dat laatste echte punt ("vanuit de oorsprong
+            // divergeren").
+            val predictionDataSets: List<ILineDataSet> = if (predictionPoints != null) {
+                val upperEntries = predictionPoints.map { Entry(latestX + it.minutesFromNow, it.upperMgdl) }
+                val lowerEntries = predictionPoints.map { Entry(latestX + it.minutesFromNow, it.lowerMgdl) }
+                val upperDataSet = LineDataSet(upperEntries, "prediction-upper").apply {
+                    setColor(PREDICTION_BAND_COLOR_ARGB)
+                    lineWidth = 1.6f
+                    enableDashedLine(10f, 6f, 0f)
+                    mode = LineDataSet.Mode.LINEAR
+                    setDrawCircles(false)
+                    setDrawValues(false)
+                    setDrawIcons(false) // zie kdoc bij bandDataSet hierboven.
+                    setDrawFilled(false)
+                    setHighlightEnabled(false)
+                }
+                val lowerDataSet = LineDataSet(lowerEntries, "prediction-lower").apply {
+                    setColor(PREDICTION_BAND_COLOR_ARGB)
+                    lineWidth = 1.6f
+                    enableDashedLine(10f, 6f, 0f)
+                    mode = LineDataSet.Mode.LINEAR
+                    setDrawCircles(false)
+                    setDrawValues(false)
+                    setDrawIcons(false)
+                    setDrawFilled(false)
+                    setHighlightEnabled(false)
+                }
+                listOf(upperDataSet, lowerDataSet)
+            } else {
+                emptyList()
+            }
+
+            chart.data = LineData(listOf<ILineDataSet>(bandDataSet, dataSet, rawDataSet) + predictionDataSets)
 
             // 09/08/2026 (editor, RONDE 64) — zie kdoc hierboven bij
             // GlucoseChart: één verticale streeplijn per wisselmoment,
@@ -505,6 +584,23 @@ fun GlucoseChart(
                     enableDashedLine(12f, 8f, 0f)
                 }
                 chart.xAxis.addLimitLine(limitLine)
+            }
+            // 29/08/2026 (editor, RONDE 160) — verticale "nu"-lijn op de
+            // grens tussen echte data en voorspelling, letterlijk gevraagd
+            // ("op de grafiek een vertikale lijn plaatsen op de actuele
+            // tijd"). Geankerd op latestX (de laatste ECHTE meting) i.p.v.
+            // System.currentTimeMillis(): dat is exact waar de voorspelling
+            // zelf ook vandaan vertrekt (zie predictionDataSets hierboven),
+            // en wijkt in de praktijk hooguit een cyclus (~5 min) af van de
+            // werkelijke kloktijd.
+            if (predictionPoints != null) {
+                chart.xAxis.addLimitLine(
+                    LimitLine(latestX).apply {
+                        lineColor = PREDICTION_NOW_LINE_COLOR_ARGB
+                        lineWidth = 1.2f
+                        enableDashedLine(6f, 6f, 0f)
+                    }
+                )
             }
 
             // Nooit verder inzoomen dan 15 minuten zichtbaar (moet ná het
@@ -541,9 +637,15 @@ fun GlucoseChart(
             chart.fitScreen()
             val fullRangeMinutes = chart.xAxis.axisMaximum - chart.xAxis.axisMinimum
             if (fullRangeMinutes > 240f) {
-                chart.zoom(fullRangeMinutes / 240f, 1f, latestX, 0f)
+                // 29/08/2026 (editor, RONDE 160) — anker nu op rightEdgeX
+                // (was latestX): als er een voorspelling getoond wordt, moet
+                // het STANDAARD 4-uur-venster eindigen bij het einde van die
+                // band, niet bij de laatste echte meting — anders staat de
+                // net toegevoegde band standaard buiten beeld en moet de
+                // gebruiker eerst handmatig verder swipen om 'm ooit te zien.
+                chart.zoom(fullRangeMinutes / 240f, 1f, rightEdgeX, 0f)
             }
-            chart.moveViewToX(latestX)
+            chart.moveViewToX(rightEdgeX)
 
             // Stapgrootte voor het standaardvenster (4 uur -> 30 min, zie
             // kdoc); daarna houdt de gesture-listener in de factory 'm bij.
@@ -560,7 +662,7 @@ fun GlucoseChart(
             // als applyXAxisGranularity() hierboven al gebruikt — en wordt,
             // net als die functie, ook na elke pan/zoom-gebaar opnieuw
             // aangeroepen (zie de gesture-listener in de factory).
-            recomputeYAxisMax(chart)
+            recomputeYAxisMax(chart, SINGLE_CHART_Y_AXIS_LABELS)
             chart.invalidate()
         }
     )
@@ -605,6 +707,11 @@ fun DualGlucoseChart(
     // 13/08/2026 (editor, RONDE 104) — zie GlucoseChart()'s zelfde parameter
     // en de klasse-kdoc bovenaan dit bestand.
     unit: GlucoseUnit = GlucoseUnit.MMOL,
+    // 29/08/2026 (editor, RONDE 160) — zie GlucoseChart()'s zelfde parameter:
+    // één globale instelling (geen per-slot toggle), hier toegepast op BEIDE
+    // curven tegelijk — precies wat gevraagd is ("Dan als extra aanvulling
+    // voor de beide slots").
+    predictionEnabled: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val colorAArgb = colorA.toArgb()
@@ -774,8 +881,25 @@ fun DualGlucoseChart(
                 }
             val latestX = maxOf(latestGlucoseX, fingerstickEntries.maxOfOrNull { it.x } ?: latestGlucoseX)
 
+            // 29/08/2026 (editor, RONDE 160) — zie GlucoseChart()'s zelfde
+            // berekening en prediction/GlucosePrediction.kt's klasse-kdoc.
+            // Per slot apart berekend (elke curve heeft z'n eigen recente
+            // historie/volatiliteit), en per slot op de as geplaatst t.o.v.
+            // DIE slot's eigen laatste meting — niet t.o.v. het gedeelde
+            // `latestX` hierboven (dat kan door de andere slot of een
+            // fingerstick al verder naar rechts opgerekt zijn).
+            val predictionPointsA = if (predictionEnabled) computeGlucosePrediction(readingsA) else null
+            val predictionPointsB = if (predictionEnabled) computeGlucosePrediction(readingsB) else null
+            val lastReadingXA = entriesA.maxOfOrNull { it.x }
+            val lastReadingXB = entriesB.maxOfOrNull { it.x }
+            val predictionRightEdge = listOfNotNull(
+                if (predictionPointsA != null) (lastReadingXA ?: latestGlucoseX) + PREDICTION_HORIZON_MINUTES else null,
+                if (predictionPointsB != null) (lastReadingXB ?: latestGlucoseX) + PREDICTION_HORIZON_MINUTES else null
+            ).maxOrNull()
+            val rightEdgeX = maxOf(latestX, predictionRightEdge ?: latestX)
+
             chart.xAxis.axisMinimum = minOf(earliestGlucoseX, latestX - 240f)
-            chart.xAxis.axisMaximum = latestX
+            chart.xAxis.axisMaximum = rightEdgeX
 
             val bandDataSet = LineDataSet(
                 listOf(Entry(latestX - 100_000f, HIGH_MGDL), Entry(latestX + 100_000f, HIGH_MGDL)),
@@ -911,16 +1035,78 @@ fun DualGlucoseChart(
                 }
             }
 
+            // 29/08/2026 (editor, RONDE 160) — zelfde soort divergerende
+            // grenslijnen als GlucoseChart() hierboven, nu per slot (elk
+            // vanaf DIE slot's eigen laatste meting, zie predictionPointsA/B
+            // hierboven), zodat bij twee actieve slots ook twee losse
+            // voorspellingsbanden te zien zijn. Slot-specifieke labels
+            // ("prediction-upper-A"/"-B") — zie DUAL_CHART_Y_AXIS_LABELS'
+            // kdoc voor waarom dat nodig is (getDataSetByLabel vindt anders
+            // maar één van de twee datasets terug).
+            fun predictionDataSets(
+                points: List<GlucosePredictionPoint>?,
+                anchorX: Float?,
+                suffix: String
+            ): List<ILineDataSet> {
+                if (points == null || anchorX == null) return emptyList()
+                val upper = LineDataSet(
+                    points.map { Entry(anchorX + it.minutesFromNow, it.upperMgdl) },
+                    "prediction-upper-$suffix"
+                ).apply {
+                    setColor(PREDICTION_BAND_COLOR_ARGB)
+                    lineWidth = 1.6f
+                    enableDashedLine(10f, 6f, 0f)
+                    mode = LineDataSet.Mode.LINEAR
+                    setDrawCircles(false)
+                    setDrawValues(false)
+                    setDrawIcons(false)
+                    setDrawFilled(false)
+                    setHighlightEnabled(false)
+                }
+                val lower = LineDataSet(
+                    points.map { Entry(anchorX + it.minutesFromNow, it.lowerMgdl) },
+                    "prediction-lower-$suffix"
+                ).apply {
+                    setColor(PREDICTION_BAND_COLOR_ARGB)
+                    lineWidth = 1.6f
+                    enableDashedLine(10f, 6f, 0f)
+                    mode = LineDataSet.Mode.LINEAR
+                    setDrawCircles(false)
+                    setDrawValues(false)
+                    setDrawIcons(false)
+                    setDrawFilled(false)
+                    setHighlightEnabled(false)
+                }
+                return listOf(upper, lower)
+            }
+            dataSets += predictionDataSets(predictionPointsA, lastReadingXA, "A")
+            dataSets += predictionDataSets(predictionPointsB, lastReadingXB, "B")
+
             chart.data = LineData(dataSets)
             chart.xAxis.removeAllLimitLines()
+            // 29/08/2026 (editor, RONDE 160) — verticale "nu"-lijn, zie
+            // GlucoseChart()'s zelfde toevoeging hierboven voor de volledige
+            // uitleg. Hier geankerd op latestGlucoseX (de meest recente ECHTE
+            // meting over BEIDE slots samen, dus zonder de fingerstick-
+            // verbreding die latestX kan hebben) — dat is de meest zinvolle
+            // "grens tussen echt en voorspeld" op een gecombineerde grafiek.
+            if (predictionPointsA != null || predictionPointsB != null) {
+                chart.xAxis.addLimitLine(
+                    LimitLine(latestGlucoseX).apply {
+                        lineColor = PREDICTION_NOW_LINE_COLOR_ARGB
+                        lineWidth = 1.2f
+                        enableDashedLine(6f, 6f, 0f)
+                    }
+                )
+            }
 
             chart.setVisibleXRangeMinimum(15f)
             chart.fitScreen()
             val fullRangeMinutes = chart.xAxis.axisMaximum - chart.xAxis.axisMinimum
             if (fullRangeMinutes > 240f) {
-                chart.zoom(fullRangeMinutes / 240f, 1f, latestX, 0f)
+                chart.zoom(fullRangeMinutes / 240f, 1f, rightEdgeX, 0f)
             }
-            chart.moveViewToX(latestX)
+            chart.moveViewToX(rightEdgeX)
 
             applyXAxisGranularity(chart)
             // 10/08/2026 (editor, RONDE 82) — zie kdoc bij recomputeYAxisMax()
@@ -1034,5 +1220,18 @@ private fun recomputeYAxisMax(chart: LineChart, labels: List<String> = listOf("B
  *  RONDE-94-kdoc bij de axis-berekening in [DualGlucoseChart] hierboven —
  *  zonder dit label werd de Y-as-bovengrens alleen op de twee sensor-curven
  *  afgestemd, waardoor een kalibratiepunt dat (zoals gebruikelijk) hoger
- *  lag dan de sensorwaarde simpelweg boven de zichtbare as uit viel. */
-private val DUAL_CHART_Y_AXIS_LABELS = listOf("slot-A", "slot-B", "fingersticks")
+ *  lag dan de sensorwaarde simpelweg boven de zichtbare as uit viel.
+ *  29/08/2026 (editor, RONDE 160) — "prediction-upper-A"/"prediction-upper-B"
+ *  toegevoegd: zonder dit label kon een stijgende voorspellingsband boven de
+ *  as uit lopen (afgekapt), precies dezelfde soort clipping-bug als bij de
+ *  fingersticks hierboven. Onschadelijk als de datasets niet bestaan
+ *  (voorspelling uit, of te weinig data) — [recomputeYAxisMax] slaat een
+ *  ontbrekend label gewoon over. */
+private val DUAL_CHART_Y_AXIS_LABELS =
+    listOf("slot-A", "slot-B", "fingersticks", "prediction-upper-A", "prediction-upper-B")
+
+/** 29/08/2026 (editor, RONDE 160) — analoog aan [DUAL_CHART_Y_AXIS_LABELS]
+ *  hierboven, maar voor [GlucoseChart]'s enkele curve. Vervangt de losse
+ *  default `listOf("BG")` die [recomputeYAxisMax] eerder had — zie kdoc
+ *  daar. */
+private val SINGLE_CHART_Y_AXIS_LABELS = listOf("BG", "prediction-upper")

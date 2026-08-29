@@ -7663,24 +7663,7 @@
                     }
                 },
                 {
-                    "source": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.5-WV\\app\\src\\main\\res\\values\\themes.xml",
-                    "from": {
-                        "startLines": "4",
-                        "startColumns": "4",
-                        "startOffsets": "185",
-                        "endColumns": "83",
-                        "endOffsets": "264"
-                    },
-                    "to": {
-                        "startLines": "237",
-                        "startColumns": "4",
-                        "startOffsets": "16457",
-                        "endColumns": "82",
-                        "endOffsets": "16535"
-                    }
-                },
-                {
-                    "source": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.5-WV\\app\\src\\main\\res\\values\\strings.xml",
+                    "source": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.6-WV\\app\\src\\main\\res\\values\\strings.xml",
                     "from": {
                         "startLines": "1",
                         "startColumns": "4",
@@ -7713,6 +7696,23 @@
                         "endLines": "474,480,486,489,500",
                         "endColumns": "24,24,24,24,24",
                         "endOffsets": "26569,26813,27060,27193,27605"
+                    }
+                },
+                {
+                    "source": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.6-WV\\app\\src\\main\\res\\values\\themes.xml",
+                    "from": {
+                        "startLines": "4",
+                        "startColumns": "4",
+                        "startOffsets": "185",
+                        "endColumns": "83",
+                        "endOffsets": "264"
+                    },
+                    "to": {
+                        "startLines": "237",
+                        "startColumns": "4",
+                        "startOffsets": "16457",
+                        "endColumns": "82",
+                        "endOffsets": "16535"
                     }
                 },
                 {

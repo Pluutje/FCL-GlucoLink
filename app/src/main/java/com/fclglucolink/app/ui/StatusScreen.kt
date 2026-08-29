@@ -287,6 +287,9 @@ fun SlotStatusContent(
     // tonen) én of de gebruiker de regel expliciet aan heeft gezet in
     // Settings. Zie AppSettings.kt's kdoc bij beide velden.
     val smoothingEnabled by settings.smoothingEnabled.collectAsState(initial = false)
+    // 29/08/2026 (editor, RONDE 160) — zie prediction/GlucosePrediction.kt en
+    // AppSettings.kt's PREDICTION_ENABLED-kdoc.
+    val predictionEnabled by settings.predictionEnabled.collectAsState(initial = false)
     val showFilteredPipelineOnMainScreen by settings.showFilteredPipelineOnMainScreen.collectAsState(initial = false)
     // 30/07/2026 (editor, na feedback: 24-48u terug kunnen swipen in de
     // grafiek) — was hours = 6, wat sowieso al hoe ver je ooit kon
@@ -430,6 +433,7 @@ fun SlotStatusContent(
                     readings = recent,
                     switchEvents = switchEvents,
                     unit = displayUnit,
+                    predictionEnabled = predictionEnabled,
                     modifier = Modifier.padding(top = 8.dp)
                 )
             }
