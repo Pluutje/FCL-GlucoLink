@@ -438,7 +438,7 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
             return
         }
         _connectionState.value = ConnectionState.Connecting(deviceAddress)
-        registerBondReceiver(appCtx, deviceAddress)
+        registerBondReceiver(appCtx, deviceAddress, scope, settings)
         scheduleScanAttempt(scope, appCtx, deviceAddress, settings, cooldownMs = 0L)
 
         statusTickerJob?.cancel()
@@ -903,6 +903,15 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
                 // DexcomG6Driver.kt's handleControlNotification().
                 0x22, 0x23 -> pendingBatteryDeferred?.complete(DexcomG7Protocol.parseBatteryInfo(value))
                 0x21 -> pendingFirmwareDeferred?.complete(DexcomG7Protocol.parseFirmwareVersion(value))
+                // 29/08/2026 (editor, RONDE 157, KRITIEKE FIX) — zie
+                // DexcomG7Protocol.kt's kdoc bij [parseFirmwareVersion1]:
+                // vraag-variant 1 (opcode 0x4A, ALTIJD als eerste geprobeerd,
+                // zie FIRMWARE_REQUEST_VERSION_ORDER) krijgt antwoord onder
+                // opcode 0x4B of een echo van 0x4A zelf — niet 0x21. Viel tot
+                // deze ronde in de "onherkend"-tak hieronder en werd dus ten
+                // onrechte als afwijzing behandeld, terwijl de sensor gewoon
+                // een geldig antwoord stuurde.
+                0x4A, 0x4B -> pendingFirmwareDeferred?.complete(DexcomG7Protocol.parseFirmwareVersion1(value))
                 else -> {
                     // 28/08/2026 (editor, RONDE 151) — zie
                     // queryBatteryIfStale/queryFirmwareIfStale's kdoc: een
@@ -1671,7 +1680,27 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
         else -> "Unknown($state)"
     }
 
-    private fun registerBondReceiver(context: Context, deviceAddress: String) {
+    /**
+     * 29/08/2026 (editor, RONDE 157, KRITIEKE FIX — live-melding: "je hebt
+     * begrepen dat hij [de firmware-uitvraagcache] bij iedere nieuwe sensor
+     * herstart zou resetten" — klopte tot deze ronde alleen voor een
+     * HANDMATIGE nieuwe koppeling via DexcomG7SetupScreen.kt (die
+     * `AppSettings.clearDexcomG7BatteryAndFirmwareInfo()` aanroept, zie die
+     * kdoc, Ronde 152). Een automatische herkoppeling ná een spontaan
+     * verloren Android-bond (bv. na een nacht Bluetooth uit, zie het
+     * gemeld/onderzochte "Bond state Unpaired"-geval) loopt NIET via dat
+     * scherm — dus bleef een oude "al geprobeerd, wacht 30 dagen"-stempel
+     * van een eerdere sessie gewoon staan, ook al begon de sensor
+     * feitelijk een compleet verse sessie. [scope]/[settings] nu ook hier
+     * doorgegeven zodat deze functie zelf, bij een ECHTE verse
+     * bond-onderhandeling (herkenbaar aan `previousBondState ==
+     * BOND_NONE` — exact dezelfde "was Unpaired"-overgang die al gelogd
+     * werd), diezelfde cache-reset ook proactief kan uitvoeren — vóór
+     * [pendingAfterBond] de batterij-/firmware-uitvraag aftrapt.
+     */
+    private fun registerBondReceiver(
+        context: Context, deviceAddress: String, scope: CoroutineScope, settings: AppSettings
+    ) {
         unregisterBondReceiver()
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context, intent: Intent) {
@@ -1736,6 +1765,13 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
                     "DexcomG7: Bond state ${bondStateName(bondState)} (was ${bondStateName(previousBondState)})"
                 )
                 if (bondState == BluetoothDevice.BOND_BONDED) {
+                    if (previousBondState == BluetoothDevice.BOND_NONE) {
+                        // Zie deze functie se kdoc — een ECHTE verse
+                        // bond-onderhandeling, dus dezelfde proactieve
+                        // cache-reset als een handmatige nieuwe koppeling.
+                        DiagnosticFileLogger.log("DexcomG7: verse bond-onderhandeling gedetecteerd — batterij-/firmware-uitvraagcache resetten (RONDE 157)")
+                        scope.launch { settings.clearDexcomG7BatteryAndFirmwareInfo(slot) }
+                    }
                     DiagnosticFileLogger.log("DexcomG7: bonded, resuming after-bond action")
                     pendingAfterBond?.invoke()
                     pendingAfterBond = null

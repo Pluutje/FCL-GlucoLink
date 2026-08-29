@@ -1,9 +1,9 @@
 -- Merging decision tree log ---
 manifest
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:13:1-255:12
-INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:13:1-255:12
-INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:13:1-255:12
-INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:13:1-255:12
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:13:1-255:12
+INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:13:1-255:12
+INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:13:1-255:12
+INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:13:1-255:12
 MERGED from [com.google.android.gms:play-services-code-scanner:16.1.0] C:\Users\palap\.gradle\caches\transforms-4\247f6081810b49656ea0ee94bac16c27\transformed\play-services-code-scanner-16.1.0\AndroidManifest.xml:2:1-23:12
 MERGED from [com.google.mlkit:barcode-scanning-common:17.0.0] C:\Users\palap\.gradle\caches\transforms-4\18618242dfc19b3c8fd95bdf7cefca06\transformed\barcode-scanning-common-17.0.0\AndroidManifest.xml:2:1-7:12
 MERGED from [com.google.mlkit:vision-common:17.0.0] C:\Users\palap\.gradle\caches\transforms-4\475ad5bbdeb1bcbb4607e749a3482e6a\transformed\vision-common-17.0.0\AndroidManifest.xml:2:1-18:12
@@ -92,102 +92,102 @@ MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.0.0] C:\User
 MERGED from [androidx.print:print:1.0.0] C:\Users\palap\.gradle\caches\transforms-4\762b742f360db1d09d1ad08cd88a0f0b\transformed\print-1.0.0\AndroidManifest.xml:17:1-22:12
 MERGED from [com.google.android.odml:image:1.0.0-beta1] C:\Users\palap\.gradle\caches\transforms-4\cd0e72668493bcd0a76b28b45745d83b\transformed\image-1.0.0-beta1\AndroidManifest.xml:2:1-9:12
 	package
-		INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml
+		INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml
 	android:versionName
-		INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml
+		INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml
 	android:versionCode
-		INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml
+		INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml
 	xmlns:android
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:13:11-69
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:13:11-69
 queries
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:24:5-28:15
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:24:5-28:15
 intent#action:name:com.eveningoutpost.dexdrip.BgEstimate
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:25:9-27:18
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:25:9-27:18
 action#com.eveningoutpost.dexdrip.BgEstimate
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:26:13-76
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:26:13-76
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:26:21-73
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:26:21-73
 uses-permission#android.permission.BLUETOOTH_SCAN
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:36:5-38:58
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:36:5-38:58
 	android:usesPermissionFlags
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:38:9-55
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:38:9-55
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:37:9-57
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:37:9-57
 uses-permission#android.permission.BLUETOOTH_CONNECT
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:39:5-76
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:39:5-76
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:39:22-73
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:39:22-73
 uses-permission#android.permission.BLUETOOTH
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:54:5-68
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:54:5-68
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:54:22-65
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:54:22-65
 uses-permission#android.permission.BLUETOOTH_ADMIN
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:55:5-74
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:55:5-74
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:55:22-71
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:55:22-71
 uses-permission#android.permission.ACCESS_FINE_LOCATION
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:59:5-61:38
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:59:5-61:38
 	android:maxSdkVersion
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:61:9-35
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:61:9-35
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:60:9-63
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:60:9-63
 uses-permission#android.permission.ACCESS_BACKGROUND_LOCATION
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:80:5-82:38
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:80:5-82:38
 	android:maxSdkVersion
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:82:9-35
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:82:9-35
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:81:9-69
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:81:9-69
 uses-permission#android.permission.FOREGROUND_SERVICE
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:83:5-77
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:83:5-77
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:83:22-74
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:83:22-74
 uses-permission#android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:84:5-94
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:84:5-94
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:84:22-91
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:84:22-91
 uses-permission#android.permission.POST_NOTIFICATIONS
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:85:5-77
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:85:5-77
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:85:22-74
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:85:22-74
 uses-permission#android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:97:5-95
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:97:5-95
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:97:22-92
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:97:22-92
 uses-permission#android.permission.WAKE_LOCK
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:105:5-68
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:105:5-68
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:105:22-65
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:105:22-65
 uses-permission#android.permission.SCHEDULE_EXACT_ALARM
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:122:5-106
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:122:5-106
 	android:maxSdkVersion
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:122:77-103
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:122:77-103
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:122:22-76
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:122:22-76
 uses-permission#android.permission.USE_EXACT_ALARM
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:123:5-74
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:123:5-74
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:123:22-71
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:123:22-71
 uses-permission#android.permission.RECEIVE_BOOT_COMPLETED
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:124:5-81
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:124:5-81
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:124:22-78
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:124:22-78
 uses-permission#android.permission.VIBRATE
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:129:5-66
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:129:5-66
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:129:22-63
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:129:22-63
 uses-permission#android.permission.USE_FULL_SCREEN_INTENT
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:138:5-81
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:138:5-81
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:138:22-78
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:138:22-78
 uses-feature#android.hardware.bluetooth_le
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:140:5-142:35
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:140:5-142:35
 	android:required
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:142:9-32
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:142:9-32
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:141:9-53
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:141:9-53
 application
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:144:5-253:19
-INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:144:5-253:19
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:144:5-253:19
+INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:144:5-253:19
 MERGED from [com.google.android.gms:play-services-code-scanner:16.1.0] C:\Users\palap\.gradle\caches\transforms-4\247f6081810b49656ea0ee94bac16c27\transformed\play-services-code-scanner-16.1.0\AndroidManifest.xml:8:5-21:19
 MERGED from [com.google.android.gms:play-services-code-scanner:16.1.0] C:\Users\palap\.gradle\caches\transforms-4\247f6081810b49656ea0ee94bac16c27\transformed\play-services-code-scanner-16.1.0\AndroidManifest.xml:8:5-21:19
 MERGED from [com.google.mlkit:vision-common:17.0.0] C:\Users\palap\.gradle\caches\transforms-4\475ad5bbdeb1bcbb4607e749a3482e6a\transformed\vision-common-17.0.0\AndroidManifest.xml:8:5-16:19
@@ -221,103 +221,103 @@ MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\palap\.gradle\cach
 MERGED from [com.google.android.odml:image:1.0.0-beta1] C:\Users\palap\.gradle\caches\transforms-4\cd0e72668493bcd0a76b28b45745d83b\transformed\image-1.0.0-beta1\AndroidManifest.xml:7:5-20
 MERGED from [com.google.android.odml:image:1.0.0-beta1] C:\Users\palap\.gradle\caches\transforms-4\cd0e72668493bcd0a76b28b45745d83b\transformed\image-1.0.0-beta1\AndroidManifest.xml:7:5-20
 	android:extractNativeLibs
-		INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml
+		INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml
 	android:appComponentFactory
 		ADDED from [androidx.core:core:1.13.1] C:\Users\palap\.gradle\caches\transforms-4\d5bb0c7e27c6c04f471b7154985dcbfe\transformed\core-1.13.1\AndroidManifest.xml:28:18-86
 	android:supportsRtl
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:150:9-35
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:150:9-35
 	android:label
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:148:9-41
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:148:9-41
 	android:icon
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:147:9-43
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:147:9-43
 	android:allowBackup
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:146:9-36
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:146:9-36
 	android:theme
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:149:9-50
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:149:9-50
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:145:9-40
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:145:9-40
 meta-data#com.google.mlkit.vision.DEPENDENCIES
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:161:9-163:42
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:161:9-163:42
 	android:value
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:163:13-39
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:163:13-39
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:162:13-64
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:162:13-64
 activity#com.fclglucolink.app.MainActivity
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:165:9-173:20
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:165:9-173:20
 	android:screenOrientation
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:168:13-52
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:168:13-52
 	android:exported
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:167:13-36
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:167:13-36
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:166:13-41
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:166:13-41
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:169:13-172:29
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:169:13-172:29
 action#android.intent.action.MAIN
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:170:17-69
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:170:17-69
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:170:25-66
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:170:25-66
 category#android.intent.category.LAUNCHER
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:171:17-77
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:171:17-77
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:171:27-74
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:171:27-74
 activity#com.fclglucolink.app.alarm.AlarmActivity
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:185:9-191:43
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:185:9-191:43
 	android:turnScreenOn
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:191:13-40
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:191:13-40
 	android:excludeFromRecents
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:188:13-46
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:188:13-46
 	android:showWhenLocked
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:190:13-42
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:190:13-42
 	android:launchMode
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:189:13-43
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:189:13-43
 	android:exported
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:187:13-37
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:187:13-37
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:186:13-48
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:186:13-48
 service#com.fclglucolink.app.sensor.ble.BleConnectionService
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:212:9-216:44
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:212:9-216:44
 	android:exported
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:214:13-37
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:214:13-37
 	android:stopWithTask
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:216:13-41
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:216:13-41
 	android:foregroundServiceType
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:215:13-60
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:215:13-60
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:213:13-60
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:213:13-60
 receiver#com.fclglucolink.app.sensor.ble.ConnectionWatchdogReceiver
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:222:9-225:40
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:222:9-225:40
 	android:enabled
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:224:13-35
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:224:13-35
 	android:exported
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:225:13-37
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:225:13-37
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:223:13-66
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:223:13-66
 receiver#com.fclglucolink.app.sensor.ble.PredictiveReconnectAlarmReceiver
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:233:9-236:40
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:233:9-236:40
 	android:enabled
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:235:13-35
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:235:13-35
 	android:exported
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:236:13-37
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:236:13-37
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:234:13-72
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:234:13-72
 receiver#com.fclglucolink.app.sensor.ble.BootReceiver
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:244:9-251:20
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:244:9-251:20
 	android:enabled
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:246:13-35
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:246:13-35
 	android:exported
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:247:13-36
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:247:13-36
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:245:13-52
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:245:13-52
 intent-filter#action:name:android.intent.action.BOOT_COMPLETED
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:248:13-250:29
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:248:13-250:29
 action#android.intent.action.BOOT_COMPLETED
-ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:249:17-79
+ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:249:17-79
 	android:name
-		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:249:25-76
+		ADDED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:249:25-76
 uses-sdk
-INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml reason: use-sdk injection requested
-INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml
-INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml
+INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml
+INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml
 MERGED from [com.google.android.gms:play-services-code-scanner:16.1.0] C:\Users\palap\.gradle\caches\transforms-4\247f6081810b49656ea0ee94bac16c27\transformed\play-services-code-scanner-16.1.0\AndroidManifest.xml:6:5-44
 MERGED from [com.google.android.gms:play-services-code-scanner:16.1.0] C:\Users\palap\.gradle\caches\transforms-4\247f6081810b49656ea0ee94bac16c27\transformed\play-services-code-scanner-16.1.0\AndroidManifest.xml:6:5-44
 MERGED from [com.google.mlkit:barcode-scanning-common:17.0.0] C:\Users\palap\.gradle\caches\transforms-4\18618242dfc19b3c8fd95bdf7cefca06\transformed\barcode-scanning-common-17.0.0\AndroidManifest.xml:5:5-44
@@ -493,9 +493,9 @@ MERGED from [androidx.print:print:1.0.0] C:\Users\palap\.gradle\caches\transform
 MERGED from [com.google.android.odml:image:1.0.0-beta1] C:\Users\palap\.gradle\caches\transforms-4\cd0e72668493bcd0a76b28b45745d83b\transformed\image-1.0.0-beta1\AndroidManifest.xml:5:5-44
 MERGED from [com.google.android.odml:image:1.0.0-beta1] C:\Users\palap\.gradle\caches\transforms-4\cd0e72668493bcd0a76b28b45745d83b\transformed\image-1.0.0-beta1\AndroidManifest.xml:5:5-44
 	android:targetSdkVersion
-		INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml
+		INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml
 	android:minSdkVersion
-		INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml
+		INJECTED from D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml
 activity#com.google.mlkit.vision.codescanner.internal.GmsBarcodeScanningDelegateActivity
 ADDED from [com.google.android.gms:play-services-code-scanner:16.1.0] C:\Users\palap\.gradle\caches\transforms-4\247f6081810b49656ea0ee94bac16c27\transformed\play-services-code-scanner-16.1.0\AndroidManifest.xml:15:9-20:20
 	android:screenOrientation

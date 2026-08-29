@@ -451,4 +451,54 @@ object DexcomG7Protocol {
             hardwareVersion, otherFirmwareVersion, asic
         )
     }
+
+    /**
+     * 29/08/2026 (editor, RONDE 157, KRITIEKE FIX — live-bevestiging door de
+     * gebruiker: "je conclusie dat de sensor hem niet terugkoppelt is
+     * onjuist want xdrip geeft hem wel aan") — [parseFirmwareVersion]
+     * hierboven verwacht UITSLUITEND opcode 0x21 (xDrip+'s
+     * `VersionRequestRxMessage`, het antwoord op vraag-variant 0/opcode
+     * 0x20). Maar [FIRMWARE_REQUEST_VERSION_ORDER] in DexcomG7Driver.kt
+     * probeert vraag-variant 1 (opcode 0x4A) ALTIJD als EERSTE — en xDrip+'s
+     * eigen `VersionRequest1RxMessage.java` (rechtstreeks nagelezen in de
+     * vendored bron, `uploads/xDrip-2026.08.08.zip`) laat zien dat het
+     * antwoord daarop een COMPLEET ANDER bytepatroon heeft, onder opcode
+     * 0x4B (of een letterlijke echo van 0x4A zelf) — niet 0x21.
+     * `DexcomG7Driver.kt`'s `handleControlNotification()`-dispatch herkende
+     * opcode 0x4A/0x4B nergens, viel in de "onherkend"-tak, en gooide het
+     * antwoord dus weg als afwijzing — exact het gemelde symptoom
+     * ("firmware blijft leeg"), terwijl de sensor wél gewoon netjes
+     * antwoordde. Handmatige decodering van een echt ontvangen pakket uit
+     * de meegestuurde log
+     * (74,0,32,-64,109,40,42,52,0,0,49,71,65,65,-77,87,-92,-72,-47,0)
+     * volgens xDrip+'s lay-out voor de opcode2(0x4A)-tak geeft
+     * firmwareVersion="32.192.109.40" — exact het xDrip-voorbeeld dat al in
+     * dit bestand's eigen kdoc bij [FirmwareVersionRx] stond, geen toeval.
+     *
+     * Alleen [firmwareVersion] wordt betrouwbaar gevuld: dat is het enige
+     * veld dat DexcomG7StatusScreen.kt daadwerkelijk toont. De overige
+     * VersionRequest1RxMessage-velden (build_version/inactive_days/
+     * version_code/serial, en die lay-out verschilt bovendien nog eens
+     * tussen de 0x4A- en 0x4B-tak) worden bewust NIET 1-op-1 in de
+     * bestaande [FirmwareVersionRx]-velden gepropt — dat zou alleen maar
+     * misleidende schijn-precisie geven voor data die nergens gebruikt
+     * wordt.
+     */
+    fun parseFirmwareVersion1(packet: ByteArray): FirmwareVersionRx? {
+        if (packet.size < 18) return null
+        val opcode = packet[0]
+        if (opcode != 0x4A.toByte() && opcode != 0x4B.toByte()) return null
+        val buf = ByteBuffer.wrap(packet).order(ByteOrder.LITTLE_ENDIAN)
+        buf.position(1)
+        val status = buf.get().toInt() and 0xff
+        val firmwareVersion = dottedStringFromData(buf, 4)
+        return FirmwareVersionRx(
+            status = status,
+            firmwareVersion = firmwareVersion,
+            bluetoothFirmwareVersion = "",
+            hardwareVersion = 0,
+            otherFirmwareVersion = "",
+            asic = 0
+        )
+    }
 }

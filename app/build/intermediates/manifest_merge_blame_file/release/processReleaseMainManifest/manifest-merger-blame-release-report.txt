@@ -12,8 +12,8 @@
 12-->
 13<manifest xmlns:android="http://schemas.android.com/apk/res/android"
 14    package="com.fclglucolink.app"
-15    android:versionCode="170"
-16    android:versionName="0.9.71-diagnostic-instance-tag" >
+15    android:versionCode="171"
+16    android:versionName="0.9.72-g7-firmware-opcode-fix" >
 17
 18    <uses-sdk
 19        android:minSdkVersion="26"
@@ -31,12 +31,12 @@
 31         het bestaande ontwerp van XDripBroadcaster).
 32    -->
 33    <queries>
-33-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:24:5-28:15
+33-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:24:5-28:15
 34        <intent>
-34-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:25:9-27:18
+34-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:25:9-27:18
 35            <action android:name="com.eveningoutpost.dexdrip.BgEstimate" />
-35-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:26:13-76
-35-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:26:21-73
+35-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:26:13-76
+35-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:26:21-73
 36        </intent>
 37    </queries>
 38
@@ -49,14 +49,14 @@
 45         niets aan wat de app al deed.
 46    -->
 47    <uses-permission
-47-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:36:5-38:58
+47-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:36:5-38:58
 48        android:name="android.permission.BLUETOOTH_SCAN"
-48-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:37:9-57
+48-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:37:9-57
 49        android:usesPermissionFlags="neverForLocation" />
-49-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:38:9-55
+49-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:38:9-55
 50    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-50-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:39:5-76
-50-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:39:22-73
+50-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:39:5-76
+50-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:39:22-73
 51    <!--
 52         31/07/2026 (editor, bugfix na crash tijdens de eerste echte BLE-
 53         koppelpoging: "SecurityException: Need BLUETOOTH permission")  —
@@ -74,22 +74,22 @@
 65         versies waar ze verder geen effect meer hebben.
 66    -->
 67    <uses-permission android:name="android.permission.BLUETOOTH" />
-67-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:54:5-68
-67-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:54:22-65
+67-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:54:5-68
+67-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:54:22-65
 68    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
-68-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:55:5-74
-68-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:55:22-71
+68-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:55:5-74
+68-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:55:22-71
 69    <!--
 70         Alleen nodig op Android <12 (API<31), waar BLE-scannen nog aan
 71         locatierechten vastzat — geen enkel gebruik van daadwerkelijke
 72         locatiedata in deze app.
 73    -->
 74    <uses-permission
-74-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:59:5-61:38
+74-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:59:5-61:38
 75        android:name="android.permission.ACCESS_FINE_LOCATION"
-75-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:60:9-63
+75-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:60:9-63
 76        android:maxSdkVersion="30" />
-76-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:61:9-35
+76-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:61:9-35
 77    <!--
 78         10/08/2026 (editor, RONDE 77, root-oorzaak van een ~20-25 min BG-gat
 79         tijdens langdurig scherm-uit op een Samsung A40/Android 11 —
@@ -111,20 +111,20 @@
 95         nodig.
 96    -->
 97    <uses-permission
-97-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:80:5-82:38
+97-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:80:5-82:38
 98        android:name="android.permission.ACCESS_BACKGROUND_LOCATION"
-98-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:81:9-69
+98-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:81:9-69
 99        android:maxSdkVersion="30" />
-99-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:82:9-35
+99-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:82:9-35
 100    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-100-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:83:5-77
-100-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:83:22-74
+100-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:83:5-77
+100-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:83:22-74
 101    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
-101-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:84:5-94
-101-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:84:22-91
+101-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:84:5-94
+101-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:84:22-91
 102    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-102-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:85:5-77
-102-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:85:22-74
+102-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:85:5-77
+102-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:85:22-74
 103
 104    <!--
 105         30/07/2026 (editor, na feedback: "moet 15 dagen onbeheerd door
@@ -139,8 +139,8 @@
 114         verzoek dat de gebruiker zelf moet goedkeuren.
 115    -->
 116    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-116-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:97:5-95
-116-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:97:22-92
+116-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:97:5-95
+116-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:97:22-92
 117
 118    <!--
 119         30/07/2026 (editor, na feedback: "update onregelmatig i.p.v. iedere
@@ -151,8 +151,8 @@
 124         uitstaat.
 125    -->
 126    <uses-permission android:name="android.permission.WAKE_LOCK" />
-126-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:105:5-68
-126-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:105:22-65
+126-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:105:5-68
+126-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:105:22-65
 127
 128    <!--
 129         03/08/2026 (editor, ronde 28 — na vergelijking van de ECHTE
@@ -172,17 +172,17 @@
 143         (maar nog steeds Doze-doorbrekende) variant, crasht nooit.
 144    -->
 145    <uses-permission
-145-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:122:5-106
+145-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:122:5-106
 146        android:name="android.permission.SCHEDULE_EXACT_ALARM"
-146-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:122:22-76
+146-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:122:22-76
 147        android:maxSdkVersion="32" />
-147-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:122:77-103
+147-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:122:77-103
 148    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
-148-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:123:5-74
-148-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:123:22-71
+148-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:123:5-74
+148-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:123:22-71
 149    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-149-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:124:5-81
-149-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:124:22-78
+149-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:124:5-81
+149-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:124:22-78
 150
 151    <!--
 152         13/08/2026 (editor, RONDE 107 — alarm-evaluatiemotor) — normale
@@ -190,8 +190,8 @@
 154         alarm/AlarmSoundPlayer.kt bij een afgaand alarm laat voelen.
 155    -->
 156    <uses-permission android:name="android.permission.VIBRATE" />
-156-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:129:5-66
-156-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:129:22-63
+156-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:129:5-66
+156-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:129:22-63
 157    <!--
 158         13/08/2026 (editor, RONDE 107) — nodig voor de scherm-doorbrekende
 159         full-screen-notificatie waarmee alarm/AlarmController.kt
@@ -203,15 +203,15 @@
 165         zelf via Instellingen aanzetten.
 166    -->
 167    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
-167-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:138:5-81
-167-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:138:22-78
+167-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:138:5-81
+167-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:138:22-78
 168
 169    <uses-feature
-169-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:140:5-142:35
+169-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:140:5-142:35
 170        android:name="android.hardware.bluetooth_le"
-170-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:141:9-53
+170-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:141:9-53
 171        android:required="true" />
-171-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:142:9-32
+171-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:142:9-32
 172
 173    <permission
 173-->[androidx.core:core:1.13.1] C:\Users\palap\.gradle\caches\transforms-4\d5bb0c7e27c6c04f471b7154985dcbfe\transformed\core-1.13.1\AndroidManifest.xml:22:5-24:47
@@ -232,22 +232,22 @@
 180-->[com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\palap\.gradle\caches\transforms-4\6662a9e6742382b3c1497ffe1c072352\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:26:22-64
 181
 182    <application
-182-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:144:5-253:19
+182-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:144:5-253:19
 183        android:name="com.fclglucolink.app.FclGlucoLinkApp"
-183-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:145:9-40
+183-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:145:9-40
 184        android:allowBackup="false"
-184-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:146:9-36
+184-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:146:9-36
 185        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
 185-->[androidx.core:core:1.13.1] C:\Users\palap\.gradle\caches\transforms-4\d5bb0c7e27c6c04f471b7154985dcbfe\transformed\core-1.13.1\AndroidManifest.xml:28:18-86
 186        android:extractNativeLibs="true"
 187        android:icon="@mipmap/ic_launcher"
-187-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:147:9-43
+187-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:147:9-43
 188        android:label="@string/app_name"
-188-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:148:9-41
+188-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:148:9-41
 189        android:supportsRtl="true"
-189-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:150:9-35
+189-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:150:9-35
 190        android:theme="@style/Theme.FCLGlucoLink" >
-190-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:149:9-50
+190-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:149:9-50
 191
 192        <!--
 193             31/07/2026 (editor) — CareSens Air koppel-stap 1/4: laat Google
@@ -261,29 +261,29 @@
 201             zie kdoc bij CareSensAirScanScreen.kt.
 202        -->
 203        <meta-data
-203-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:161:9-163:42
+203-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:161:9-163:42
 204            android:name="com.google.mlkit.vision.DEPENDENCIES"
-204-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:162:13-64
+204-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:162:13-64
 205            android:value="barcode_ui" />
-205-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:163:13-39
+205-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:163:13-39
 206
 207        <activity
-207-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:165:9-173:20
+207-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:165:9-173:20
 208            android:name="com.fclglucolink.app.MainActivity"
-208-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:166:13-41
+208-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:166:13-41
 209            android:exported="true"
-209-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:167:13-36
+209-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:167:13-36
 210            android:screenOrientation="unspecified" >
-210-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:168:13-52
+210-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:168:13-52
 211            <intent-filter>
-211-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:169:13-172:29
+211-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:169:13-172:29
 212                <action android:name="android.intent.action.MAIN" />
-212-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:170:17-69
-212-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:170:25-66
+212-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:170:17-69
+212-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:170:25-66
 213
 214                <category android:name="android.intent.category.LAUNCHER" />
-214-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:171:17-77
-214-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:171:27-74
+214-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:171:17-77
+214-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:171:27-74
 215            </intent-filter>
 216        </activity>
 217
@@ -300,19 +300,19 @@
 228             stapel losse schermen op te bouwen.
 229        -->
 230        <activity
-230-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:185:9-191:43
+230-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:185:9-191:43
 231            android:name="com.fclglucolink.app.alarm.AlarmActivity"
-231-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:186:13-48
+231-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:186:13-48
 232            android:excludeFromRecents="true"
-232-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:188:13-46
+232-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:188:13-46
 233            android:exported="false"
-233-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:187:13-37
+233-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:187:13-37
 234            android:launchMode="singleTop"
-234-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:189:13-43
+234-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:189:13-43
 235            android:showWhenLocked="true"
-235-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:190:13-42
+235-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:190:13-42
 236            android:turnScreenOn="true" />
-236-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:191:13-40
+236-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:191:13-40
 237
 238        <!--
 239             30/07/2026 (editor) — draait de actieve SensorDriver (scan/connect/
@@ -336,15 +336,15 @@
 257             stoppen).
 258        -->
 259        <service
-259-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:212:9-216:44
+259-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:212:9-216:44
 260            android:name="com.fclglucolink.app.sensor.ble.BleConnectionService"
-260-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:213:13-60
+260-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:213:13-60
 261            android:exported="false"
-261-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:214:13-37
+261-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:214:13-37
 262            android:foregroundServiceType="connectedDevice"
-262-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:215:13-60
+262-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:215:13-60
 263            android:stopWithTask="false" />
-263-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:216:13-41
+263-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:216:13-41
 264
 265        <!--
 266             03/08/2026 (editor, ronde 28) — zie ConnectionWatchdog.kt's kdoc:
@@ -353,13 +353,13 @@
 269             exported="false" — alleen deze app zelf plant dit alarm in.
 270        -->
 271        <receiver
-271-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:222:9-225:40
+271-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:222:9-225:40
 272            android:name="com.fclglucolink.app.sensor.ble.ConnectionWatchdogReceiver"
-272-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:223:13-66
+272-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:223:13-66
 273            android:enabled="true"
-273-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:224:13-35
+273-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:224:13-35
 274            android:exported="false" />
-274-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:225:13-37
+274-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:225:13-37
 275
 276        <!--
 277             04/08/2026 (editor, ronde 36) — zie PredictiveReconnectAlarm.kt's
@@ -370,13 +370,13 @@
 282             Bewust exported="false", net als de watchdog hierboven.
 283        -->
 284        <receiver
-284-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:233:9-236:40
+284-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:233:9-236:40
 285            android:name="com.fclglucolink.app.sensor.ble.PredictiveReconnectAlarmReceiver"
-285-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:234:13-72
+285-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:234:13-72
 286            android:enabled="true"
-286-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:235:13-35
+286-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:235:13-35
 287            android:exported="false" />
-287-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:236:13-37
+287-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:236:13-37
 288
 289        <!--
 290             03/08/2026 (editor, ronde 28) — mirror van Juggluco's `.NumAlarm`:
@@ -387,18 +387,18 @@
 295             eigen manifest).
 296        -->
 297        <receiver
-297-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:244:9-251:20
+297-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:244:9-251:20
 298            android:name="com.fclglucolink.app.sensor.ble.BootReceiver"
-298-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:245:13-52
+298-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:245:13-52
 299            android:enabled="true"
-299-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:246:13-35
+299-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:246:13-35
 300            android:exported="true" >
-300-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:247:13-36
+300-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:247:13-36
 301            <intent-filter>
-301-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:248:13-250:29
+301-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:248:13-250:29
 302                <action android:name="android.intent.action.BOOT_COMPLETED" />
-302-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:249:17-79
-302-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.4-WV\app\src\main\AndroidManifest.xml:249:25-76
+302-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:249:17-79
+302-->D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.5-WV\app\src\main\AndroidManifest.xml:249:25-76
 303            </intent-filter>
 304        </receiver>
 305

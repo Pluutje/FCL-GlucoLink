@@ -139,7 +139,7 @@
 				}
 			],
 			"type" : "STRING",
-			"value" : "RelWithDebInfo"
+			"value" : "Debug"
 		},
 		{
 			"name" : "CMAKE_CACHEFILE_DIR",
@@ -151,7 +151,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "d:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v9.4-WV/app/.cxx/RelWithDebInfo/6r2p5g44/arm64-v8a"
+			"value" : "d:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v9.5-WV/app/.cxx/Debug/70425w2u/arm64-v8a"
 		},
 		{
 			"name" : "CMAKE_CACHE_MAJOR_VERSION",
@@ -671,7 +671,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v9.4-WV/app/src/main/cpp"
+			"value" : "D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v9.5-WV/app/src/main/cpp"
 		},
 		{
 			"name" : "CMAKE_INSTALL_PREFIX",
@@ -707,7 +707,7 @@
 				}
 			],
 			"type" : "UNINITIALIZED",
-			"value" : "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.4-WV\\app\\build\\intermediates\\cxx\\RelWithDebInfo\\6r2p5g44\\obj\\arm64-v8a"
+			"value" : "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.5-WV\\app\\build\\intermediates\\cxx\\Debug\\70425w2u\\obj\\arm64-v8a"
 		},
 		{
 			"name" : "CMAKE_LINKER",
@@ -979,7 +979,7 @@
 				}
 			],
 			"type" : "UNINITIALIZED",
-			"value" : "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.4-WV\\app\\build\\intermediates\\cxx\\RelWithDebInfo\\6r2p5g44\\obj\\arm64-v8a"
+			"value" : "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.5-WV\\app\\build\\intermediates\\cxx\\Debug\\70425w2u\\obj\\arm64-v8a"
 		},
 		{
 			"name" : "CMAKE_SHARED_LINKER_FLAGS",
@@ -1219,11 +1219,11 @@
 			[
 				{
 					"name" : "HELPSTRING",
-					"value" : "No help, variable specified on the command line."
+					"value" : "The CMake toolchain file"
 				}
 			],
-			"type" : "UNINITIALIZED",
-			"value" : "C:\\Users\\palap\\AppData\\Local\\Android\\Sdk\\ndk\\26.1.10909125\\build\\cmake\\android.toolchain.cmake"
+			"type" : "FILEPATH",
+			"value" : "C:/Users/palap/AppData/Local/Android/Sdk/ndk/26.1.10909125/build/cmake/android.toolchain.cmake"
 		},
 		{
 			"name" : "CMAKE_VERBOSE_MAKEFILE",
@@ -1251,7 +1251,7 @@
 				}
 			],
 			"type" : "STATIC",
-			"value" : "D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v9.4-WV/app/.cxx/RelWithDebInfo/6r2p5g44/arm64-v8a"
+			"value" : "D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v9.5-WV/app/.cxx/Debug/70425w2u/arm64-v8a"
 		},
 		{
 			"name" : "caresensair_bridge_IS_TOP_LEVEL",
@@ -1275,7 +1275,7 @@
 				}
 			],
 			"type" : "STATIC",
-			"value" : "D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v9.4-WV/app/src/main/cpp"
+			"value" : "D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v9.5-WV/app/src/main/cpp"
 		},
 		{
 			"name" : "log-lib",

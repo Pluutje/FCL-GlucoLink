@@ -9622,4 +9622,66 @@ Gewijzigd: `logging/DiagnosticFileLogger.kt`, `app/build.gradle.kts`.
 
 versionCode 170, versionName "0.9.71-diagnostic-instance-tag".
 
+## Ronde 157 (29/08/2026) — KRITIEKE FIX: G7-firmwareveld bleef leeg (verkeerde opcode herkend) + cache-reset ontbrak bij automatische herkoppeling
+
+**Aanleiding.** Live-analyse van een dag-lange G7-test riep bij de gebruiker
+twee vragen op: (1) waarom blijft "Firmware version" op het statusscherm
+leeg, ook na een verse koppeling, en (2) waarom duurt het 30 dagen voordat
+er opnieuw geprobeerd wordt. Eerste analyse concludeerde ten onrechte dat
+de sensor het firmwareverzoek gewoon niet ondersteunde — de gebruiker
+corrigeerde dat direct en terecht: xDrip+ haalt bij dezelfde sensor wél
+firmware-info op.
+
+**Diagnose.**
+
+1. **Verkeerde opcode verwacht.** `FIRMWARE_REQUEST_VERSION_ORDER` in
+   `DexcomG7Driver.kt` probeert vraag-variant 1 (opcode 0x4A) ALTIJD als
+   eerste. xDrip+'s eigen broncode (`VersionRequest1RxMessage.java`,
+   rechtstreeks nagelezen in `uploads/xDrip-2026.08.08.zip`) laat zien dat
+   het antwoord daarop onder opcode 0x4B (of een echo van 0x4A zelf) komt —
+   een compleet ander bytepatroon dan opcode 0x21, waar onze
+   `parseFirmwareVersion()`/`handleControlNotification()`-dispatch tot deze
+   ronde uitsluitend op rekende. Een echt ontvangen pakket uit de log
+   (`74,0,32,-64,109,40,42,52,0,0,49,71,65,65,-77,87,-92,-72,-47,0`) blijkt,
+   met de hand gedecodeerd volgens xDrip+'s lay-out, gewoon een geldig
+   antwoord: firmwareVersion="32.192.109.40" — exact het voorbeeld dat al in
+   dit bestand's eigen kdoc stond. De sensor antwoordde dus prima; onze code
+   gooide het antwoord weg als "onherkend/afgewezen".
+2. **Cache-reset gold niet voor een automatische herkoppeling.** De
+   30-dagen-"al geprobeerd"-stempel wordt gewist door
+   `AppSettings.clearDexcomG7BatteryAndFirmwareInfo()`, maar die werd tot
+   deze ronde alleen aangeroepen vanuit de HANDMATIGE "nieuwe G7
+   koppelen"-flow. Een automatische herkoppeling na een spontaan verloren
+   Android-bond (zoals gezien tijdens de nacht-test) loopt daar niet
+   doorheen, dus bleef een oude, met de foute-opcode-fout besmette stempel
+   gewoon 30 dagen staan.
+
+**Wijziging.**
+
+- `sensor/dexcomg7/DexcomG7Protocol.kt`: nieuwe `parseFirmwareVersion1()` —
+  herkent opcode 0x4A/0x4B, vult `FirmwareVersionRx.firmwareVersion` (het
+  enige veld dat DexcomG7StatusScreen.kt toont) betrouwbaar in.
+- `sensor/dexcomg7/DexcomG7Driver.kt`: `handleControlNotification()`'s
+  dispatch route opcode 0x4A/0x4B nu naar de nieuwe parser i.p.v. naar de
+  "onherkend"-fail-fast-tak.
+- `sensor/dexcomg7/DexcomG7Driver.kt`: `registerBondReceiver()` krijgt nu
+  ook `scope`/`settings` mee en roept, bij een ECHTE verse
+  bond-onderhandeling (`previousBondState == BOND_NONE`, dezelfde "was
+  Unpaired"-overgang die al gelogd werd), zelf proactief
+  `clearDexcomG7BatteryAndFirmwareInfo()` aan — dezelfde reset als bij een
+  handmatige nieuwe koppeling, nu ook bij een automatische herkoppeling.
+
+**Verificatie.** Beide gewijzigde bestanden gecontroleerd met dezelfde
+Python-tokenizer als voorgaande rondes — accolades/haakjes in balans. Geen
+Gradle/Android-SDK beschikbaar om te compileren — handmatige review, plus
+de handmatige byte-voor-byte decodering van het echte ontvangen pakket
+tegen xDrip+'s eigen `VersionRequest1RxMessage`-lay-out als sterk bewijs
+voor de parse-fix. Nog niet zelf tegen een levende sensor getest — dat
+vergt een volgende koppeling/reconnect met diagnose-logboek aan.
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Protocol.kt`,
+`sensor/dexcomg7/DexcomG7Driver.kt`, `app/build.gradle.kts`.
+
+versionCode 171, versionName "0.9.72-g7-firmware-opcode-fix".
+
 versionCode 117, versionName `0.9.20-alarm-alert-mode-fix`.
