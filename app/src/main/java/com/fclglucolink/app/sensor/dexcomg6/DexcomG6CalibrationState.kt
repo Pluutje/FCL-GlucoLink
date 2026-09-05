@@ -183,6 +183,71 @@ enum class DexcomG6TransmitterType {
 /** Kortere, direct bruikbare ingang voor aanroepers die alleen de
  *  fallback-opwarmtijd nodig hebben (zie [DexcomG6TransmitterType]'s kdoc)
  *  — `null` als het transmitter-type nog niet bekend is (dan is er ook
- *  geen zinnige fallback te bepalen). */
+ *  geen zinnige fallback te bepalen).
+ *
+ *  04/09/2026 (editor, RONDE 166) — deze functie/[DexcomG6TransmitterType.
+ *  fallbackWarmupSeconds] worden sinds deze ronde NIET meer gebruikt voor
+ *  de eigenlijke meting-gate in DexcomG6Driver.kt's `handleGlucoseResult()`
+ *  (zie [MINIMUM_WARMUP_SECONDS_ALWAYS] hieronder voor de nieuwe, simpelere
+ *  gate) — blijven staan voor [DexcomG6TransmitterType]'s eigen Anubis/
+ *  Original-classificatie (nog gebruikt voor het "Type"-label op
+ *  DexcomG6StatusScreen.kt) en voor de "Warmup"-infokaart-rij daar (puur
+ *  informatief: de transmitter's eigen opgegeven/geschatte opwarmduur,
+ *  los van of readings al dan niet doorgelaten worden). */
 fun dexcomG6FallbackWarmupSeconds(typicalSensorDays: Int?): Int? =
     DexcomG6TransmitterType.fromTypicalSensorDays(typicalSensorDays)?.fallbackWarmupSeconds
+
+/**
+ * ============================================================================
+ * RONDE 166 (04/09/2026) — vaste, altijd-geldende minimum-opwarmtijd +
+ * "plausibele waarde tijdens WarmingUp toch tonen"
+ * ============================================================================
+ *
+ * Op verzoek, na een gesprek over hoe lang een G6 daadwerkelijk opwarmt: "Zou
+ * je de app zo kunnen aanpassen dat hij bij de g6 altijd minimaal 30 minuten
+ * gebruikt maar als er wel waarden binnen komen dat die dan gewoon getoond
+ * worden ondanks dat er ook een warming up signaal wordt mee gegeven."
+ *
+ * Twee losse wijzigingen t.o.v. de oude Ronde 74-gate
+ * ([DexcomG6TransmitterType.fallbackWarmupSeconds], 30 min voor Anubis / 60
+ * min voor Original, en ALLEEN actief als de transmitter zelf geen bruikbare
+ * `warmupSeconds` teruggeeft):
+ *
+ * 1) [MINIMUM_WARMUP_SECONDS_ALWAYS] — een vaste 30 minuten, VOORTAAN
+ *    ONVOORWAARDELIJK: ongeacht Anubis/Original-classificatie, en ongeacht
+ *    of de transmitter zelf een (mogelijk veel langere, bv. 2 uur) eigen
+ *    `warmupSeconds` rapporteert. De oude gate liet een Original-transmitter
+ *    die wél een eigen `warmupSeconds` opgaf volledig ongemoeid door deze
+ *    tweede gate heen (puur de kalibratiebyte bepaalde dan alles) — dat kon
+ *    dus 0 minuten zijn als de transmitter zelf per ongeluk/firmware-bug al
+ *    vroeg "Ok" zou melden. De nieuwe gate is bewust een simpele, harde
+ *    ondergrens die voor GEEN ENKELE G6-transmitter overgeslagen wordt.
+ *
+ * 2) [DEXCOM_RESERVED_STATUS_CODES_MGDL] — ná die 30 minuten wordt een
+ *    meting nu ook getoond als de transmitter nog "WarmingUp" rapporteert,
+ *    MITS het meegestuurde getal niet één van Dexcom's gereserveerde lage
+ *    statuscodes is (zie [DexcomG6CalibrationState.usableGlucose]'s kdoc:
+ *    1, 2, 3, 5, 6, 9, 10, 12, 13 mg/dL — intern gebruikt als foutcodes,
+ *    nooit als echte meetwaarde). Vóór deze ronde werd een "WarmingUp"-
+ *    gemarkeerde meting altijd volledig genegeerd, ongeacht het getal.
+ *
+ * EERLIJKE KANTTEKENING (belangrijk, want dit voedt uiteindelijk AAPS'
+ * doseerbeslissingen): dit is een HEURISTIEK, geen garantie. Een getal
+ * buiten de gereserveerde-statuscodes-lijst is met zekerheid GEEN interne
+ * foutcode, maar dat betekent niet automatisch dat de sensor al fysiek
+ * nauwkeurig is — sensoren kunnen tijdens de opwarmfase ook gewoon nog
+ * ruizig/onnauwkeurig meten zonder dat de transmitter dat via een
+ * gereserveerde code aangeeft. Ronde 74's eigen live-voorbeeld (een
+ * fysiek onwaarschijnlijke sprong van ~2 naar 16 mmol/L, amper 8 minuten
+ * na start, terwijl de kalibratiebyte toen al "Ok" zei) laat zien dat de
+ * transmitter's eigen staat-signaal alléén niet altijd waterdicht is — de
+ * onvoorwaardelijke 30-minuten-vloer hierboven is dan ook bewust behouden
+ * als extra, altijd-actieve veiligheidsmarge, in plaats van deze
+ * plausibiliteits-check als enige gate te laten dienen.
+ */
+const val MINIMUM_WARMUP_SECONDS_ALWAYS = 30 * 60
+
+/** Dexcom's protocol gebruikt deze lage mg/dL-waarden als gereserveerde
+ *  interne statuscodes (zie [DexcomG6CalibrationState.usableGlucose]'s
+ *  kdoc) — nooit een echte meting, ook niet toevallig. */
+val DEXCOM_RESERVED_STATUS_CODES_MGDL = setOf(1, 2, 3, 5, 6, 9, 10, 12, 13)

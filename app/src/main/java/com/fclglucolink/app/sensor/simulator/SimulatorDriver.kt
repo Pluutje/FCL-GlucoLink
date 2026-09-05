@@ -20,6 +20,12 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+/** 29/08/2026 (editor, RONDE 163) — "3 keer een vaste instelbare Bg te laten
+ *  beginnen", letterlijk uit het verzoek. Vast op 3 gehouden (alleen de
+ *  BASELINE-WAARDE zelf is instelbaar, zie AppSettings.simulatorBaselineMgdl)
+ *  — makkelijk hier aan te passen mocht dat ooit nodig zijn. */
+private const val BASELINE_REPEAT_COUNT = 3
+
 /**
  * 30/07/2026 (editor) — geen echte sensor: geen BLE, geen device om mee te
  * koppelen. connect() "verbindt" meteen (device-adres is altijd de vaste
@@ -126,25 +132,45 @@ class SimulatorDriver(@Suppress("unused") private val slot: SensorSlot) : Sensor
         val values = command.valuesMgdl
         if (values.isEmpty()) return
         replayJob = driverScope.launch {
-            var previous = values.first()
-            var lap = 1
-            // Loopt oneindig door (begint na de laatste waarde weer vooraan)
-            // totdat StopReplay komt — editor's expliciete verzoek, zodat een
-            // testrun niet vanzelf stopt zolang je 'm niet zelf stopt.
+            val minutesPerStep = command.intervalMs / 60_000.0
+            var previous = command.baselineMgdl
+
+            // Fase 1 (RONDE 163): BASELINE_REPEAT_COUNT keer de ingestelde
+            // baseline-waarde, zodat AAPS/FCLvNext eerst een stabiele IOB
+            // opbouwt vanaf een bekend startpunt vóór het eigenlijke
+            // scenario begint — zie SimulatorCommand.StartListReplay's kdoc.
+            repeat(BASELINE_REPEAT_COUNT) { i ->
+                emitReading(command.baselineMgdl, 0f)
+                SimulatorControlBridge.updateReplayState(
+                    SimulatorReplayState.PlayingBaselineWarmup(i + 1, BASELINE_REPEAT_COUNT, command.baselineMgdl)
+                )
+                delay(command.intervalMs)
+            }
+
+            // Fase 2: het scenario zelf, precies ÉÉN keer (niet meer
+            // oneindig looped, zie kdoc bij SimulatorCommand.StartListReplay
+            // voor de reden van deze RONDE-163-wijziging).
+            values.forEachIndexed { index, mgdl ->
+                // Trend uit het verschil met de vorige waarde — zelfde
+                // eenheid (mg/dL/min) als een echte sensor zou opleveren.
+                val trend = if (minutesPerStep > 0) ((mgdl - previous) / minutesPerStep).toFloat() else 0f
+                emitReading(mgdl, trend)
+                previous = mgdl
+                SimulatorControlBridge.updateReplayState(
+                    SimulatorReplayState.PlayingList(index + 1, values.size, mgdl)
+                )
+                delay(command.intervalMs)
+            }
+
+            // Fase 3: terugspringen naar en blijven hangen op de baseline —
+            // zodat de test niet in het niets eindigt (geen "stale BG" in
+            // AAPS) en meteen duidelijk is dat het scenario is afgerond.
             while (true) {
-                values.forEachIndexed { index, mgdl ->
-                    // Trend uit het verschil met de vorige waarde — zelfde
-                    // eenheid (mg/dL/min) als een echte sensor zou opleveren.
-                    val minutesPerStep = command.intervalMs / 60_000.0
-                    val trend = if (minutesPerStep > 0) ((mgdl - previous) / minutesPerStep).toFloat() else 0f
-                    emitReading(mgdl, trend)
-                    previous = mgdl
-                    SimulatorControlBridge.updateReplayState(
-                        SimulatorReplayState.PlayingList(index + 1, values.size, mgdl, lap)
-                    )
-                    delay(command.intervalMs)
-                }
-                lap++
+                emitReading(command.baselineMgdl, 0f)
+                SimulatorControlBridge.updateReplayState(
+                    SimulatorReplayState.RepeatingValue(command.baselineMgdl)
+                )
+                delay(command.intervalMs)
             }
         }
     }

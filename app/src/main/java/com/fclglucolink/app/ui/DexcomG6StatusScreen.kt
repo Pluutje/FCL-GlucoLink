@@ -42,6 +42,7 @@ import com.fclglucolink.app.sensor.ble.ConnectionStatusBridge
 import com.fclglucolink.app.sensor.dexcomg6.DexcomG6CalibrationState
 import com.fclglucolink.app.sensor.dexcomg6.DexcomG6Protocol
 import com.fclglucolink.app.sensor.dexcomg6.DexcomG6TransmitterType
+import com.fclglucolink.app.sensor.dexcomg6.MINIMUM_WARMUP_SECONDS_ALWAYS
 import com.fclglucolink.app.sensor.dexcomg6.dexcomG6FallbackWarmupSeconds
 import com.fclglucolink.app.startBleConnectionService
 import com.fclglucolink.app.stopBleConnectionService
@@ -641,23 +642,29 @@ fun dexcomG6StatusText(
     // retry-gate-fix in DexcomG6Driver.kt — een stale 0-waarde uit een
     // oudere, gebugde ronde mag hier geen (onzinnige) "0m resterend" tonen.
     //
-    // 09/08/2026 (editor, RONDE 74) — `effectiveWarmupSeconds`/`isFallbackWarmup`:
-    // bij ontbreken van een ECHTE, door de transmitter opgegeven waarde,
-    // valt dit terug op de gebruiker-gekozen schatting. BELANGRIJK: deze
-    // aftelling wordt hieronder NIET langer gegated op `calibrationState.
-    // warmingUp()` — bij deze specifieke Anubis-transmitter bleek het
-    // kalibratiebyte soms al vroeg "Ok"/bruikbaar te rapporteren (zie de
-    // live-test met een implausibele 16.0 mmol/L-sprong ~8 min na start),
-    // terwijl de gebruiker nog steeds wil weten hoelang de (door hem
-    // ingestelde) veiligheidsmarge nog loopt — zie ook DexcomG6Driver.kt's
-    // handleGlucoseResult()-gate, die metingen tijdens dit venster sowieso
-    // onderdrukt ongeacht wat het kalibratiebyte zegt.
-    val realWarmupSeconds = warmupSeconds?.takeIf { it > 0 }
-    val effectiveWarmupSeconds = realWarmupSeconds ?: dexcomG6FallbackWarmupSeconds(typicalSensorDays)
-    val isFallbackWarmup = realWarmupSeconds == null && effectiveWarmupSeconds != null
-    val warmupRemainingMs = if (effectiveWarmupSeconds != null && sessionStartConfirmedAtMs != null) {
-        effectiveWarmupSeconds * 1000L - (nowMs - sessionStartConfirmedAtMs)
-    } else null
+    // 09/08/2026 (editor, RONDE 74) — deze aftelling werd bewust NIET
+    // gegated op `calibrationState.warmingUp()` — bij deze specifieke
+    // Anubis-transmitter bleek het kalibratiebyte soms al vroeg "Ok"/
+    // bruikbaar te rapporteren (zie de live-test met een implausibele 16.0
+    // mmol/L-sprong ~8 min na start), terwijl de gebruiker nog steeds wil
+    // weten hoelang de veiligheidsmarge nog loopt.
+    //
+    // 04/09/2026 (editor, RONDE 166, op verzoek: "altijd minimaal 30
+    // minuten") — was hier `effectiveWarmupSeconds` (de transmitter's eigen
+    // warmupSeconds, of anders een Anubis/Original-afhankelijke 30/60-min-
+    // schatting via dexcomG6FallbackWarmupSeconds()). Die aftelling klopte
+    // niet meer met DexcomG6Driver.kt's eigen gate (handleGlucoseResult()),
+    // die sinds deze ronde altijd een vaste 30 minuten aanhoudt, ongeacht
+    // wat de transmitter zelf opgeeft — zie DexcomG6CalibrationState.kt's
+    // kdoc bij MINIMUM_WARMUP_SECONDS_ALWAYS. Nu dus dezelfde vaste waarde
+    // hier, zodat deze statustekst nooit meer een langere/kortere resterende
+    // tijd suggereert dan wat er daadwerkelijk gebeurt. `warmupSeconds`/
+    // `typicalSensorDays`/`dexcomG6FallbackWarmupSeconds()` blijven wél
+    // gebruikt voor de aparte "Warmup"-infokaart-rij hierboven (puur
+    // informatief, de transmitter's eigen opgegeven/geschatte opwarmduur).
+    val warmupRemainingMs = sessionStartConfirmedAtMs?.let {
+        MINIMUM_WARMUP_SECONDS_ALWAYS * 1000L - (nowMs - it)
+    }
     return when {
         // 09/08/2026 (editor, RONDE 71) — na 2+ mislukte pogingen (getracked
         // in DexcomG6Driver.kt) is "Sending sensor start…" misleidend: er
@@ -715,15 +722,24 @@ fun dexcomG6StatusText(
             calibrationState.shortUserText()!!
         // 09/08/2026 (editor, RONDE 74) — deze tak vervangt/verbreedt de oude
         // `calibrationState?.warmingUp() == true`-voorwaarde: zolang het
-        // (echte of fallback-)opwarmvenster nog niet verstreken is sinds de
-        // bevestigde start, blijft de aftelling zichtbaar — ongeacht wat het
-        // kalibratiebyte inmiddels al beweert (zie kdoc hierboven).
+        // opwarmvenster nog niet verstreken is sinds de bevestigde start,
+        // blijft de aftelling zichtbaar — ongeacht wat het kalibratiebyte
+        // inmiddels al beweert (zie kdoc hierboven).
+        //
+        // 04/09/2026 (editor, RONDE 166) — vaste 30 minuten i.p.v. een
+        // transmitter-/type-afhankelijke schatting, zie kdoc hierboven bij
+        // `warmupRemainingMs` — dus geen "(est.)"-suffix meer nodig, dit IS
+        // nu altijd de exacte drempel die DexcomG6Driver.kt ook aanhoudt.
         warmupRemainingMs != null && warmupRemainingMs > 0 -> {
             val remainingMin = (warmupRemainingMs / 60_000L).coerceAtLeast(0)
-            val suffix = if (isFallbackWarmup) " (est.)" else ""
-            "Sensor started · ${remainingMin / 60}h ${remainingMin % 60}m warmup remaining$suffix"
+            "Sensor started · ${remainingMin / 60}h ${remainingMin % 60}m minimum warmup remaining"
         }
-        calibrationState?.warmingUp() == true -> "Sensor started · warming up"
+        // 04/09/2026 (editor, RONDE 166) — ná de 30-minuten-vloer hierboven
+        // kan de driver een "WarmingUp"-gemarkeerde meting nu ook al tonen
+        // (zie DexcomG6Driver.kt's handleGlucoseResult()) — deze tekst hier
+        // is dan ook niet meer per se "nog geen data", puur een eerlijke
+        // weergave van wat de transmitter zelf nog meldt.
+        calibrationState?.warmingUp() == true -> "Sensor started · warming up (readings may already be showing)"
         connectionState is ConnectionState.Scanning -> "Searching for transmitter…"
         connectionState is ConnectionState.Connecting -> "Connecting…"
         lastConnectedAtMs != null ->

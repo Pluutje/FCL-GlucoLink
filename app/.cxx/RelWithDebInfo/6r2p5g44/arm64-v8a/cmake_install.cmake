@@ -1,4 +1,4 @@
-# Install script for directory: D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v9.6-WV/app/src/main/cpp
+# Install script for directory: D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-WerkVersie/app/src/main/cpp
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -50,5 +50,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v9.6-WV/app/.cxx/RelWithDebInfo/6r2p5g44/arm64-v8a/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-WerkVersie/app/.cxx/RelWithDebInfo/6r2p5g44/arm64-v8a/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

@@ -13,6 +13,7 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.fclglucolink.app.MainActivity
 import com.fclglucolink.app.alarm.AlarmMonitor
+import com.fclglucolink.app.update.UpdateChecker
 import com.fclglucolink.app.alarm.AlarmSoundPlayer
 import com.fclglucolink.app.broadcast.XDripBroadcaster
 import com.fclglucolink.app.calibration.CalibrationStore
@@ -275,6 +276,36 @@ class BleConnectionService : Service() {
             while (isActive) {
                 runCatching { alarmMonitor.checkOnce() }
                 delay(AlarmMonitor.CHECK_INTERVAL_MS)
+            }
+        }
+
+        // 04/09/2026 (editor, RONDE 165) — zelfde patroon als de
+        // alarmMonitor-lus hierboven: een losstaande, read-only periodieke
+        // lus, geen enkele bestaande sensor-/scan-logica raakt hierdoor
+        // aan. UPDATE_CHECK_INTERVAL_MS bewust ruim (12u) — dit is geen
+        // tijdkritische controle zoals BG-metingen/alarmen, gewoon "is er
+        // een nieuwere APK in de Drive-map" af en toe navragen, zie
+        // update/UpdateChecker.kt's kdoc voor het volledige ontwerp
+        // (inclusief waarom dit de eerste échte netwerkaanroep in deze
+        // verder volledig offline app is).
+        scope.launch {
+            while (isActive) {
+                runCatching {
+                    when (val result = UpdateChecker.checkForUpdate(this@BleConnectionService)) {
+                        is UpdateChecker.UpdateCheckResult.UpdateAvailable ->
+                            settings.setAvailableUpdate(result.versionCode, result.fileId, result.fileName)
+                        is UpdateChecker.UpdateCheckResult.UpToDate ->
+                            settings.clearAvailableUpdate()
+                        // NotConfigured/Error: bewust NIETS wijzigen aan de
+                        // bewaarde staat — een tijdelijke netwerkhapering
+                        // mag een eerder gevonden "update beschikbaar" niet
+                        // stilletjes laten verdwijnen.
+                        is UpdateChecker.UpdateCheckResult.NotConfigured,
+                        is UpdateChecker.UpdateCheckResult.Error -> Unit
+                    }
+                    settings.setLastUpdateCheckAt(System.currentTimeMillis())
+                }
+                delay(UPDATE_CHECK_INTERVAL_MS)
             }
         }
     }
@@ -677,7 +708,12 @@ class BleConnectionService : Service() {
                     .getOrDefault(emptyList())
                     .map { it.mmolToMgdl() }
                 if (mgdlValues.isNotEmpty()) {
-                    SimulatorControlBridge.startListReplay(mgdlValues, mode.intervalMs)
+                    // 29/08/2026 (editor, RONDE 163) — mode.baselineMgdl
+                    // doorgeven, zie PersistedSimulatorMode.ListReplay's
+                    // kdoc: zonder dit zou een service-herstart halverwege
+                    // de baseline-opwarm-/eindfase op de verkeerde waarde
+                    // hervatten.
+                    SimulatorControlBridge.startListReplay(mode.baselineMgdl, mgdlValues, mode.intervalMs)
                 }
             }
         }
@@ -982,5 +1018,11 @@ class BleConnectionService : Service() {
     companion object {
         private const val CHANNEL_ID = "fclglucolink_ble_status"
         private const val NOTIFICATION_ID = 1
+
+        // 04/09/2026 (editor, RONDE 165) — zie de update-check-lus in
+        // onCreate() hierboven: 12 uur, niet vaker — dit is een "is er een
+        // nieuwe APK klaargezet"-check, geen tijdkritisch signaal, dus
+        // bewust ruim om onnodig netwerkverkeer te vermijden.
+        private const val UPDATE_CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000L
     }
 }

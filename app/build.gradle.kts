@@ -1,3 +1,5 @@
+import java.util.Properties
+
 // FCLGlucoLink — app module.
 //
 // 30/07/2026 (editor) — minSdk 26: nodig voor de moderne BLE-scanfilters en
@@ -21,6 +23,29 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+// 04/09/2026 (editor, RONDE 165) — de Drive-map-ID en API-key voor de
+// update-check (zie update/UpdateChecker.kt's kdoc) horen NIET in de
+// broncode: local.properties staat al buiten versiebeheer (zie het bestand
+// zelf, "must NOT be checked into Version Control Systems") — dus dat is
+// ook de juiste plek voor deze twee, zelfde patroon als sdk.dir hierboven
+// in datzelfde bestand. Bewust met lege string als fallback i.p.v. de build
+// te laten falen als ze nog ontbreken — UpdateChecker.kt behandelt een lege
+// key/ID gewoon als "update-check nu niet mogelijk", geen crash.
+//
+// 04/09/2026 (editor, bugfix na build-fout "Unresolved reference: util") —
+// was `java.util.Properties()` los in de expressie, wat botst met AGP 8's
+// eigen `java { ... }`-DSL-extensie (voor toolchain-configuratie) — die
+// overschaduwt de kale `java`-pakketnaam op het top-level van dit script,
+// waardoor Kotlin `.util` niet meer als onderdeel van het pakket herkent.
+// Standaardfix: expliciete `import java.util.Properties` bovenaan dit
+// bestand, hier alleen nog het ongekwalificeerde klassenaam gebruiken.
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) {
+        file.inputStream().use { load(it) }
+    }
+}
+
 android {
     namespace = "com.fclglucolink.app"
     compileSdk = 34
@@ -29,8 +54,8 @@ android {
         applicationId = "com.fclglucolink.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 176
-        versionName = "0.9.77-bg-prediction-longterm-volatility"
+        versionCode = 183
+        versionName = "0.9.84-whats-new-and-manual-refresh"
 
         // 01/08/2026 (editor) — alleen arm64-v8a: libCALCULATION.so (in
         // app/src/main/jniLibs/arm64-v8a/) is alleen voor die ABI
@@ -42,6 +67,22 @@ android {
         ndk {
             abiFilters += "arm64-v8a"
         }
+
+        // 04/09/2026 (editor, RONDE 165) — zie kdoc bij `localProperties`
+        // hierboven en update/UpdateChecker.kt: BuildConfig.DRIVE_UPDATE_*
+        // i.p.v. hardcoded in Kotlin, zodat de echte waarden nooit in
+        // versiebeheer belanden. Waarden zelf vult de gebruiker aan in
+        // local.properties: `driveUpdateFolderId=...` / `driveUpdateApiKey=...`.
+        buildConfigField(
+            "String",
+            "DRIVE_UPDATE_FOLDER_ID",
+            "\"${localProperties.getProperty("driveUpdateFolderId", "")}\""
+        )
+        buildConfigField(
+            "String",
+            "DRIVE_UPDATE_API_KEY",
+            "\"${localProperties.getProperty("driveUpdateApiKey", "")}\""
+        )
     }
 
     externalNativeBuild {

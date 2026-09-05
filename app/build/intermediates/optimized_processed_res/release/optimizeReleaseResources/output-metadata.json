@@ -11,8 +11,8 @@
       "type": "SINGLE",
       "filters": [],
       "attributes": [],
-      "versionCode": 176,
-      "versionName": "0.9.77-bg-prediction-longterm-volatility",
+      "versionCode": 183,
+      "versionName": "0.9.84-whats-new-and-manual-refresh",
       "outputFile": "resources-release-optimize.ap_"
     }
   ],

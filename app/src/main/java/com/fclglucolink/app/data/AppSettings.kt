@@ -71,6 +71,11 @@ import kotlinx.coroutines.flow.map
  */
 private val Context.dataStore by preferencesDataStore(name = "fclglucolink_settings")
 
+/** 29/08/2026 (editor, RONDE 163) — zie [AppSettings.simulatorBaselineMgdl]'s
+ *  kdoc: 126 mg/dL (7,0 mmol/L), zelfde default als SimulatorSetupScreen.kt's
+ *  bestaande "Manual value"-veld. */
+private const val DEFAULT_SIMULATOR_BASELINE_MGDL = 126.0
+
 class AppSettings(private val context: Context) {
 
     private object Keys {
@@ -1440,11 +1445,17 @@ class AppSettings(private val context: Context) {
             val modeKey = slotString("simulator_active_mode", slot)
             val repeatKey = slotDouble("simulator_repeat_mgdl", slot)
             val intervalKey = slotLong("simulator_interval_ms", slot)
+            // 29/08/2026 (editor, RONDE 163) — aparte sleutel van [repeatKey]:
+            // dat veld hoort bij de losse "Repeat"-modus (zie
+            // SimulatorSetupScreen.kt's "Manual value"-kaart) en zou anders
+            // door elkaar lopen met de baseline van een lijst-scenario.
+            val listBaselineKey = slotDouble("simulator_list_replay_baseline_mgdl", slot)
             when (mode) {
                 is PersistedSimulatorMode.None -> {
                     prefs[modeKey] = "NONE"
                     prefs.remove(repeatKey)
                     prefs.remove(intervalKey)
+                    prefs.remove(listBaselineKey)
                 }
                 is PersistedSimulatorMode.Repeat -> {
                     prefs[modeKey] = "REPEAT"
@@ -1458,6 +1469,7 @@ class AppSettings(private val context: Context) {
                 is PersistedSimulatorMode.ListReplay -> {
                     prefs[modeKey] = "LIST_REPLAY"
                     prefs[intervalKey] = mode.intervalMs
+                    prefs[listBaselineKey] = mode.baselineMgdl
                 }
             }
         }
@@ -1472,7 +1484,21 @@ class AppSettings(private val context: Context) {
                 if (mgdl != null) PersistedSimulatorMode.Repeat(mgdl, intervalMs) else PersistedSimulatorMode.None
             }
             "RANDOM_WALK" -> PersistedSimulatorMode.RandomWalk(intervalMs)
-            "LIST_REPLAY" -> PersistedSimulatorMode.ListReplay(intervalMs)
+            // 29/08/2026 (editor, RONDE 163) — ontbrekende baseline (bv. een
+            // op-schijf-staat van vóór deze ronde) valt terug op
+            // simulatorBaselineMgdl's eigen default, niet op "geen scenario":
+            // een lijst-afspeelmodus zonder geldige baseline zou anders
+            // stilletjes NIETS hervatten (zie de vergelijkbare `?:
+            // PersistedSimulatorMode.None`-val bij "REPEAT" hierboven, hier
+            // bewust NIET gekopieerd — een ontbrekende baseline is anders dan
+            // een ontbrekende herhaal-waarde: bij Repeat is het veld de HELE
+            // betekenis van de modus, bij ListReplay is het een aanvullende,
+            // altijd-met-een-zinnig-default-in te vullen instelling).
+            "LIST_REPLAY" -> {
+                val baselineMgdl = prefs[slotDouble("simulator_list_replay_baseline_mgdl", slot)]
+                    ?: DEFAULT_SIMULATOR_BASELINE_MGDL
+                PersistedSimulatorMode.ListReplay(baselineMgdl, intervalMs)
+            }
             else -> PersistedSimulatorMode.None
         }
     }
@@ -1483,6 +1509,91 @@ class AppSettings(private val context: Context) {
 
     suspend fun setExternalListUri(slot: SensorSlot, uri: String) {
         context.dataStore.edit { prefs -> prefs[slotString("simulator_external_list_uri", slot)] = uri }
+    }
+
+    // 29/08/2026 (editor, RONDE 163, op verzoek — "3 keer een vaste
+    // instelbare Bg te laten beginnen [...] daarna weer naar de ingestelde
+    // waarde te springen") — de instelbare baseline-waarde zelf, los van
+    // welke modus 'm gebruikt (alleen de lijst-scenario-modus doet dat
+    // vandaag, zie SimulatorSetupScreen.kt). 126 mg/dL (7,0 mmol/L) — zelfde
+    // default als het bestaande "Manual value"-veld op dat scherm, geen
+    // nieuw, ongemotiveerd derde default-getal in deze codebase.
+    fun simulatorBaselineMgdl(slot: SensorSlot): Flow<Double> = context.dataStore.data.map { prefs ->
+        prefs[slotDouble("simulator_baseline_mgdl", slot)] ?: DEFAULT_SIMULATOR_BASELINE_MGDL
+    }
+
+    suspend fun setSimulatorBaselineMgdl(slot: SensorSlot, value: Double) {
+        context.dataStore.edit { prefs -> prefs[slotDouble("simulator_baseline_mgdl", slot)] = value }
+    }
+
+    // ============================================================
+    // Expert-modus — welke SensorType's zichtbaar zijn in de sensorkeuze
+    // (ui/SensorSelectionScreen.kt), RONDE 164, op verzoek: "het kunnen
+    // kiezen van de virtuele sensor (en ook de andere) onder een expert
+    // modus [...] alle sensoren staan met een selectie vakje er achter die
+    // default op aan staan maar die je ook uit kunt zetten zodat als je in
+    // 1 van de slots kiest je alleen de ingestelde/geactiveerde sensoren
+    // ziet." Bewust GLOBAAL (niet per-slot) — dit gaat over welke
+    // sensortypes een gebruiker in het algemeen wil kunnen kiezen (bv. de
+    // testsensoren verbergen voor niet-expert-gebruik), niet over een
+    // per-slot-keuze. Default AAN voor elk type (`?: true`) zodat een
+    // bestaande gebruiker die deze knop nooit aanraakt precies dezelfde,
+    // ongefilterde lijst blijft zien als vóór deze ronde.
+    // ============================================================
+
+    fun isSensorTypeEnabledInPicker(sensorType: SensorType): Flow<Boolean> =
+        context.dataStore.data.map { prefs ->
+            prefs[booleanPreferencesKey("expert_mode_sensor_enabled_${sensorType.name}")] ?: true
+        }
+
+    suspend fun setSensorTypeEnabledInPicker(sensorType: SensorType, enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[booleanPreferencesKey("expert_mode_sensor_enabled_${sensorType.name}")] = enabled
+        }
+    }
+
+    // ============================================================
+    // Update-check (About-scherm), RONDE 165 — zie
+    // update/UpdateChecker.kt's klasse-kdoc voor het volledige ontwerp.
+    // Bewaart alleen het LAATST BEKENDE resultaat van een periodieke check
+    // (uitgevoerd vanuit BleConnectionService.kt), zodat AboutScreen.kt
+    // meteen iets zinnigs kan tonen zonder zelf een nieuwe netwerkaanroep te
+    // hoeven doen bij elke keer openen. versionCode 0 = "geen update bekend"
+    // (een geldige versionCode is altijd >= 1, zie build.gradle.kts), fileId
+    // leeg = hetzelfde signaal voor dat veld.
+    // ============================================================
+
+    val availableUpdateVersionCode: Flow<Int> = context.dataStore.data.map { prefs ->
+        prefs[intPreferencesKey("available_update_version_code")] ?: 0
+    }
+    val availableUpdateFileId: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[stringPreferencesKey("available_update_file_id")] ?: ""
+    }
+    val availableUpdateFileName: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[stringPreferencesKey("available_update_file_name")] ?: ""
+    }
+    val lastUpdateCheckAtMs: Flow<Long> = context.dataStore.data.map { prefs ->
+        prefs[longPreferencesKey("last_update_check_at_ms")] ?: 0L
+    }
+
+    suspend fun setAvailableUpdate(versionCode: Int, fileId: String, fileName: String) {
+        context.dataStore.edit { prefs ->
+            prefs[intPreferencesKey("available_update_version_code")] = versionCode
+            prefs[stringPreferencesKey("available_update_file_id")] = fileId
+            prefs[stringPreferencesKey("available_update_file_name")] = fileName
+        }
+    }
+
+    suspend fun clearAvailableUpdate() {
+        context.dataStore.edit { prefs ->
+            prefs[intPreferencesKey("available_update_version_code")] = 0
+            prefs[stringPreferencesKey("available_update_file_id")] = ""
+            prefs[stringPreferencesKey("available_update_file_name")] = ""
+        }
+    }
+
+    suspend fun setLastUpdateCheckAt(millis: Long) {
+        context.dataStore.edit { prefs -> prefs[longPreferencesKey("last_update_check_at_ms")] = millis }
     }
 
     // ============================================================

@@ -1,5 +1,13 @@
 # ninja log v5
-7	796	8097167607431658	CMakeFiles/caresensair_bridge.dir/caresensair_bridge.cpp.o	5a67538f0d83806d
-797	956	8097167609167286	D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v9.6-WV/app/build/intermediates/cxx/RelWithDebInfo/6r2p5g44/obj/arm64-v8a/libcaresensair_bridge.so	5be8c3c07b5d5f9e
-8	777	8097207608699213	CMakeFiles/caresensair_bridge.dir/caresensair_bridge.cpp.o	5a67538f0d83806d
-778	928	8097207610236592	D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v9.6-WV/app/build/intermediates/cxx/RelWithDebInfo/6r2p5g44/obj/arm64-v8a/libcaresensair_bridge.so	5be8c3c07b5d5f9e
+1	1105	8102529488548593	CMakeFiles/caresensair_bridge.dir/caresensair_bridge.cpp.o	18a82196af4bdfbd
+1112	1242	8102529489990242	D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-WerkVersie/app/build/intermediates/cxx/RelWithDebInfo/6r2p5g44/obj/arm64-v8a/libcaresensair_bridge.so	2fc3e294899a35b3
+0	21	0	clean	184bb85595596643
+5	991	8102597202108802	CMakeFiles/caresensair_bridge.dir/caresensair_bridge.cpp.o	18a82196af4bdfbd
+992	1133	8102597203515402	D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-WerkVersie/app/build/intermediates/cxx/RelWithDebInfo/6r2p5g44/obj/arm64-v8a/libcaresensair_bridge.so	2fc3e294899a35b3
+0	13	0	clean	184bb85595596643
+4	910	8102975044740815	CMakeFiles/caresensair_bridge.dir/caresensair_bridge.cpp.o	18a82196af4bdfbd
+911	1063	8102975046365365	D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-WerkVersie/app/build/intermediates/cxx/RelWithDebInfo/6r2p5g44/obj/arm64-v8a/libcaresensair_bridge.so	2fc3e294899a35b3
+1	14	0	clean	184bb85595596643
+0	12	0	clean	184bb85595596643
+4	745	8103006926506489	CMakeFiles/caresensair_bridge.dir/caresensair_bridge.cpp.o	18a82196af4bdfbd
+745	882	8103006927947862	D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-WerkVersie/app/build/intermediates/cxx/RelWithDebInfo/6r2p5g44/obj/arm64-v8a/libcaresensair_bridge.so	2fc3e294899a35b3

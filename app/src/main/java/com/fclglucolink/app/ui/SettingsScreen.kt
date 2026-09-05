@@ -30,8 +30,10 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -42,8 +44,10 @@ import androidx.compose.ui.unit.dp
 import com.fclglucolink.app.data.AppSettings
 import com.fclglucolink.app.logging.DiagnosticFileLogger
 import com.fclglucolink.app.sensor.SensorSlot
+import com.fclglucolink.app.sensor.SensorType
 import com.fclglucolink.app.smoothing.SmoothingStrength
 import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
@@ -813,6 +817,62 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit) {
                                 scope.launch { settings.setBondLossAutoRecoveryEnabled(enabled) }
                             }
                         )
+                    }
+                }
+            }
+
+            // 29/08/2026 (editor, RONDE 164, op verzoek — "het kunnen kiezen
+            // van de virtuele sensor (en ook de andere) onder een expert
+            // modus te zetten. Bij de settings komt dan een knop 'expert
+            // modus' waarbij alle sensoren staan met een selectie vakje er
+            // achter die default op aan staan maar die je ook uit kunt
+            // zetten zodat als je in 1 van de slots kiest je alleen de
+            // ingestelde/geactiveerde sensoren ziet") — de "knop" is hier een
+            // in-/uitklap-schakelaar (i.p.v. een apart navigatiescherm, om
+            // geen nieuwe route in FclGlucoLinkNavHost.kt nodig te hebben
+            // voor iets dat verder gewoon bij de rest van de instellingen
+            // hoort): dichtgeklapt standaard, zodat de meeste gebruikers de
+            // testsensor-schakelaars nooit hoeven te zien. Zie
+            // ui/SensorSelectionScreen.kt voor waar dit daadwerkelijk
+            // gefilterd wordt.
+            var expertModeExpanded by remember { mutableStateOf(false) }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Expert mode", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Choose which sensor types show up in the sensor picker for " +
+                            "each slot — e.g. hide the BG simulator (testing) once you " +
+                            "no longer need it, so it can't be picked by accident.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                    TextButton(onClick = { expertModeExpanded = !expertModeExpanded }) {
+                        Text(if (expertModeExpanded) "Hide sensor visibility settings" else "Show sensor visibility settings")
+                    }
+                    if (expertModeExpanded) {
+                        SensorType.entries.forEach { sensor ->
+                            val enabled by settings.isSensorTypeEnabledInPicker(sensor).collectAsState(initial = true)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(sensor.displayName, style = MaterialTheme.typography.bodyMedium)
+                                Switch(
+                                    checked = enabled,
+                                    onCheckedChange = { checked ->
+                                        scope.launch { settings.setSensorTypeEnabledInPicker(sensor, checked) }
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
             }

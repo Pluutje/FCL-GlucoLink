@@ -9959,4 +9959,465 @@ Gewijzigd: `prediction/GlucosePrediction.kt`, `app/build.gradle.kts`.
 
 versionCode 176, versionName "0.9.77-bg-prediction-longterm-volatility".
 
+## Ronde 163 (29/08/2026) — BG-simulator: baseline-opwarming + één doorloop i.p.v. oneindig herhalen
+
+**Aanleiding.** Op verzoek: "Die blijft nu de lijst oneindig herhalen. Ik
+denk dat het nuttiger is om hem met 3 keer een vaste instelbare Bg te laten
+beginnen. Dan de lijst af te spelen en daarna weer naar de ingestelde
+waarde te springen." Doel: virtueel met een bekende IOB kunnen beginnen
+(bepaald door de baseline-fase), het scenario reproduceerbaar met het oude
+FCLvNext-algoritme kunnen afdraaien, dan de testversie installeren, de IOB
+weer gelijkzetten, en exact hetzelfde scenario nog een keer afspelen om de
+verschillen te vergelijken.
+
+**Wijziging.** `SimulatorCommand.StartListReplay` (`SimulatorControlBridge.kt`)
+kreeg een nieuw `baselineMgdl`-veld; `SimulatorDriver.kt`'s
+`startListReplay()` speelt nu drie fasen af i.p.v. de lijst oneindig te
+herhalen: (1) de baseline-waarde 3× (`BASELINE_REPEAT_COUNT`), (2) de
+gekozen lijst precies één keer, (3) daarna blijven hangen op de baseline
+(zodat AAPS geen "stale BG" meldt en duidelijk is dat het scenario klaar
+is). `PersistedSimulatorMode.ListReplay` en `SimulatorReplayState` zijn
+meegewerkt (nieuwe `PlayingBaselineWarmup`-status, `lap` verwijderd uit
+`PlayingList` want er is nu maar één doorloop). `AppSettings.kt` kreeg
+`simulatorBaselineMgdl(slot)`/`setSimulatorBaselineMgdl()` (default 126
+mg/dL, zelfde als het bestaande "Manual value"-veld) en de uitgebreide
+`ListReplay`-persistentie (nieuwe `simulator_list_replay_baseline_mgdl`-
+sleutel, apart van de bestaande "Repeat"-modus z'n eigen waarde).
+`BleConnectionService.kt`'s `resumeSimulatorIfNeeded()` geeft de baseline
+nu mee bij het hervatten na een service-herstart. `SimulatorSetupScreen.kt`
+kreeg een "Baseline BG"-invoerveld (onthouden tussen sessies) in de
+External-list-kaart, bijgewerkte uitleg-tekst en een aangepaste
+`replayStatusText()`.
+
+**Verificatie.** Alle vijf gewijzigde bestanden gecontroleerd met de
+Python-tokenizer — accolades/haakjes in balans. Alle aanroepplekken van
+`startListReplay()`/`PersistedSimulatorMode.ListReplay()` doorzocht — geen
+achtergebleven oude 1-/2-argument-aanroepen. Geen Gradle/Android-SDK
+beschikbaar om te compileren — handmatige review. Nog niet live getest.
+
+Gewijzigd: `sensor/simulator/SimulatorControlBridge.kt`,
+`sensor/simulator/SimulatorDriver.kt`, `data/AppSettings.kt`,
+`sensor/ble/BleConnectionService.kt`, `ui/SimulatorSetupScreen.kt`.
+
+## Ronde 164 (29/08/2026) — Expert mode: sensortypes verbergen in de sensorkeuze
+
+**Aanleiding.** Op verzoek, aansluitend bij Ronde 163: "het kunnen kiezen
+van de virtuele sensor (en ook de andere) onder een expert modus te
+zetten. Bij de settings komt dan een knop 'expert modus' waarbij alle
+sensoren staan met een selectie vakje er achter die default op aan staan
+maar die je ook uit kunt zetten zodat als je in 1 van de slots kiest je
+alleen de ingestelde/geactiveerde sensoren ziet."
+
+**Wijziging.**
+
+- `data/AppSettings.kt`: nieuwe, GLOBALE (niet per-slot) toggle per
+  `SensorType` — `isSensorTypeEnabledInPicker(sensorType)`/
+  `setSensorTypeEnabledInPicker()`, sleutel
+  `expert_mode_sensor_enabled_<NAAM>`, default AAN (bestaande gebruikers
+  zien zonder deze knop aan te raken exact dezelfde, ongefilterde lijst als
+  vóór deze ronde).
+- `ui/SettingsScreen.kt`: nieuwe "Expert mode"-kaart, standaard
+  dichtgeklapt (een knop "Show sensor visibility settings" klapt de lijst
+  met Switches open) — geen apart navigatiescherm, blijft bij de rest van
+  de instellingen.
+- `ui/SensorSelectionScreen.kt`: `SensorType.entries` wordt nu gefilterd op
+  de Expert-mode-instelling vóór het tonen; het MOMENTEEL ACTIEVE type
+  blijft altijd zichtbaar (ook als het net is uitgevinkt), zodat je een
+  actieve sensor nooit kwijt kunt raken vanuit dit scherm. De "None"-kaart
+  is geen `SensorType` en dus altijd zichtbaar, ongewijzigd.
+
+**Verificatie.** Beide gewijzigde bestanden gecontroleerd met de
+Python-tokenizer — accolades/haakjes in balans. Geen Gradle/Android-SDK
+beschikbaar om te compileren — handmatige review. Nog niet live getest.
+
+Gewijzigd: `data/AppSettings.kt`, `ui/SettingsScreen.kt`,
+`ui/SensorSelectionScreen.kt`, `app/build.gradle.kts`.
+
+versionCode 177, versionName "0.9.78-simulator-scenario-and-expert-mode".
+
+## Ronde 165 (04/09/2026) — update-check via gedeelde Google Drive-map + About-knop verplaatst
+
+**Aanleiding.** Op verzoek: "Ik kreeg het verzoek om te onderzoeken of er in
+de app ook een mogelijkheid is om een melding te krijgen als er een update
+beschikbaar is. Ik stel de apk beschikbaar als download via mijn google
+drive in een gedeelde map." Het oorspronkelijke voorstel (bestandsdatum
+vergelijken) bleek fragiel — zie de bijbehorende analyse aan de gebruiker:
+Drive's publieke downloadlink toont voor een bestand van deze grootte een
+"kan niet scannen op virussen"-tussenpagina i.p.v. het bestand, en een
+datum kan ook zonder échte nieuwe versie veranderen. Na overleg (zie de
+AskUserQuestion-ronde over detectiemethode/installatiegedrag) koos de
+gebruiker zelf voor een derde, robuustere variant: "als we de versie in de
+app zelf weg schrijven [...] en ik gebruik datzelfde versienr in de bestands
+naam. Dan hoeft hij alleen maar naar de naam te kijken. Hij hoeft denk ik
+niet automatisch te updaten dat kunnen de gebruikers wel handmatig doen.
+Wat dan wel handig is als de google drive link toch al in de app bekend is
+dat hij dan zelf op verzoek kan updaten." Plus, in dezelfde ronde: "de about
+knop die ik trouwens als aparte knop onder 'getting the best results' ipv
+als onderdeel er van wil hebben." Losstaand hiervan is deze ronde ook de
+eerste waarin de werkmap rechtstreeks op de pc van de gebruiker is
+aangesloten (`mcp__cowork__request_cowork_directory`) i.p.v. via zip-
+levering per ronde — zie de kdoc's datumstempel (04/09/2026) hierboven voor
+het omslagpunt.
+
+**Wijziging.**
+
+- `ui/ManualScreen.kt`/`ui/FclGlucoLinkNavHost.kt`: "About" is nu een eigen
+  rij in `ManualScreen`'s hoofdmenu, direct onder de "Getting the best
+  results"-rij, i.p.v. een link onderaan die ene topic-pagina. Het
+  `ManualTopic.showAboutLink`-veld is vervallen.
+- Nieuw package `update/`: `UpdateChecker.kt` leest de gedeelde Drive-map uit
+  via de Drive API's `files.list` (alleen bestandsNAMEN, geen download) en
+  parseert de versiecode uit elke `.apk`-bestandsnaam (patroon `_v<cijfers>`,
+  bv. `FCLGlucoLink_v178.apk`) — de hoogste gevonden versiecode wordt
+  vergeleken met `BuildConfig.VERSION_CODE`. `UpdateInstaller.kt` downloadt,
+  alleen op expliciete gebruikerstik ("Update now"), de gekozen APK via de
+  Drive API's media-endpoint (dezelfde tussenpagina-fragiliteit als bij de
+  publieke link vermeden, want dit endpoint geeft altijd de ruwe bytes) en
+  opent Android's eigen installatiebevestiging via een nieuwe FileProvider.
+- `AndroidManifest.xml`: nieuwe permissies `INTERNET` (eerste ooit in deze
+  overigens volledig offline app) en `REQUEST_INSTALL_PACKAGES`, plus een
+  `FileProvider`-declaratie (`res/xml/file_paths.xml`, cache-map `updates/`).
+- `app/build.gradle.kts`: `DRIVE_UPDATE_FOLDER_ID`/`DRIVE_UPDATE_API_KEY`
+  als `buildConfigField`, gevuld vanuit `local.properties` (buiten
+  versiebeheer, zelfde patroon als `sdk.dir`) — leeg gelaten =
+  `UpdateChecker` geeft dan gewoon `NotConfigured` terug, geen crash.
+- `data/AppSettings.kt`: `availableUpdateVersionCode`/`availableUpdateFileId`/
+  `availableUpdateFileName`/`lastUpdateCheckAtMs` — het laatst bekende
+  resultaat van de periodieke check, zodat AboutScreen.kt niet bij elke
+  opening zelf hoeft te bevragen.
+- `sensor/ble/BleConnectionService.kt`: een losstaande periodieke lus in
+  `onCreate()` (zelfde patroon als de bestaande `AlarmMonitor`-lus),
+  standaard elke 12 uur — bewust ruim, dit is geen tijdkritische controle.
+- `ui/AboutScreen.kt`: nieuwe "Updates"-kaart met "Check now" (direct, geen
+  wachten op de volgende periodieke check) en, alleen als er een nieuwere
+  versie bekend is, "Update now" — die laatste vraagt zo nodig eerst om de
+  systeemtoestemming "Install unknown apps" voor deze app.
+
+**Bewust NIET automatisch/stil.** Zowel de check als de installatie
+gebeuren nooit zonder een expliciete tik van de gebruiker op "Update now" —
+de periodieke achtergrondlus zet alleen de "een update is beschikbaar"-vlag,
+downloadt of installeert nooit zelf iets.
+
+**Verificatie.** Alle gewijzigde/nieuwe Kotlin-bestanden gecontroleerd met
+een eigen geschreven, Kotlin-string-template-bewuste tokenizer (de eerdere,
+simpelere regex-tokenizer gaf hier valse positieven bij `"https://..."` en
+bij genest `${x ?: "y"}`-interpolatie — beide zijn gewoon geldige Kotlin,
+geen echte bug) — alle accolades/haakjes in balans. `AndroidManifest.xml` en
+`res/xml/file_paths.xml` gecontroleerd op welgevormde XML. Alle aanroepplekken
+van `ManualScreen()`/`ManualTopicScreen()` doorzocht — geen achtergebleven
+oude parameteraanroepen. Geen Gradle/Android-SDK beschikbaar om te
+compileren — handmatige review. Nog niet live getest (Drive-map-ID en
+API-key moeten nog door de gebruiker zelf ingevuld worden in
+`local.properties`, zie de kdoc bij `update/UpdateChecker.kt`).
+
+Gewijzigd: `ui/ManualScreen.kt`, `ui/FclGlucoLinkNavHost.kt`,
+`ui/AboutScreen.kt`, `data/AppSettings.kt`,
+`sensor/ble/BleConnectionService.kt`, `AndroidManifest.xml`,
+`app/build.gradle.kts`, `local.properties`. Nieuw:
+`update/UpdateChecker.kt`, `update/UpdateInstaller.kt`,
+`res/xml/file_paths.xml`.
+
+versionCode 178, versionName "0.9.79-update-check".
+
+## Ronde 166 (04/09/2026) — Dexcom G6: altijd minimaal 30 minuten opwarmen, daarna plausibele waarden ook tijdens "WarmingUp" tonen
+
+**Aanleiding.** Op verzoek, na een gesprek over hoe de Anubis- vs. een
+originele G6-transmitter zich verhouden qua opwarmtijd: "Zou je de app zo
+kunnen aanpassen dat hij bij de g6 altijd minimaal 30 minuten gebruikt maar
+als er wel waarden binnen komen dat die dan gewoon getoond worden ondanks
+dat er ook een warming up signaal wordt mee gegeven."
+
+**Diagnose.** De oude gate (Ronde 74) had twee zwaktes t.o.v. dit verzoek:
+(1) de fallback-opwarmtijd (30 min Anubis / 60 min Original) was alleen
+actief als de transmitter zelf GEEN bruikbare `warmupSeconds` teruggaf — gaf
+een transmitter die wél op, dan gold er feitelijk GEEN minimum-tijd meer,
+puur het kalibratiebyte bepaalde alles (kon dus 0 minuten zijn bij een
+firmware-eigenaardigheid); (2) een "WarmingUp"-gemarkeerde meting werd
+altijd volledig genegeerd, ongeacht het meegestuurde getal.
+
+**Wijziging.**
+
+- `sensor/dexcomg6/DexcomG6CalibrationState.kt`: nieuwe `const val
+  MINIMUM_WARMUP_SECONDS_ALWAYS = 30 * 60` — ONVOORWAARDELIJK, ongeacht
+  transmitter-type en ongeacht wat de transmitter zelf rapporteert. Nieuwe
+  `val DEXCOM_RESERVED_STATUS_CODES_MGDL = setOf(1, 2, 3, 5, 6, 9, 10, 12,
+  13)` — Dexcom's gereserveerde lage-mg/dL-statuscodes (zie de bestaande
+  kdoc bij `usableGlucose()`, Ronde 69).
+- `sensor/dexcomg6/DexcomG6Driver.kt`'s `handleGlucoseResult()`: de oude
+  type-afhankelijke fallback-gate vervangen door twee simpelere regels: (1)
+  altijd minimaal `MINIMUM_WARMUP_SECONDS_ALWAYS` sinds de bevestigde
+  sessionStart; (2) ná die vloer wordt een meting ook geaccepteerd bij staat
+  "WarmingUp", mits het getal niet in `DEXCOM_RESERVED_STATUS_CODES_MGDL`
+  zit. `warmupSeconds`/`typicalSensorDays` worden niet meer voor de gate
+  zelf gebruikt, wel nog meegelogd voor diagnose.
+- `ui/DexcomG6StatusScreen.kt`'s `dexcomG6StatusText()`: de aftelling
+  gebruikt nu dezelfde vaste 30 minuten (was een transmitter-/type-
+  afhankelijke schatting) — anders zou de getoonde resterende tijd niet meer
+  overeenkomen met wanneer de driver daadwerkelijk data doorlaat. De
+  "warming up"-statustekst vermeldt nu expliciet dat er, ná de vloer, al
+  metingen kunnen verschijnen ondanks die tekst. De losse "Warmup"-infokaart-
+  rij (transmitter's eigen opgegeven/geschatte opwarmduur) blijft ongewijzigd
+  — puur informatief, niet gate-gerelateerd.
+
+**Eerlijke kanttekening (belangrijk — dit voedt AAPS' doseerbeslissingen).**
+Dit is een heuristiek, geen garantie: een getal buiten de gereserveerde-
+statuscodes-lijst is met zekerheid geen interne foutcode, maar dat betekent
+niet automatisch dat de sensor al fysiek nauwkeurig meet — sensoren kunnen
+tijdens opwarming ook gewoon nog ruizig zijn zonder dat de transmitter dat
+via een gereserveerde code aangeeft. Ronde 74's eigen live-voorbeeld (een
+fysiek onwaarschijnlijke sprong van ~2 naar 16 mmol/L, amper 8 minuten na
+start, terwijl het kalibratiebyte toen al "Ok" zei) laat zien dat de
+transmitter's eigen staat-signaal alléén niet waterdicht is. De
+onvoorwaardelijke 30-minuten-vloer blijft daarom bewust behouden als extra
+veiligheidsmarge, in plaats van de plausibiliteits-check als enige gate te
+laten dienen.
+
+**Verificatie.** Alle drie gewijzigde bestanden gecontroleerd met de Kotlin-
+string-template-bewuste tokenizer — accolades/haakjes in balans. Doorzocht
+op achtergebleven verwijzingen naar de verwijderde `isFallbackWarmup`/
+`effectiveWarmupSeconds`/`withinFallbackWarmup`/`fallbackElapsedMs` — geen
+gevonden (behalve één historische kdoc-vermelding). Geen Gradle/Android-SDK
+beschikbaar om te compileren — handmatige review. Nog niet live getest (geen
+originele G6-transmitter beschikbaar om tegen te testen).
+
+Gewijzigd: `sensor/dexcomg6/DexcomG6CalibrationState.kt`,
+`sensor/dexcomg6/DexcomG6Driver.kt`, `ui/DexcomG6StatusScreen.kt`.
+
+versionCode 179, versionName "0.9.80-g6-warmup-minimum-floor".
+
+## Ronde 167 (04/09/2026) — update-download: échte foutreden loggen i.p.v. generieke "Download failed"
+
+**Aanleiding.** Live-melding met screenshot: "Update now" op het About-scherm
+gaf "Couldn't install the update: Download failed" — geen bruikbare reden
+om de daadwerkelijke oorzaak (verkeerde API-key-restrictie? geen
+downloadrechten op het bestand? iets anders?) te kunnen vaststellen.
+
+**Diagnose.** `UpdateInstaller.kt`'s `downloadAndLaunchInstall()` toonde tot
+nu toe letterlijk `e.message ?: "Download failed"` — de generieke tekst
+verscheen dus omdat de opgevangen exception zelf GEEN `.message` had, niet
+omdat er geen fout was. Daarnaast las de HTTP-foutafhandeling nooit de
+error-response-body van Google's API, die bij een non-200-status vaak
+letterlijk de reden noemt (bv. "API key not valid" of een permissiemelding).
+
+**Wijziging.** `update/UpdateInstaller.kt`:
+- Bij een gevangen exception: altijd `"${e.javaClass.simpleName}: ${e.message
+  ?: "(no message)"}"` tonen — nooit meer een lege/generieke tekst, ook niet
+  als `.message` zelf `null` is.
+- Bij een non-200 HTTP-status: de `errorStream` van de connectie uitlezen
+  en meesturen in de foutmelding (Google's eigen JSON-foutrespons staat
+  daar, niet in de normale `inputStream`).
+- Elke downloadfout wordt nu ook naar `DiagnosticFileLogger` weggeschreven.
+
+**Verificatie.** Bestand gecontroleerd met de Kotlin-tokenizer — accolades/
+haakjes in balans. Geen Gradle/Android-SDK beschikbaar om te compileren —
+handmatige review. Nog niet live getest — dit is precies bedoeld om bij de
+VOLGENDE poging de echte reden zichtbaar te maken.
+
+Gewijzigd: `update/UpdateInstaller.kt`.
+
+versionCode 180, versionName "0.9.81-update-download-diagnostics".
+
+## Ronde 168 (04/09/2026) — update-download: NetworkOnMainThreadException opgelost
+
+**Aanleiding.** Ronde 167's verbeterde foutmelding deed precies waarvoor hij
+bedoeld was: de volgende live-testpoging (logcat-plak door de gebruiker)
+toonde de échte reden zwart-op-wit:
+`UpdateInstaller: download failed — NetworkOnMainThreadException: (no message)`.
+
+**Diagnose.** `downloadApk()` is een gewone, blokkerende functie
+(`HttpURLConnection`, geen `suspend`). `downloadAndLaunchInstall()` riep
+'m rechtstreeks aan zonder expliciete `withContext(Dispatchers.IO)` —
+in tegenstelling tot `UpdateChecker.kt`'s `checkForUpdate()`, die dat wél al
+goed deed. De aanroeper (`AboutScreen.kt`) start dit vanuit een gewone
+`rememberCoroutineScope()`-`scope.launch { }`, wat standaard op
+`Dispatchers.Main` draait — Android's StrictMode verbiedt netwerk-I/O op de
+hoofdthread en gooit dan deze exception, vóórdat er ook maar één byte
+gedownload wordt.
+
+**Wijziging.** `update/UpdateInstaller.kt`'s `downloadAndLaunchInstall()`:
+de aanroep `runCatching { downloadApk(context, fileId, apiKey) }` nu
+gewrapt in `withContext(Dispatchers.IO) { ... }` — exact hetzelfde patroon
+als `UpdateChecker.kt`. `Dispatchers`/`withContext` waren al geïmporteerd in
+dit bestand (uit Ronde 165), dus geen nieuwe import nodig.
+
+**Verificatie.** Bestand gecontroleerd met de Kotlin-string-template-bewuste
+tokenizer — accolades/haakjes in balans. Geen Gradle/Android-SDK
+beschikbaar om te compileren — handmatige review. LIVE GETEST door de
+gebruiker en bevestigd werkend: na installeren van de echte v181 een 1-op-1
+kopie van diezelfde apk hernoemd naar "...v182.apk" op de Drive gezet — de
+app detecteerde 'm, downloadde zonder fout (geen
+`NetworkOnMainThreadException` meer) en installeerde 'm. Android weigert een
+install alleen bij een STRIKT LAGERE versionCode dan de al geïnstalleerde
+(downgrade-bescherming) — een gelijke versionCode (hier 181==181, alleen de
+bestandsnaam suggereerde "182") is gewoon een toegestane herinstallatie,
+vandaar dat ook de install-stap hier zonder probleem doorliep. Na het
+verwijderen van die testkopie van de Drive gaf de app terecht weer "geen
+nieuwere versie beschikbaar" aan. Volledige check→download→install-cyclus
+hiermee end-to-end bevestigd.
+
+Gewijzigd: `update/UpdateInstaller.kt`, `app/build.gradle.kts`.
+
+versionCode 181, versionName "0.9.82-update-download-thread-fix".
+
+## Ronde 169 (05/09/2026) — Dexcom G6: reconnect-storm ná een geslaagde meting opgelost
+
+**Aanleiding.** Live-melding met logcat en twee screenshots (statusscherm
+met "Connecting..."/"Last connected" die elkaar razendsnel afwisselen):
+"Kun je eens kijken naar de connecting van de dexcom in mijn geval. Als er
+een nieuwe waarde binnenkomt geeft hij heel even 'last connected' maar al
+heel snel geeft hij dan weer connecting. Ik krijg het vermoeden dat hij dus
+continu probeert te connecten via de bluetooth terwijl hij na de laatste
+connectie gewoon 4 minuten kan wachten tot de volgende poging."
+
+**Diagnose.** De meegestuurde log bevestigde het vermoeden letterlijk: om
+09:28:57 kwam een geslaagde meting binnen (`glucose=94.0`), gevolgd door een
+bewuste disconnect — daarna probeerde de driver, in plaats van de
+verwachte ~4-5 minuten stilte, elke ~0,6-0,7 seconde opnieuw te verbinden
+(09:29:01, :02, :03, :03, :04, :05 — telkens `status=19`, de transmitter
+zelf verbreekt meteen weer omdat hij simpelweg nog niet klaar is voor een
+nieuwe uitwisseling).
+
+Root cause zat in `onConnectionStateChange()`'s STATE_DISCONNECTED-tak: een
+`wasSuccessfulRead`-check ("was er OOIT binnen de laatste 60s een
+geslaagde meting, ongeacht welke poging") bepaalde of de voorspellende
+`computeReconnectCooldownMs()` (het 5-minuten-raster) vertrouwd werd, of de
+gewone oplopende foutenbackoff. Voor DEZE specifieke cyclus voorspelde die
+functie toevallig ~0ms (de meting kwam laat in zijn eigen 5-minuten-vak
+binnen, waardoor het eerstvolgende rasterpunt volgens de formule maar ~16s
+later lag) — een mispredictie, geen bug in de formule zelf. Het echte
+probleem: zodra die eerste, foute voorspelling faalde (de transmitter was
+uiteraard nog niet bereikbaar), bleef `wasSuccessfulRead` voor ELKE
+volgende mislukte poging binnen dat 60s-venster WAAR (de laatste écht
+geslaagde meting was en bleef nog maar een paar seconden oud), dus bleef
+de code dezelfde, inmiddels aantoonbaar foute voorspelling herhalen i.p.v.
+terug te vallen op de normale backoff — vandaar de connect-storm.
+
+**Wijziging.** `sensor/dexcomg6/DexcomG6Driver.kt`:
+- Nieuw veld `gotReadingThisAttempt: Boolean` — expliciet "leverde DEZE
+  specifieke GATT-verbindpoging een meting op", i.p.v. de kale recentheid
+  van de laatst geslaagde meting ooit.
+- Gereset op `false` bij het STARTEN van elke nieuwe GATT-poging
+  (`connectToDevice()`), op `true` gezet zodra `handleGlucoseResult()` een
+  echte meting binnenkrijgt, en ook op `true` gezet in het bestaande
+  Ronde-123-auto-stop-pad (dat al een vergelijkbare "dit was een geslaagde
+  cyclus"-markering deed, nu op het nieuwe veld i.p.v. alleen op
+  `lastSuccessfulConnectionAtMs`).
+- `onConnectionStateChange()`'s STATE_DISCONNECTED-tak gebruikt nu
+  `gotReadingThisAttempt` (i.p.v. `wasSuccessfulRead`) om te kiezen tussen
+  de voorspellende cooldown en de oplopende foutenbackoff: een mislukte
+  reconnect vlak ná een geslaagde meting valt zo meteen terug op
+  `errorBackoffMs` i.p.v. dezelfde mispredictie te blijven herhalen.
+
+**Verificatie.** Bestand gecontroleerd met de Kotlin-string-template-bewuste
+tokenizer — accolades/haakjes in balans. Alle drie plekken die
+`lastSuccessfulConnectionAtMs` zetten nagelopen om zeker te weten dat
+`gotReadingThisAttempt` overal consistent meegezet wordt (geen regressie
+van Ronde 123's auto-stop-fix). Geen Gradle/Android-SDK beschikbaar om te
+compileren — handmatige review. Nog niet live getest — vraagt om een
+langere testperiode (meerdere 5-minuten-cycli) om te bevestigen dat de
+storm weg is en de status nu netjes ~4-5 minuten op "Connected"/"Last
+connected" blijft staan tussen metingen in.
+
+Gewijzigd: `sensor/dexcomg6/DexcomG6Driver.kt`, `app/build.gradle.kts`.
+
+versionCode 182, versionName "0.9.83-g6-reconnect-storm-fix".
+
+## Ronde 170 (05/09/2026) — manual bijgewerkt + "What's new"-knop op het About-scherm
+
+**Aanleiding.** Op verzoek, terwijl Ronde 169's G6-fix nog liep: "kun je
+[...] de update methode en met name de info omtrent de update aanpassen.
+Allereerst wil ik graag dat je de manual weer een keer doorloopt en die in
+lijn brengt met de huidige versie. En dan als aanvulling wil ik graag, als
+er een update beschikbaar is een 'whats new' knop. Die knop zou dan per
+versie moeten tonen wat er is veranderd/aangepast/toegevoegd [...] Hij zou
+dan alles wat er is aangepast sinds de versie die gebruikt is moeten tonen.
+Dus stel iemand gebruikt v180 en in de drive staan v181, v182 en v183
+klaar dan moeten de aanpassingen van 181,182 en 183 worden getoond, maar
+zit iemand al op 182 dan moet alleen 183 worden getoond. Hij moet bij
+drukken op de update knop wel altijd de laatste versie downloaden en
+installeren."
+
+**Deel 1 — Manual doorgenomen (ManualScreen.kt).** Vergeleken met
+AppSettings.kt's daadwerkelijke instellingen-sleutels en SettingsScreen.kt's
+eigen tekst — vijf instellingen van de afgelopen rondes stonden nog nergens
+in de handleiding: de mg/dL-vs-mmol/L-keuze (Ronde 104), Bg-voorspelling op
+de grafiek (Ronde 160-162), de universele vertrouwde xDrip-broncode
+(Ronde 115), automatisch opnieuw koppelen bij bond-verlies (Ronde 57), en
+Expert mode's sensor-zichtbaarheid (Ronde 164). Alle vijf nu als eigen
+sectie op SETTINGS, tekst overgenomen uit SettingsScreen.kt's eigen
+omschrijvingen. HOME_SCREEN's "The chart"-sectie kreeg een zin over de
+gestippelde voorspellingslijnen. SENSORS' "External list"-sectie noemde nog
+hardcoded "mmol/L" alsof dat de enige optie was — nu unit-onafhankelijk
+geformuleerd (het bestandsformaat zelf blijft overigens wél altijd mmol/L,
+onafhankelijk van de displayUnit-instelling — geverifieerd in
+`SimulatorListFile.kt`). `AboutLinkRow`'s subtitel noemt nu ook "what's
+new".
+
+**Deel 2 — "What's new"-knop.** Kernprobleem: een app die nu v180 draait
+kan onmogelijk uit haar EIGEN gecompileerde code weten wat v181/182/183
+straks bevatten — die inhoud bestaat simpelweg nog niet op het toestel. De
+enige plek waar dat wél al bekend is op het moment dat een oudere versie
+het nodig heeft, is dezelfde gedeelde Drive-map als de APK's zelf.
+
+- Nieuwe bestandsconventie, zelfde stijl als de APK's (Ronde 165:
+  "_v<cijfers>" in de bestandsnaam): één klein tekstbestand per uitgebrachte
+  versie, `FCLGlucoLink_v<versionCode>_whatsnew.txt`, kort en in het Engels
+  geschreven vanuit gebruikersperspectief (dus NIET dezelfde tekst als deze
+  README-rondes, die zijn ontwikkelaarsgericht/Nederlands/technisch). Bewust
+  een NIEUW bestand per versie (append-only, past bij het toch al bestaande
+  "één nieuwe APK per release"-patroon) i.p.v. één gedeeld bestand dat
+  steeds bewerkt moet worden — dat laatste zou bij een vergeten update-stap
+  stilzwijgend een oudere changelog tonen zonder dat iemand het merkt.
+- `update/DriveApi.kt` (nieuw): `listFiles()`/`downloadTextFile()` —
+  losgetrokken uit `UpdateChecker.kt`'s private `listApkFiles()`/`DriveFile`
+  (Ronde 165), zodat de bestandenlijst-aanroep hergebruikt kan worden i.p.v.
+  gekopieerd. `UpdateChecker.kt` gebruikt 'm nu ook (pure verhuizing, geen
+  gedragswijziging).
+- `update/WhatsNewChecker.kt` (nieuw): `fetchSince(context,
+  sinceVersionCode)` — filtert op versionCode STRIKT HOGER dan het
+  meegegeven `sinceVersionCode` (de aanroeper geeft altijd
+  `BuildConfig.VERSION_CODE` van de HUIDIG geïnstalleerde app door, geen
+  aparte "laatst geziene versie"-status nodig) — exact het
+  "v180-ziet-181+182+183, v182-ziet-alleen-183"-gedrag uit het verzoek.
+  Downloadt elk relevant bestand als platte tekst en geeft ze gesorteerd
+  terug.
+- `ui/AboutScreen.kt`: nieuwe "What's new"-knop, ALLEEN zichtbaar naast
+  "Update now" (dus alleen als een update al bekend is) — haalt de
+  changelogs pas op bij het tikken zelf, toont ze in een simpele,
+  scrollbare `AlertDialog` (bewust geen apart navigatiescherm). Toont een
+  nette "No changelog available for this update yet."-tekst als er (nog)
+  geen `_whatsnew.txt`-bestanden voor de tussenliggende versies gevonden
+  worden — nooit een foutmelding voor iets dat gewoon nog niet is
+  geüpload. "Update now" zelf is ONGEWIJZIGD: downloadt/installeert altijd
+  de nieuwste versie, ongeacht wat er in de "What's new"-lijst staat.
+
+**Belangrijk voor de gebruiker — nieuwe uploadstap (pas vanaf de VOLGENDE
+versie relevant).** Aanvankelijk waren hier ook vijf `_whatsnew.txt`-
+bestanden voor v179 t/m v183 klaargezet (map `whatsnew/`) — na een terechte
+opmerking van de gebruiker weer verwijderd: de knop bestaat pas in v183's
+eigen code, dus kan hij nooit gelezen worden door iemand die nog op een
+oudere versie zit (die heeft de knop nog niet) — en wie eenmaal op v183
+zit, heeft geen "update naar v183" meer nodig om 'm te zien. Elke
+`_whatsnew.txt` t/m v183 is dus dode data; zelfs v183's eigen bestand wordt
+nooit gelezen. Pas v184 (de eerstvolgende versie ná deze) is de eerste
+waarvan een `_whatsnew.txt` ooit daadwerkelijk getoond kan worden —
+namelijk aan iedereen die dan nog op v183 zit. Vanaf v184 hoort er dus wél
+weer bij elke nieuwe versie een eigen `_whatsnew.txt`-bestand mee-geüpload
+te worden naar de Drive-map, samen met de apk.
+
+**Verificatie.** Alle vijf gewijzigde/nieuwe Kotlin-bestanden
+(`ManualScreen.kt`, `AboutScreen.kt`, `UpdateChecker.kt`, `DriveApi.kt`,
+`WhatsNewChecker.kt`) gecontroleerd met de Kotlin-string-template-bewuste
+tokenizer — accolades/haakjes overal in balans. Geverifieerd dat
+`SimulatorListFile.kt`'s externe-lijst-formaat inderdaad altijd mmol/L
+verwacht (voor de manual-tekstcorrectie hierboven). Geen Gradle/Android-SDK
+beschikbaar om te compileren — handmatige review. Nog niet live getest.
+
+Gewijzigd: `ui/ManualScreen.kt`, `ui/AboutScreen.kt`,
+`update/UpdateChecker.kt`, `app/build.gradle.kts`. Nieuw: `update/DriveApi.kt`,
+`update/WhatsNewChecker.kt` (de vijf `_whatsnew.txt`-bestanden die hier
+eerst bijstonden zijn weer verwijderd, zie de kanttekening hierboven).
+
+versionCode 183, versionName "0.9.84-whats-new-and-manual-refresh".
+
 versionCode 117, versionName `0.9.20-alarm-alert-mode-fix`.

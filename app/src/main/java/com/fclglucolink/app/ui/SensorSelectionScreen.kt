@@ -22,13 +22,17 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.fclglucolink.app.data.AppSettings
 import com.fclglucolink.app.sensor.SensorType
+import kotlinx.coroutines.flow.combine
 
 /**
  * 30/07/2026 (editor) — sensorkeuzemenu. Niet-geïmplementeerde sensoren
@@ -85,6 +89,27 @@ fun SensorSelectionScreen(
     var pendingSwitchTarget by remember { mutableStateOf<SensorType?>(null) }
     var pendingClear by remember { mutableStateOf(false) }
 
+    // 29/08/2026 (editor, RONDE 164, op verzoek — "het kunnen kiezen van de
+    // virtuele sensor (en ook de andere) onder een expert modus te zetten
+    // [...] zodat als je in 1 van de slots kiest je alleen de ingestelde/
+    // geactiveerde sensoren ziet") — zie ui/SettingsScreen.kt's "Expert
+    // mode"-kaart en AppSettings.isSensorTypeEnabledInPicker()'s kdoc voor
+    // de volledige achtergrond. `combine` i.p.v. los per type collectAsState
+    // in een forEach: één stabiele, samengevoegde Flow, geen herhaalde
+    // composable-aanroepen binnen een lambda nodig.
+    val context = LocalContext.current
+    val settings = remember { AppSettings(context) }
+    val enabledSensorTypesFlow = remember(settings) {
+        combine(SensorType.entries.map { settings.isSensorTypeEnabledInPicker(it) }) { enabledFlags ->
+            SensorType.entries.filterIndexed { index, _ -> enabledFlags[index] }.toSet()
+        }
+    }
+    val enabledSensorTypes by enabledSensorTypesFlow.collectAsState(initial = SensorType.entries.toSet())
+    // Het momenteel actieve type blijft ALTIJD zichtbaar, ook als het net in
+    // Expert mode is uitgevinkt — anders zou je de sensor die daadwerkelijk
+    // actief is niet meer kunnen terugvinden/beheren vanuit dit scherm.
+    val visibleSensorTypes = SensorType.entries.filter { it == activeSensor || it in enabledSensorTypes }
+
     Scaffold(
         topBar = { TopAppBar(title = { Text("Choose your sensor") }) }
     ) { padding ->
@@ -105,7 +130,7 @@ fun SensorSelectionScreen(
                     if (activeSensor != null) pendingClear = true
                 }
             )
-            SensorType.entries.forEach { sensor ->
+            visibleSensorTypes.forEach { sensor ->
                 SensorCard(
                     sensor = sensor,
                     isActive = sensor == activeSensor,

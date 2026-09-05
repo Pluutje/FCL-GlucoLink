@@ -1,5 +1,9 @@
 [
     {
+        "merged": "com.fclglucolink.app-release-59:/xml_file_paths.xml.flat",
+        "source": "com.fclglucolink.app-main-60:/xml/file_paths.xml"
+    },
+    {
         "merged": "com.fclglucolink.app-release-59:/mipmap-anydpi-v26_ic_launcher.xml.flat",
         "source": "com.fclglucolink.app-main-60:/mipmap-anydpi-v26/ic_launcher.xml"
     },

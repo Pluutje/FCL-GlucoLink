@@ -1,3 +1,0 @@
--- Configuring done
--- Generating done
--- Build files have been written to: D:/_AAPS-AS/___FCL_GlucoLink/FCLGlucoLink-v9.6-WV/app/.cxx/Debug/70425w2u/arm64-v8a

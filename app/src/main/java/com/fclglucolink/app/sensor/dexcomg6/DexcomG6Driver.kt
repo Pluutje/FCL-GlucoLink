@@ -171,6 +171,23 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
     private var cadenceAnchorAtMs: Long? = null
     private var sensorStartedAtMs: Long = 0L
 
+    // 05/09/2026 (editor, RONDE 169 — na live-melding: "geeft heel even
+    // 'last connected' maar al heel snel geeft hij dan weer connecting...
+    // continu probeert te connecten via de bluetooth terwijl hij na de
+    // laatste connectie gewoon 4 minuten kan wachten") — zie de kdoc bij
+    // de STATE_DISCONNECTED-tak hieronder voor de volledige analyse: de
+    // oude `wasSuccessfulRead`-check (any successful read <60s geleden)
+    // bleef de voorspellende computeReconnectCooldownMs() vertrouwen voor
+    // ELKE mislukte reconnect-poging binnen dat venster, ook al had de
+    // EERSTE poging in dat venster al aangetoond dat die voorspelling voor
+    // deze cyclus fout was (near-zero cooldown -> meteen weer status=19).
+    // Dit veld maakt het verschil tussen "deze specifieke GATT-poging
+    // leverde een meting op" en "er was OOIT recent een meting" expliciet:
+    // gereset bij het STARTEN van elke nieuwe GATT-verbindpoging
+    // (connectToDevice()), pas op true gezet zodra handleGlucoseResult()
+    // ECHT een meting binnenkrijgt tijdens diezelfde poging.
+    private var gotReadingThisAttempt: Boolean = false
+
     // 08/08/2026 (editor) — xDrip+'s eigen oplopende backoff
     // (`error_backoff_ms`, Ob1G5CollectionService.java) i.p.v. CareSens
     // Air's vaste 60s-fallback — zie klasse-kdoc.
@@ -350,6 +367,7 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
         resetAuthState()
         lastSuccessfulConnectionAtMs = null
         cadenceAnchorAtMs = null
+        gotReadingThisAttempt = false
         errorBackoffMs = 1_000L
         val settings = AppSettings(context)
         val scope = CoroutineScope(SupervisorJob())
@@ -722,6 +740,10 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
 
     private fun connectToDevice(scope: CoroutineScope, appCtx: Context, device: BluetoothDevice, settings: AppSettings) {
         _connectionState.value = ConnectionState.Connecting(device.address)
+        // 05/09/2026 (editor, RONDE 169) — zie het klasse-veld zijn kdoc:
+        // elke NIEUWE GATT-poging begint met een schone lei, ongeacht of
+        // een eerdere poging (mogelijk lang) geleden wél een meting gaf.
+        gotReadingThisAttempt = false
         val callback = GattCallback(scope, settings)
         val gatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             device.connectGatt(appCtx, false, callback, BluetoothDevice.TRANSPORT_LE)
@@ -761,9 +783,47 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
                     bluetoothGatt = null
                     updateConnectionStatusAfterDisconnect()
                     if (ctx != null) {
-                        val wasSuccessfulRead = lastSuccessfulConnectionAtMs != null &&
-                            System.currentTimeMillis() - lastSuccessfulConnectionAtMs!! < 60_000L
-                        val cooldown = if (wasSuccessfulRead) {
+                        // 05/09/2026 (editor, RONDE 169, KRITIEKE FIX — na
+                        // live-melding: "geeft heel even 'last connected'
+                        // maar al heel snel geeft hij dan weer connecting
+                        // [...] ik krijg het vermoeden dat hij continu
+                        // probeert te connecten via de bluetooth terwijl
+                        // hij na de laatste connectie gewoon 4 minuten kan
+                        // wachten") — logcat bevestigde dit exact: ná een
+                        // geslaagde meting (glucose=94.0 om 09:28:57) volgde
+                        // een reeks mislukte reconnects (status=19, telkens
+                        // binnen ~1s van elkaar, om 09:29:02/03/03/04/05...)
+                        // in plaats van de verwachte ~4-5 minuten stilte.
+                        //
+                        // WAS: `wasSuccessfulRead` keek alleen of er OOIT
+                        // een geslaagde meting was binnen de laatste 60s —
+                        // dat was WAAR voor elke mislukte poging in die
+                        // reeks (de laatste ECHTE meting was en bleef maar
+                        // een paar seconden oud), dus koos de code steeds
+                        // opnieuw voor de voorspellende
+                        // computeReconnectCooldownMs() — die voor DEZE
+                        // cyclus toevallig ~0ms voorspelde (de meting kwam
+                        // laat in zijn eigen 5-minuten-vak binnen, waardoor
+                        // het eerstvolgende rasterpunt maar ~16s later lag).
+                        // Zodra die eerste voorspelling faalde (de
+                        // transmitter was, zoals verwacht, nog geen 16s
+                        // later alweer bereikbaar — status=19), bleef de
+                        // oude check diezelfde (inmiddels aantoonbaar
+                        // foute) voorspelling telkens herhalen, in plaats
+                        // van terug te vallen op een normale backoff —
+                        // vandaar de connect-storm van ~1x/seconde.
+                        //
+                        // NU: `gotReadingThisAttempt` (zie het klasse-veld
+                        // en handleGlucoseResult()) maakt expliciet
+                        // onderscheid tussen "DEZE poging leverde een
+                        // meting op" (vertrouw de voorspelling) en "een
+                        // vorige poging leverde ooit een meting op, maar
+                        // DEZE poging niet" (val terug op de gewone
+                        // groeiende foutmarge-backoff) — een mislukte
+                        // reconnect direct na een geslaagde meting valt nu
+                        // dus meteen terug op errorBackoffMs i.p.v. dezelfde
+                        // mispredictie te blijven herhalen.
+                        val cooldown = if (gotReadingThisAttempt) {
                             // 08/08/2026 (editor) — mirror van xDrip+'s
                             // prepareToWakeup(): ná een geslaagde meting NIET
                             // opnieuw meteen scannen, maar voorspellend
@@ -1071,6 +1131,16 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
                 val nowMsAutoStop = System.currentTimeMillis()
                 lastSuccessfulConnectionAtMs = nowMsAutoStop
                 if (cadenceAnchorAtMs == null) cadenceAnchorAtMs = nowMsAutoStop
+                // 05/09/2026 (editor, RONDE 169) — zie STATE_DISCONNECTED's
+                // nieuwe kdoc: sinds deze ronde bepaalt `gotReadingThisAttempt`
+                // (niet meer de kale recentheid van `lastSuccessfulConnectionAtMs`)
+                // of de voorspellende cooldown vertrouwd wordt. Zonder deze
+                // regel zou een BEWUSTE, geslaagde auto-stop-cyclus (exact
+                // dezelfde situatie als Ronde 123 hierboven al bedoelde te
+                // dekken) na deze ronde per ongeluk weer als "mislukking"
+                // behandeld worden — dezelfde reconnect-storm terug, maar nu
+                // via een ander pad.
+                gotReadingThisAttempt = true
                 // pendingCode blijft bewust STAAN (niet gewist) — de
                 // volgende, APARTE verbindcyclus pakt 'm hierboven gewoon
                 // weer op en stuurt dan (na een verse TransmitterTime-check)
@@ -1318,17 +1388,34 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
          * in het overzicht is gestart", n.a.v. een live-screenshot met een
          * fysiek onwaarschijnlijke sprong van ~2 naar 16 mmol/L amper 8
          * minuten na een bevestigde sensorstart) — BOVENOP de kalibratie-
-         * byte-gate hierboven (ronde 69) komt nu een TWEEDE, onafhankelijke
-         * gate: zelfs als de transmitter een kalibratiestaat als "Ok"/
-         * "NeedsCalibration" rapporteert, wordt de meting alsnog onderdrukt
-         * zolang de eigen, door de gebruiker gekozen fallback-opwarmtijd
-         * (zie DexcomG6CalibrationState.kt's dexcomG6FallbackWarmupSeconds())
-         * nog niet verstreken is SINDS de bevestigde sessionStart — maar
-         * ALLEEN wanneer de transmitter zelf GEEN bruikbare `warmupSeconds`
-         * teruggeeft (zoals bij deze specifieke Anubis-hardware, zie ronde
-         * 71's kdoc). Komt er ooit wél een echte `warmupSeconds` uit de
-         * transmitter, dan heeft die altijd voorrang en wordt deze fallback-
-         * gate overgeslagen (`fallbackWarmupSeconds` wordt dan `null`).
+         * byte-gate hierboven (ronde 69) kwam een TWEEDE, onafhankelijke
+         * gate: een fallback-opwarmtijd die alleen actief was zonder een
+         * bruikbare, door de transmitter zelf opgegeven `warmupSeconds`.
+         *
+         * 04/09/2026 (editor, RONDE 166, op verzoek: "Zou je de app zo
+         * kunnen aanpassen dat hij bij de g6 altijd minimaal 30 minuten
+         * gebruikt maar als er wel waarden binnen komen dat die dan gewoon
+         * getoond worden ondanks dat er ook een warming up signaal wordt
+         * mee gegeven") — deze gate vervangen door twee simpelere, los van
+         * Anubis/Original-classificatie werkende regels (zie
+         * DexcomG6CalibrationState.kt's uitgebreide kdoc bij
+         * [MINIMUM_WARMUP_SECONDS_ALWAYS] voor de volledige achtergrond +
+         * de eerlijke kanttekening over de resterende onzekerheid):
+         * 1) ONVOORWAARDELIJK minimaal [MINIMUM_WARMUP_SECONDS_ALWAYS] (30
+         *    min) sinds de bevestigde sessionStart, ongeacht transmitter-
+         *    type en ongeacht wat de transmitter zelf als `warmupSeconds`
+         *    opgeeft — de oude gate liet dat laatste namelijk VOLLEDIG
+         *    ongemoeid als de transmitter een eigen waarde teruggaf, wat
+         *    dus feitelijk 0 minuten kon betekenen.
+         * 2) Ná die 30 minuten wordt een meting ook geaccepteerd als de
+         *    staat nog "WarmingUp" is, MITS het getal niet één van Dexcom's
+         *    gereserveerde lage statuscodes is ([DEXCOM_RESERVED_
+         *    STATUS_CODES_MGDL]) — vóór deze ronde werd een WarmingUp-
+         *    gemarkeerde meting altijd volledig genegeerd.
+         * `warmupSeconds`/`typicalSensorDays` worden hier niet meer voor de
+         * gate zelf gebruikt (wel nog meegelogd, zie onderaan deze functie,
+         * voor diagnose) — puur voor het "Warmup"-infoveld en het "Type"-
+         * label op DexcomG6StatusScreen.kt blijven ze relevant.
          */
         private fun handleGlucoseResult(
             gatt: BluetoothGatt,
@@ -1339,6 +1426,11 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
         ) {
             val nowMs = System.currentTimeMillis()
             lastSuccessfulConnectionAtMs = nowMs
+            // 05/09/2026 (editor, RONDE 169) — zie het klasse-veld zijn
+            // kdoc en de STATE_DISCONNECTED-tak hieronder: DEZE poging
+            // leverde een echte meting op, dus de voorspellende cooldown
+            // mag hierna vertrouwd worden.
+            gotReadingThisAttempt = true
             // 10/08/2026 (editor, RONDE 86) — zie het klasse-veld en
             // CareSensAirDriver.kt's zelfde-ronde-kdoc.
             if (cadenceAnchorAtMs == null) cadenceAnchorAtMs = nowMs
@@ -1354,19 +1446,25 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
             val calibrationState = DexcomG6CalibrationState.fromRaw(rx.stateRaw)
             val calibrationUsable = calibrationState.usableGlucose() || calibrationState.insufficientCalibration()
 
-            // RONDE 74: fallback-opwarmgate — alleen actief zonder een echte
-            // warmupSeconds uit de transmitter zelf.
-            val fallbackWarmupSeconds = if (warmupSeconds == null || warmupSeconds <= 0) {
-                dexcomG6FallbackWarmupSeconds(typicalSensorDays)
-            } else {
-                null
-            }
-            val fallbackElapsedMs = sessionStartConfirmedAtMs?.let { nowMs - it }
-            val withinFallbackWarmup = fallbackWarmupSeconds != null &&
-                fallbackElapsedMs != null &&
-                fallbackElapsedMs < fallbackWarmupSeconds * 1000L
+            // RONDE 166: zie de klasse-kdoc hierboven bij handleGlucoseResult()
+            // en DexcomG6CalibrationState.kt's kdoc bij MINIMUM_WARMUP_SECONDS_ALWAYS
+            // voor de volledige achtergrond.
+            //
+            // 1) Onvoorwaardelijke 30-minuten-vloer, ongeacht transmitter-type
+            //    en ongeacht wat de transmitter zelf als warmupSeconds opgeeft.
+            val minimumElapsedMs = sessionStartConfirmedAtMs?.let { nowMs - it }
+            val withinMinimumWarmup = minimumElapsedMs != null &&
+                minimumElapsedMs < MINIMUM_WARMUP_SECONDS_ALWAYS * 1000L
 
-            val glucoseUsable = calibrationUsable && !withinFallbackWarmup
+            // 2) Ná die vloer: een "WarmingUp"-gemarkeerde meting toch
+            //    accepteren zolang het getal niet één van Dexcom's
+            //    gereserveerde statuscodes is (dus vermoedelijk een echte
+            //    meting, geen interne foutcode).
+            val looksLikePlausibleGlucose = rx.glucoseMgdl.toInt() !in DEXCOM_RESERVED_STATUS_CODES_MGDL
+            val warmingUpButPlausible = calibrationState.warmingUp() && looksLikePlausibleGlucose
+            val stateAllowsReading = calibrationUsable || warmingUpButPlausible
+
+            val glucoseUsable = stateAllowsReading && !withinMinimumWarmup
             _connectionState.value = ConnectionState.Connected(gatt.device.address, gatt.device.name)
             if (glucoseUsable) {
                 val glucoseMgdl = rx.glucoseMgdl.toDouble()
@@ -1377,17 +1475,27 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
                     sensorStartedAtMs = sensorStartedAtMs,
                     sensorType = SensorType.DEXCOM_G6
                 )
-                DiagnosticFileLogger.log("DexcomG6: glucose=$glucoseMgdl seq=${rx.sequence} display_only=${rx.glucoseIsDisplayOnly} state=$calibrationState")
-                scope.launch { _readings.emit(reading) }
-            } else if (calibrationUsable && withinFallbackWarmup) {
+                val plausibleSuffix = if (warmingUpButPlausible && !calibrationUsable) {
+                    " (state still WarmingUp, accepted as plausible — see Ronde 166 kdoc)"
+                } else {
+                    ""
+                }
                 DiagnosticFileLogger.log(
-                    "DexcomG6: glucose value ${rx.glucoseMgdl} SUPPRESSED — within fallback warmup window " +
-                        "(transmitter's own warmupSeconds unavailable, using ${fallbackWarmupSeconds}s estimate; " +
-                        "${(fallbackElapsedMs ?: 0L) / 1000L}s elapsed since confirmed start)"
+                    "DexcomG6: glucose=$glucoseMgdl seq=${rx.sequence} display_only=${rx.glucoseIsDisplayOnly} " +
+                        "state=$calibrationState$plausibleSuffix"
+                )
+                scope.launch { _readings.emit(reading) }
+            } else if (stateAllowsReading && withinMinimumWarmup) {
+                DiagnosticFileLogger.log(
+                    "DexcomG6: glucose value ${rx.glucoseMgdl} SUPPRESSED — within unconditional " +
+                        "${MINIMUM_WARMUP_SECONDS_ALWAYS}s minimum-warmup window " +
+                        "(${(minimumElapsedMs ?: 0L) / 1000L}s elapsed since confirmed start; " +
+                        "transmitter warmupSeconds=$warmupSeconds typicalSensorDays=$typicalSensorDays state=$calibrationState)"
                 )
             } else {
                 DiagnosticFileLogger.log(
-                    "DexcomG6: glucose value ${rx.glucoseMgdl} IGNORED (not a real measurement) — state=$calibrationState"
+                    "DexcomG6: glucose value ${rx.glucoseMgdl} IGNORED (looks like a reserved status code, " +
+                        "not a real measurement) — state=$calibrationState"
                 )
             }
 

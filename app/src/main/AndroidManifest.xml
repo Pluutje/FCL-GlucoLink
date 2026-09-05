@@ -137,6 +137,23 @@
          zelf via Instellingen aanzetten. -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
+    <!-- 04/09/2026 (editor, RONDE 165, op verzoek: "onderzoek [...] een
+         melding [...] als er een update beschikbaar is [...] via mijn
+         google drive [...] op verzoek kan updaten") — de EERSTE keer dat
+         deze app iets over het netwerk doet: periodiek de gedeelde
+         Drive-map uitlezen (bestandsnamen, geen grote downloads, zie
+         update/UpdateChecker.kt) en, alleen als de gebruiker zelf op
+         "Update nu" tikt, de nieuwe APK ophalen. Nooit automatisch/stil op
+         de achtergrond geïnstalleerd. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 04/09/2026 (editor, RONDE 165) — nodig om, ná een door de gebruiker
+         zelf getikte "Update nu"-knop, de systeem-installatiebevestiging
+         voor de gedownloade APK te mogen openen (zie
+         update/UpdateInstaller.kt). Puur de vraag mogen STELLEN; Android
+         toont de gebruiker altijd zijn eigen "installeer onbekende apps"-
+         toestemmingsscherm de eerste keer, deze permissie omzeilt dat niet. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <uses-feature
         android:name="android.hardware.bluetooth_le"
         android:required="true" />
@@ -249,6 +266,29 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <!-- 04/09/2026 (editor, RONDE 165) — nodig om de gedownloade update-
+             APK (in de eigen cache-map, zie update/UpdateInstaller.kt) als
+             een content://-URI aan Android's package-installer aan te
+             bieden — sinds Android 7 (API 24) accepteert de installer geen
+             kale file://-URI's meer van andere apps (FileUriExposed-
+             StrictMode-crash), vandaar deze FileProvider net als vrijwel
+             elke andere sideload-installer (F-Droid, Obtainium e.d.) hem
+             gebruikt. authorities uniek per package i.p.v. hardcoded, zodat
+             dit nooit kan botsen met een andere app z'n FileProvider op
+             hetzelfde toestel. exported="false" + grantUriPermissions:
+             alleen de installer-Activity die WIJ expliciet een tijdelijke
+             leestoestemming geven (via Intent.FLAG_GRANT_READ_URI_PERMISSION
+             in UpdateInstaller.kt) kan dit bestand lezen. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
     </application>
 

@@ -83,6 +83,34 @@ import com.fclglucolink.app.ui.theme.FCLGlucoLinkManualTheme
  * gebruikers-zichtbare tekst naar het Engels"-beslissing) — alleen de
  * code-commentaren/kdoc blijven Nederlands.
  *
+ * 04/09/2026 (editor, RONDE 165, op verzoek: "de about knop [...] als
+ * aparte knop onder 'getting the best results' ipv als onderdeel er van
+ * wil hebben") — [AboutLinkRow] stond tot nu toe ALLEEN op
+ * [ManualTopic.BEST_RESULTS]'s eigen inhoudspagina, onderaan, als link
+ * binnen die pagina's content ([ManualTopicScreen]'s [showAboutLink]-blok).
+ * Nu verplaatst naar [ManualScreen] zelf: een eigen, aparte rij in het
+ * hoofdmenu, direct ONDER de "Getting the best results"-rij (die toch al
+ * de laatste in [ManualTopic.entries] is) — je hoeft dus niet meer eerst
+ * die pagina te openen om bij "About" te komen. [showAboutLink] op
+ * [ManualTopic] is hiermee vervallen (was alleen BEST_RESULTS's eigen
+ * vlag); [ManualTopicScreen] roept [onOpenAbout] niet langer aan.
+ *
+ * 05/09/2026 (editor, RONDE 170, op verzoek: "de manual weer een keer
+ * doorlopen en die in lijn brengen met de huidige versie") — een aantal
+ * instellingen die de afgelopen rondes zijn toegevoegd stonden nergens in
+ * de handleiding: de mg/dL-vs-mmol/L-keuze (Ronde 104), Bg-voorspelling op
+ * de grafiek (Ronde 160-162), de universele vertrouwde xDrip-broncode
+ * (Ronde 115), automatisch opnieuw koppelen bij bond-verlies (Ronde 57),
+ * en Expert mode's sensor-zichtbaarheid (Ronde 164) — alle vijf nu als
+ * eigen sectie op SETTINGS, met tekst rechtstreeks overgenomen uit
+ * SettingsScreen.kt's eigen omschrijvingen (i.p.v. uit het hoofd
+ * herschreven, zelfde aanpak als Ronde 84's SENSORS-sectie hierboven).
+ * HOME_SCREEN's "The chart"-sectie kreeg er een zin bij over de gestippelde
+ * voorspellingslijnen die nu op de grafiek kunnen verschijnen. SENSORS'
+ * "External list"-sectie noemde nog specifiek "mmol/L" alsof dat de enige
+ * optie was — inmiddels unit-onafhankelijk geformuleerd. [AboutLinkRow]'s
+ * subtitel noemt nu ook de nieuwe "What's new"-knop (zie AboutScreen.kt).
+ *
  * 10/08/2026 (editor, RONDE 84, op verzoek: "kun je daarnaast ook de manual
  * aanpassen aan de nieuwe opties") — de tekst hieronder dateerde nog
  * volledig uit vóór de 2-sensoren-architectuur (Ronde 78+) en was op
@@ -127,7 +155,7 @@ import com.fclglucolink.app.ui.theme.FCLGlucoLinkManualTheme
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ManualScreen(onBack: () -> Unit, onOpenTopic: (ManualTopic) -> Unit) {
+fun ManualScreen(onBack: () -> Unit, onOpenTopic: (ManualTopic) -> Unit, onOpenAbout: () -> Unit) {
     FCLGlucoLinkManualTheme {
         Scaffold(
             topBar = {
@@ -158,6 +186,11 @@ fun ManualScreen(onBack: () -> Unit, onOpenTopic: (ManualTopic) -> Unit) {
                 for (topic in ManualTopic.entries) {
                     ManualMenuRow(topic = topic, onClick = { onOpenTopic(topic) })
                 }
+                // 04/09/2026 (editor, RONDE 165) — zie kdoc bovenaan dit
+                // bestand: eigen rij, direct onder de laatste topic-rij
+                // ("Getting the best results"), i.p.v. een link binnen die
+                // pagina's eigen content.
+                AboutLinkRow(onClick = onOpenAbout)
             }
         }
     }
@@ -201,13 +234,14 @@ private fun ManualMenuRow(topic: ManualTopic, onClick: () -> Unit) {
  * inhoudspagina voor één [ManualTopic], geopend vanuit [ManualScreen]'s
  * menu. [onBack] gaat terug naar dat menu (popBackStack in
  * FclGlucoLinkNavHost.kt), niet in één keer door naar het thuisscherm.
- * [onOpenAbout] wordt alleen daadwerkelijk aangeroepen als deze pagina
- * [ManualTopic.showAboutLink] heeft (nu alleen BEST_RESULTS) — zie
- * [AboutLinkRow] onderaan.
+ * 04/09/2026 (editor, RONDE 165) — [onOpenAbout]-parameter en het
+ * [AboutLinkRow]-blok onderaan zijn vervallen: "About" is nu een eigen rij
+ * in [ManualScreen]'s hoofdmenu i.p.v. een link binnen deze pagina's
+ * content, zie kdoc bovenaan dit bestand.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ManualTopicScreen(topic: ManualTopic, onBack: () -> Unit, onOpenAbout: () -> Unit) {
+fun ManualTopicScreen(topic: ManualTopic, onBack: () -> Unit) {
     val context = LocalContext.current
     FCLGlucoLinkManualTheme {
         Scaffold(
@@ -244,9 +278,6 @@ fun ManualTopicScreen(topic: ManualTopic, onBack: () -> Unit, onOpenAbout: () ->
                         context.startActivity(intent)
                     })
                 }
-                if (topic.showAboutLink) {
-                    AboutLinkRow(onClick = onOpenAbout)
-                }
             }
         }
     }
@@ -271,8 +302,15 @@ private fun ManualSectionBlock(section: ManualSection) {
 
 /**
  * 06/08/2026 (editor, RONDE 53) — verplaatst uit SettingsScreen.kt (zie de
- * kdoc daar): alleen zichtbaar op [ManualTopic.BEST_RESULTS], onderaan de
- * pagina, in dezelfde tikbare-rij-stijl als [ManualMenuRow] hierboven.
+ * kdoc daar).
+ *
+ * 04/09/2026 (editor, RONDE 165) — verplaatst NOGMAALS, dit keer van een
+ * link onderaan [ManualTopic.BEST_RESULTS]'s eigen pagina naar een eigen
+ * rij in [ManualScreen]'s hoofdmenu zelf (direct onder die topic-rij) —
+ * zie kdoc bovenaan dit bestand. Nu ook een subtitel, in dezelfde
+ * twee-regel-stijl als [ManualMenuRow], i.p.v. de vorige kale titel-only
+ * rij (paste niet meer bij de andere menu-rijen eromheen nu dit er zelf
+ * één is geworden).
  */
 @Composable
 private fun AboutLinkRow(onClick: () -> Unit) {
@@ -290,7 +328,14 @@ private fun AboutLinkRow(onClick: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("About FCLGlucoLink", style = MaterialTheme.typography.bodyMedium)
+            Column(modifier = Modifier.weight(1f)) {
+                Text("About FCLGlucoLink", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "App info, credits, version, update check, and what's new",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+            }
             Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
@@ -390,8 +435,12 @@ data class ManualSection(val heading: String, val body: String)
  * enum-waarde per handleiding-onderwerp: [menuTitle]/[menuSubtitle] voor de
  * rij in [ManualScreen]'s menu, [sections] voor de daadwerkelijke
  * (kopje, alinea)-inhoud op [ManualTopicScreen]. [showAapsWarning] alleen
- * `true` voor Calibration/Smoothing (zie [WarningCard]); [showAboutLink]
- * alleen `true` voor BEST_RESULTS (zie [AboutLinkRow]).
+ * `true` voor Calibration/Smoothing (zie [WarningCard]).
+ *
+ * 04/09/2026 (editor, RONDE 165) — het vroegere [showAboutLink]-veld
+ * (alleen `true` voor BEST_RESULTS) is vervallen: "About" is nu een eigen,
+ * vaste rij in [ManualScreen]'s menu i.p.v. een per-topic vlag, zie
+ * [AboutLinkRow]'s kdoc.
  *
  * SENSORS's inhoud (06/08/2026, op verzoek: "het stukje info over de
  * sensors moet wat uitgebreider [...] dan ook de sensors noemen die
@@ -408,7 +457,6 @@ enum class ManualTopic(
     val menuSubtitle: String,
     val sections: List<ManualSection>,
     val showAapsWarning: Boolean = false,
-    val showAboutLink: Boolean = false,
     val showLocationPermissionLink: Boolean = false
 ) {
     HOME_SCREEN(
@@ -447,7 +495,11 @@ enum class ManualTopic(
                     "moment a new sensor session started on that slot — " +
                     "subtle for a same-type switch (e.g. a new CareSens " +
                     "sensor), more prominent for a switch between " +
-                    "different sensor types."
+                    "different sensor types. If \"Show Bg prediction\" is " +
+                    "on (Settings), two diverging dashed lines continue " +
+                    "past your last reading — a rough, short-term forecast " +
+                    "of where the Bg could move, see \"Settings\" in this " +
+                    "guide for what it's based on."
             ),
             ManualSection(
                 "Quick-access buttons",
@@ -543,7 +595,9 @@ enum class ManualTopic(
             ),
             ManualSection(
                 "External list (reproducible testing)",
-                "Pick a text file with one BG value (mmol/L) per line — " +
+                "Pick a text file with one BG value per line, in mmol/L " +
+                    "regardless of your display unit setting (see " +
+                    "\"Settings\" in this guide) — " +
                     "for example an earlier problem episode exported from " +
                     "your own logs — and the simulator replays it in that " +
                     "exact order, looping back to the start once it " +
@@ -597,6 +651,56 @@ enum class ManualTopic(
                 "Those switches also live on this screen — see their own " +
                     "topics in this guide for what they do and how to set " +
                     "them up."
+            ),
+            ManualSection(
+                "Display unit",
+                "Choose mmol/L or mg/dL — controls charts, the status " +
+                    "ring, fingerstick/simulator input, and the connection " +
+                    "notification. Storage and the value sent to AAPS " +
+                    "always stay mg/dL underneath, regardless of this " +
+                    "setting, so switching it is purely cosmetic and never " +
+                    "affects dosing."
+            ),
+            ManualSection(
+                "Bg prediction",
+                "\"Show Bg prediction\" adds a 1-hour forecast to the " +
+                    "chart on the tab it's shown on (see \"Home screen\" " +
+                    "in this guide) — based only on the recent trend and " +
+                    "how much it's been varying, with no insulin-on-board " +
+                    "or meal information involved. Treat it as a rough " +
+                    "indication, not a precise prediction."
+            ),
+            ManualSection(
+                "Universal trusted source code",
+                "Makes every sensor (including the simulator) identify " +
+                    "itself to AAPS with a single description that's " +
+                    "trusted for \"SMB Always\" on both AAPS 3 and AAPS 4 " +
+                    "— the trade-off is that AAPS/Nightscout then shows a " +
+                    "generic Dexcom label instead of your actual sensor's " +
+                    "name. Off sends the best-matching description per " +
+                    "sensor instead, which may not enable SMB Always on " +
+                    "every AAPS version."
+            ),
+            ManualSection(
+                "Automatic re-pair",
+                "If the phone's Bluetooth pairing with your sensor is " +
+                    "unexpectedly lost after it worked before, FCLGlucoLink " +
+                    "can try to silently re-pair instead of waiting for " +
+                    "you to reconnect by hand. It only acts on a sensor " +
+                    "it has successfully connected to before, never a " +
+                    "brand-new one — but note that it removes and " +
+                    "re-creates the phone's Bluetooth pairing, which " +
+                    "affects the whole phone: if another app (e.g. xDrip+) " +
+                    "is also paired with the same sensor, its pairing " +
+                    "breaks too."
+            ),
+            ManualSection(
+                "Expert mode",
+                "Choose which sensor types show up in the sensor picker " +
+                    "on each slot's own tab — for example, hide the BG " +
+                    "simulator once you no longer need it for testing, so " +
+                    "it can't be picked by accident. Every sensor type is " +
+                    "visible by default."
             )
         )
     ),
@@ -794,7 +898,6 @@ enum class ManualTopic(
                     "topics in this guide."
             )
         ),
-        showAboutLink = true,
         showLocationPermissionLink = true
     )
 }

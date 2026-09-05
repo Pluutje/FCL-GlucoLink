@@ -95,6 +95,23 @@
                     }
                 },
                 {
+                    "source": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-WerkVersie\\app\\src\\main\\res\\values\\strings.xml",
+                    "from": {
+                        "startLines": "1",
+                        "startColumns": "4",
+                        "startOffsets": "16",
+                        "endColumns": "49",
+                        "endOffsets": "61"
+                    },
+                    "to": {
+                        "startLines": "110",
+                        "startColumns": "4",
+                        "startOffsets": "6873",
+                        "endColumns": "49",
+                        "endOffsets": "6918"
+                    }
+                },
+                {
                     "source": "C:\\Users\\palap\\.gradle\\caches\\transforms-4\\0783de45fcfaa8abc9d9a7a92bf91e9d\\transformed\\foundation-release\\res\\values\\values.xml",
                     "from": {
                         "startLines": "2,3",
@@ -129,23 +146,6 @@
                     }
                 },
                 {
-                    "source": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.6-WV\\app\\src\\main\\res\\values\\strings.xml",
-                    "from": {
-                        "startLines": "1",
-                        "startColumns": "4",
-                        "startOffsets": "16",
-                        "endColumns": "49",
-                        "endOffsets": "61"
-                    },
-                    "to": {
-                        "startLines": "110",
-                        "startColumns": "4",
-                        "startOffsets": "6873",
-                        "endColumns": "49",
-                        "endOffsets": "6918"
-                    }
-                },
-                {
                     "source": "C:\\Users\\palap\\.gradle\\caches\\transforms-4\\6890592c507ba7052f533e72b1b10772\\transformed\\navigation-common-2.7.7\\res\\values\\values.xml",
                     "from": {
                         "startLines": "2,15,21,27,30",
@@ -162,23 +162,6 @@
                         "endLines": "474,480,486,489,500",
                         "endColumns": "24,24,24,24,24",
                         "endOffsets": "26569,26813,27060,27193,27605"
-                    }
-                },
-                {
-                    "source": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-v9.6-WV\\app\\src\\main\\res\\values\\themes.xml",
-                    "from": {
-                        "startLines": "4",
-                        "startColumns": "4",
-                        "startOffsets": "185",
-                        "endColumns": "83",
-                        "endOffsets": "264"
-                    },
-                    "to": {
-                        "startLines": "237",
-                        "startColumns": "4",
-                        "startOffsets": "16457",
-                        "endColumns": "82",
-                        "endOffsets": "16535"
                     }
                 },
                 {
@@ -270,6 +253,23 @@
                         "endLines": "143,144,145,146,147,148,149,150,151,154,155,156,157,158,159,160,161,162,163,164,167,168,169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189,190,191,192,193,194,195,196,197,198,199,200,201,202",
                         "endColumns": "87,85,80,83,68,64,82,105,85,13,53,68,60,68,88,94,73,96,92,97,13,90,87,95,97,63,67,86,93,66,71,71,100,108,75,68,47,65,63,56,56,71,49,53,70,70,69,68,57,75,70,73,85,49,69,64",
                         "endOffsets": "10306,10392,10473,10557,10626,10691,10774,10880,10966,11086,11140,11209,11270,11339,11428,11523,11597,11694,11787,11885,12034,12125,12213,12309,12407,12471,12539,12626,12720,12787,12859,12931,13032,13141,13217,13286,13334,13400,13464,13521,13578,13650,13700,13754,13825,13896,13966,14035,14093,14169,14240,14314,14400,14450,14520,14585"
+                    }
+                },
+                {
+                    "source": "D:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-WerkVersie\\app\\src\\main\\res\\values\\themes.xml",
+                    "from": {
+                        "startLines": "4",
+                        "startColumns": "4",
+                        "startOffsets": "185",
+                        "endColumns": "83",
+                        "endOffsets": "264"
+                    },
+                    "to": {
+                        "startLines": "237",
+                        "startColumns": "4",
+                        "startOffsets": "16457",
+                        "endColumns": "82",
+                        "endOffsets": "16535"
                     }
                 },
                 {

@@ -252,7 +252,11 @@ fun FclGlucoLinkNavHost() {
                 onBack = { navController.popBackStack() },
                 onOpenTopic = { topic ->
                     navController.navigate("manual_topic/${topic.name}")
-                }
+                },
+                // 04/09/2026 (editor, RONDE 165) — zie ManualScreen.kt's
+                // kdoc: "About" is nu een eigen rij in dit menu i.p.v. een
+                // link binnen ManualTopicScreen's BEST_RESULTS-pagina.
+                onOpenAbout = { navController.navigate(ROUTE_ABOUT) }
             )
         }
 
@@ -266,13 +270,11 @@ fun FclGlucoLinkNavHost() {
             val topic = topicName?.let {
                 runCatching { ManualTopic.valueOf(it) }.getOrNull()
             } ?: ManualTopic.HOME_SCREEN
+            // 04/09/2026 (editor, RONDE 165) — onOpenAbout hier vervallen,
+            // zie ManualScreen.kt's kdoc.
             ManualTopicScreen(
                 topic = topic,
-                onBack = { navController.popBackStack() },
-                // 06/08/2026 (editor, RONDE 53) — zie ManualScreen.kt's
-                // kdoc: alleen daadwerkelijk aangeroepen op de pagina die
-                // ManualTopic.showAboutLink heeft (BEST_RESULTS).
-                onOpenAbout = { navController.navigate(ROUTE_ABOUT) }
+                onBack = { navController.popBackStack() }
             )
         }
 

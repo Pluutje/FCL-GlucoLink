@@ -1,1 +1,1 @@
-D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-v9.6-WV\app\src\main\cpp\CMakeLists.txt
+D:\_AAPS-AS\___FCL_GlucoLink\FCLGlucoLink-WerkVersie\app\src\main\cpp\CMakeLists.txt

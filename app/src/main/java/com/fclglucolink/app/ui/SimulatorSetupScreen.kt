@@ -128,6 +128,13 @@ fun SimulatorSetupScreen(
     var listValueCount by remember { mutableStateOf(0) }
     var listError by remember { mutableStateOf<String?>(null) }
     var listFast by remember { mutableStateOf(false) }
+    // 29/08/2026 (editor, RONDE 163) — instelbare baseline-waarde voor de
+    // nieuwe 3-fasen-afspeelvolgorde (opwarmen -> scenario -> baseline
+    // vasthouden), zie SimulatorControlBridge.kt's kdoc bij
+    // SimulatorCommand.StartListReplay. Startwaarde in de weergave-eenheid,
+    // zelfde patroon als manualValueText hierboven; overschreven door de
+    // opgeslagen waarde zodra die hieronder is ingeladen.
+    var baselineValueText by remember { mutableStateOf(if (displayUnit == GlucoseUnit.MGDL) "126" else "7.0") }
 
     // Eerder gekozen lijst (persistable URI) terugladen bij het openen van
     // dit scherm, zodat editor 'm niet elke sessie opnieuw hoeft te kiezen.
@@ -144,6 +151,12 @@ fun SimulatorSetupScreen(
                 listValueCount = values.size
             }
         }
+        // 29/08/2026 (editor, RONDE 163) — opgeslagen baseline terugladen,
+        // zodat een eerder ingestelde waarde (bv. "startpunt van mijn
+        // A/B-testscenario") niet elke sessie opnieuw ingetikt hoeft te
+        // worden — zelfde soort persistentie-gemak als de lijst-URI hierboven.
+        val savedBaselineMgdl = settings.simulatorBaselineMgdl(slot).first()
+        baselineValueText = savedBaselineMgdl.formatForDisplay(displayUnit)
     }
 
     val openDocument = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -289,15 +302,38 @@ fun SimulatorSetupScreen(
 
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("External list (loops continuously)", style = MaterialTheme.typography.titleMedium)
+                    Text("External list scenario", style = MaterialTheme.typography.titleMedium)
+                    // 29/08/2026 (editor, RONDE 163, op verzoek — zie
+                    // SimulatorControlBridge.kt's kdoc bij
+                    // SimulatorCommand.StartListReplay voor het volledige
+                    // A/B-testdoel) — was "loops continuously"; nu drie
+                    // duidelijk afgebakende fasen i.p.v. een oneindige lus,
+                    // zodat een testrun reproduceerbaar is (bv. eerst met het
+                    // oude FCLvNext-algoritme, dan — na de testversie
+                    // installeren en de IOB weer gelijkzetten — nog een keer
+                    // met de nieuwe).
                     Text(
                         "One BG value (mmol/L) per line, chronological order " +
                             "— e.g. an earlier problem episode from your FCLvNext logs. " +
                             "Pick a file from, say, Documents/AAPS-analysis; that choice " +
-                            "is remembered. Automatically starts over from the " +
-                            "beginning after the last value, until you press Stop.",
+                            "is remembered. Playback: starts with the baseline BG below " +
+                            "(repeated 3×, so AAPS/FCLvNext can build up a known IOB " +
+                            "first), then plays the list once, then jumps back to and " +
+                            "holds the baseline — handy for running the exact same " +
+                            "scenario twice (before/after an algorithm change) and " +
+                            "comparing the results.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.secondary
+                    )
+
+                    OutlinedTextField(
+                        value = baselineValueText,
+                        onValueChange = { baselineValueText = it },
+                        label = { Text("Baseline BG (${displayUnit.suffix})") },
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = KeyboardType.Decimal
+                        ),
+                        modifier = Modifier.fillMaxWidth()
                     )
 
                     OutlinedButton(onClick = {
@@ -328,12 +364,17 @@ fun SimulatorSetupScreen(
                             enabled = listValueCount > 0,
                             onClick = {
                                 val uri = listUri ?: return@Button
+                                val baselineMgdl = baselineValueText.parseToMgdl(displayUnit) ?: return@Button
                                 val values = runCatching { readMmolValuesFromUri(context, uri) }.getOrDefault(emptyList())
                                 val mgdlValues = values.map { it.mmolToMgdl() }
                                 val interval = if (listFast) INTERVAL_FAST_MS else INTERVAL_REALTIME_MS
                                 scope.launch {
-                                    SimulatorControlBridge.startListReplay(mgdlValues, interval)
-                                    settings.setActiveSimulatorMode(slot, PersistedSimulatorMode.ListReplay(interval))
+                                    settings.setSimulatorBaselineMgdl(slot, baselineMgdl)
+                                    SimulatorControlBridge.startListReplay(baselineMgdl, mgdlValues, interval)
+                                    settings.setActiveSimulatorMode(
+                                        slot,
+                                        PersistedSimulatorMode.ListReplay(baselineMgdl, interval)
+                                    )
                                 }
                             }
                         ) { Text("Start playback") }
@@ -365,8 +406,15 @@ private fun replayStatusText(state: SimulatorReplayState, unit: GlucoseUnit): St
     is SimulatorReplayState.Idle -> "Nothing active."
     is SimulatorReplayState.RepeatingValue ->
         "Repeating ${state.glucoseMgdl.formatForDisplayWithUnit(unit)}…"
+    // 29/08/2026 (editor, RONDE 163) — de nieuwe opwarmfase vóór een
+    // lijst-scenario, zie SimulatorReplayState.PlayingBaselineWarmup's kdoc.
+    is SimulatorReplayState.PlayingBaselineWarmup ->
+        "Baseline warm-up ${state.step}/${state.total}: " +
+            "${state.glucoseMgdl.formatForDisplayWithUnit(unit)}…"
+    // 29/08/2026 (editor, RONDE 163) — geen "lap" meer, het scenario speelt
+    // nu precies één keer af (zie kdoc bij SimulatorCommand.StartListReplay).
     is SimulatorReplayState.PlayingList ->
-        "Playing (lap ${state.lap}): ${state.index}/${state.total} " +
+        "Playing scenario: ${state.index}/${state.total} " +
             "(${state.currentMgdl.formatForDisplayWithUnit(unit)})"
     is SimulatorReplayState.GeneratingRandom ->
         "Generating: ${state.currentMgdl.formatForDisplayWithUnit(unit)}…"

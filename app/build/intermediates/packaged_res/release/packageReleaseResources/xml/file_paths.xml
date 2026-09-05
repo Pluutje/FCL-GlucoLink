@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    04/09/2026 (editor, RONDE 165) — hoort bij de FileProvider in
+    AndroidManifest.xml, nodig voor de on-request update-installatie (zie
+    update/UpdateInstaller.kt's kdoc). cache-path i.p.v. external-path: de
+    gedownloade APK is puur tijdelijk (wordt overschreven bij de volgende
+    check, nooit door de gebruiker beheerd), dus hoort in de eigen cache,
+    niet in gedeelde/externe opslag. Subfolder "updates/" i.p.v. de cache-
+    root zelf, puur om het opgeruimd te houden naast eventuele andere
+    toekomstige cache-bestanden.
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="updates" path="updates/" />
+</paths>
