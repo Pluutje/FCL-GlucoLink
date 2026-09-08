@@ -12,8 +12,8 @@
 12-->
 13<manifest xmlns:android="http://schemas.android.com/apk/res/android"
 14    package="com.fclglucolink.app"
-15    android:versionCode="183"
-16    android:versionName="0.9.84-whats-new-and-manual-refresh" >
+15    android:versionCode="186"
+16    android:versionName="0.9.87-broadcast-trend-sync-and-g6-code-display-fix" >
 17
 18    <uses-sdk
 19        android:minSdkVersion="26"

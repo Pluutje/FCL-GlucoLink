@@ -54,8 +54,8 @@ android {
         applicationId = "com.fclglucolink.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 183
-        versionName = "0.9.84-whats-new-and-manual-refresh"
+        versionCode = 186
+        versionName = "0.9.87-broadcast-trend-sync-and-g6-code-display-fix"
 
         // 01/08/2026 (editor) — alleen arm64-v8a: libCALCULATION.so (in
         // app/src/main/jniLibs/arm64-v8a/) is alleen voor die ABI

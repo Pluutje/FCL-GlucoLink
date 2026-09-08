@@ -8,13 +8,13 @@ import android.os.PowerManager
  * FCLGlucoLink — kortstondige wakelock rond actief BLE-werk (RONDE 89)
  * ============================================================================
  *
- * 11/08/2026 (editor, op verzoek — "beduidend sneller leeg lopen van de
- * batterij... hoog batterijverbruik") — vervangt de PARTIAL_WAKE_LOCK die
+ * 11/08/2026 (editor, na melding van beduidend hoger batterijverbruik) —
+ * vervangt de PARTIAL_WAKE_LOCK die
  * `BleConnectionService.kt` sinds 30/07/2026 de VOLLEDIGE service-levensduur
  * vasthield (`acquire(20 dagen)`, pas losgelaten in onDestroy()).
  *
- * Waarom die er toen kwam (zie BleConnectionService.kt's klasse-kdoc voor het
- * volledige citaat): een kale coroutine-`delay()` in SimulatorDriver's
+ * Waarom die er toen kwam (zie BleConnectionService.kt's klasse-kdoc): een
+ * kale coroutine-`delay()` in SimulatorDriver's
  * afspeellus vuurde te laat af zodra de CPU tijdens Doze in slaap viel — een
  * permanente wakelock loste dat destijds op.
  *

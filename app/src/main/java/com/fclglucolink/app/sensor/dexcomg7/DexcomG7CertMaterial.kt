@@ -26,7 +26,7 @@ package com.fclglucolink.app.sensor.dexcomg7
  * 1667). Onderzoek deze ronde liet zien: xDrip+'s EIGEN externe-plugin-
  * downloadpad (`Loader.getInstance()`/`Dialog.askIfNeeded()`) staat in de
  * broncode volledig uitgecommentarieerd — dus GEEN netwerk, GEEN download,
- * exact zoals de gebruiker aangaf ("er is 100% zeker geen internet nodig").
+ * wat bevestigt dat hiervoor met zekerheid geen internet nodig is.
  * De actieve pairing-code (`Loader.getLocalInstance()`) gebruikt uitsluitend
  * lokaal, al aanwezig sleutelmateriaal.
  *

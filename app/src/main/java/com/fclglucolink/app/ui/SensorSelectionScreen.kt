@@ -41,11 +41,9 @@ import kotlinx.coroutines.flow.combine
  * zodat je meteen ziet welke drie sensoren dit uiteindelijk gaat
  * ondersteunen, ook voordat G7/Accu-Chek af zijn.
  *
- * 09/08/2026 (editor, RONDE 64, op verzoek: "de sensor knop naast de Bg
- * waarde is bedoeld om van sensor type te wisselen. Als je daar een andere
- * sensor type aanklikt terwijl er nog een andere actief is moet hij dan
- * uiteraard eerst een melding maken [...] en of je zeker weet dat je wilt
- * wisselen") — dit scherm is nu die TYPE-wissel-ingang, geen kale lijst meer:
+ * 09/08/2026 (editor, RONDE 64, op verzoek om bij het aanklikken van een
+ * ander sensortype terwijl er al een sensor actief is, eerst een melding
+ * te tonen met de vraag of de gebruiker echt wil wisselen) — dit scherm is nu die TYPE-wissel-ingang, geen kale lijst meer:
  *  - Tikken op het AL ACTIEVE type opent gewoon direct dat type's eigen
  *    statusscherm (onReopenActive) — geen destructieve actie, dus geen
  *    bevestiging nodig; dit is puur "laat me het huidige type nog eens
@@ -64,8 +62,8 @@ import kotlinx.coroutines.flow.combine
  * @OptIn(ExperimentalMaterial3Api::class) — zie kdoc bij PairingScreen.kt,
  * puur vanwege TopAppBar.
  *
- * 10/08/2026 (editor, RONDE 80, letterlijk verzoek — "dat ik als sensor ook
- * geen kan kiezen bij de sensoren") — nieuwe [onClearSensor]-actie erbij: een
+ * 10/08/2026 (editor, RONDE 80, op verzoek om bij de sensoren ook "geen"
+ * te kunnen kiezen) — nieuwe [onClearSensor]-actie erbij: een
  * extra "None"-kaart bovenaan de lijst (zie [NoneSensorCard]) naast de drie
  * echte sensortypes, waarmee een slot expliciet leeggemaakt kan worden i.p.v.
  * alleen tussen types te kunnen WISSELEN. Zelfde bevestigingslogica als een
@@ -89,10 +87,10 @@ fun SensorSelectionScreen(
     var pendingSwitchTarget by remember { mutableStateOf<SensorType?>(null) }
     var pendingClear by remember { mutableStateOf(false) }
 
-    // 29/08/2026 (editor, RONDE 164, op verzoek — "het kunnen kiezen van de
-    // virtuele sensor (en ook de andere) onder een expert modus te zetten
-    // [...] zodat als je in 1 van de slots kiest je alleen de ingestelde/
-    // geactiveerde sensoren ziet") — zie ui/SettingsScreen.kt's "Expert
+    // 29/08/2026 (editor, RONDE 164, op verzoek om het kiezen van de
+    // virtuele sensor (en de andere) onder een expert-modus te zetten, zodat
+    // je bij het kiezen per slot alleen de ingestelde/geactiveerde sensoren
+    // ziet) — zie ui/SettingsScreen.kt's "Expert
     // mode"-kaart en AppSettings.isSensorTypeEnabledInPicker()'s kdoc voor
     // de volledige achtergrond. `combine` i.p.v. los per type collectAsState
     // in een forEach: één stabiele, samengevoegde Flow, geen herhaalde

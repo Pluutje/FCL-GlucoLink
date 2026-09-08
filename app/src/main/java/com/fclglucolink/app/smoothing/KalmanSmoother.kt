@@ -11,10 +11,10 @@ import kotlin.math.sqrt
  * FCLGlucoLink — real-time glucose smoothing (ronde 49)
  * ============================================================================
  *
- * 06/08/2026 (editor, RONDE 49 — op verzoek, "nu graag de smoothing bouwen",
- * na de eerder besproken en bevestigde volgorde "eerst kalibratie, dan
- * smoothing") — geïnspireerd op/overgenomen van de door de gebruiker
- * aangeleverde AAPS-bron `UnscentedKalmanFilterPlugin.kt`: hetzelfde
+ * 06/08/2026 (editor, RONDE 49 — op verzoek om de smoothing te bouwen, na de
+ * eerder besproken en bevestigde volgorde "eerst kalibratie, dan
+ * smoothing") — geïnspireerd op/overgenomen van de aangeleverde AAPS-bron
+ * `UnscentedKalmanFilterPlugin.kt`: hetzelfde
  * fysische model (toestand = [glucose, snelheid], vaste procesruis Q,
  * adaptieve meetruis R met robuuste, getrimde-gemiddelde-schatting,
  * chi-kwadraat-gebaseerde uitschieter-detectie, 2-van-3-teken-poort +
@@ -64,10 +64,10 @@ import kotlin.math.sqrt
  * kalibratie-entries die de gebruiker zelf handmatig heeft ingevoerd en die
  * dus NOOIT stilzwijgend mogen verdwijnen (zie ronde 46's bugfix).
  *
- * 15/08/2026 (editor, RONDE 109, op verzoek: "Iemand gaf aan dat de adaptive
- * smoothing een hele goede optie was [...] als er voordelen te behalen zijn
- * (belangrijk voordeel is snellere stijgingsdetectie zonder gelijk meer
- * ruis te krijgen) zou het een optie zijn om die over te nemen" — na
+ * 15/08/2026 (editor, RONDE 109, op verzoek — naar aanleiding van de
+ * suggestie dat AIMI's adaptive smoothing een goede optie was, met als
+ * belangrijkste voordeel snellere stijgingsdetectie zonder meer ruis, om te
+ * onderzoeken of dat overgenomen kon worden — na
  * vergelijking met AIMI's `AdaptiveSmoothingPlugin.kt`) — ÉÉN mechanisme
  * daaruit is overgenomen: naast de bestaande 2-van-3-teken-poort hierboven
  * (die WACHT op 2 van de laatste 3 metingen die in dezelfde richting >2σ
@@ -106,12 +106,12 @@ import kotlin.math.sqrt
  * 16/08/2026 (editor, RONDE 111, op verzoek — n.a.v. community-meldingen
  * dat CareSens Air de eerste dag(en) "springerig" kan zijn en de trend
  * "nogal dramatisch" kan doen, waardoor AndroidAPS/FCLvNext soms heftig
- * reageert: "wat ik met name wil voorkomen is dat ruisgevoelige stijgingen
- * het doseeralgoritme onterecht triggert [...] dalingen zijn in mijn ogen
- * dus minder van belang [...] een aan/uit knop en [...] een aantal dagen
- * (of uren) instelling [...] het hoeft niet sensor afhankelijk [...] een
- * aflopende (lineair of logaritmische) correctie [...] de calibratie kant
- * moet erbuiten blijven") — een OPTIONELE, tijdelijke extra demping vlak
+ * reageert) — met name ruisgevoelige stijgingen moeten voorkomen worden die
+ * het doseeralgoritme onterecht triggeren; dalingen zijn daarbij minder van
+ * belang. Gevraagd is een aan/uit-knop, een instelbare duur in dagen (of
+ * uren), sensor-onafhankelijk, met een aflopende (lineair of
+ * logaritmische) correctie, waarbij de kalibratiekant erbuiten moet blijven
+ * — een OPTIONELE, tijdelijke extra demping vlak
  * na een sensorstart, exponentieel afbouwend naar het bestaande (ongewijzigde)
  * gedrag.
  *
@@ -147,24 +147,24 @@ import kotlin.math.sqrt
  * ingestelde duur (AppSettings.breakInFilterDurationHours, standaard 24u):
  * exponentieel, τ = duur / 5, dus na precies de ingestelde duur is nog maar
  * ~0,7% van de correctie over — voor de gebruiker niet te onderscheiden van
- * "helemaal uitgewerkt" (letterlijk verzoek: "een instelling van 24 uur
- * betekent dat het na 24 uur volledig is uitgewerkt"), terwijl de afbouw
+ * helemaal uitgewerkt (een instelling van 24 uur betekent dat het filter na
+ * 24 uur volledig is uitgewerkt), terwijl de afbouw
  * zelf toch vloeiend blijft, geen knik op het afbouwmoment. Bewust GLOBAAL,
- * niet per sensortype (letterlijk verzoek: "in principe heeft iedere
- * sensor er last van [...] het hoeft niet sensor afhankelijk") — deze
+ * niet per sensortype (in principe heeft iedere sensor er last van, dus dit
+ * hoeft niet sensor-afhankelijk te zijn) — deze
  * klasse zelf weet niets van instellingen of sensortype, precies zoals
  * [AlarmSoundPlayer.start]'s `alertMode`-parameter: de instelling wordt
  * buiten gelezen, hier komt alleen het kale, al-berekende getal binnen.
  *
  * BEWUST BUITEN SCOPE: de kalibratiekant (CalibrationEngine/
- * SplineCalibrationMath) blijft ongemoeid — letterlijk verzoek ("niet
- * iedereen zal calibratie gebruiken"), en calibratie heeft met
+ * SplineCalibrationMath) blijft ongemoeid — op verzoek, aangezien niet
+ * iedereen kalibratie zal gebruiken — en calibratie heeft met
  * MIN_ENTRIES_FOR_SPLINE hoe dan ook al een eigen, deels overlappende
  * vroege-voorzichtigheid (spline lukt simpelweg niet met te weinig punten).
  *
- * 18/08/2026 (editor, RONDE 114, op verzoek: "wat we nu nog niet hebben is
- * een algemene filtering sterkte 3 keuze schakelaar [...] die dan indien
- * enable uitgeschakeld ook grijs wordt") — dit was tijdens Ronde 113's
+ * 18/08/2026 (editor, RONDE 114, op verzoek voor een algemene 3-keuze
+ * filtersterkte-schakelaar, die grijs wordt zodra smoothing uitgeschakeld
+ * is) — dit was tijdens Ronde 113's
  * gesprek nog een bewust NIET-geïmplementeerd, opengelaten idee (het
  * gesprek concludeerde toen dat er eerst zichtbaarheid van de pijplijn
  * nodig was voordat een sterkte-instelling zinvol te beoordelen zou zijn —
@@ -194,10 +194,10 @@ import kotlin.math.sqrt
  * Settings direct op de eerstvolgende meting doorwerkt, zonder de sensor
  * opnieuw te hoeven koppelen of de service te herstarten.
  *
- * 24/08/2026 (editor, RONDE 125, op verzoek: "een breakout filter wat
- * eigenlijk precies omgekeerd werkt tov de breakin [...] boven op de basis
- * (ongeacht welke stand gekozen is) en even sterk als break in dus in
- * principe een omgekeerde kopie" — na CareSens Air-meldingen dat sensoren
+ * 24/08/2026 (editor, RONDE 125, op verzoek voor een breakout-filter dat
+ * eigenlijk precies omgekeerd werkt t.o.v. de breakin-filter — bovenop de
+ * basis (ongeacht welke stand gekozen is) en even sterk als breakin, dus in
+ * principe een omgekeerde kopie — na CareSens Air-meldingen dat sensoren
  * de laatste dagen van hun looptijd weer instabiel worden) — [smooth] krijgt
  * er een tweede, gelijkwaardig parameter [breakOutDecayFactor] bij. Beide
  * factoren worden gecombineerd tot één `edgeStrength` (het maximum van de

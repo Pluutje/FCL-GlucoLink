@@ -38,14 +38,14 @@ sealed interface SimulatorCommand {
     ) : SimulatorCommand
 
     /**
-     * 29/08/2026 (editor, RONDE 163, op verzoek — "Die blijft nu de lijst
-     * oneindig herhalen. Ik denk dat het nuttiger is om hem met 3 keer een
-     * vaste instelbare Bg te laten beginnen. Dan de lijst af te spelen en
-     * daarna weer naar de ingestelde waarde te springen. Op die manier kun
-     * je het systeem virtueel met een bepaalde iob laten beginnen [...] met
-     * het oude algoritme, dan installeer je de test versie (zet de iob weer
-     * gelijk) en draait hetzelfde scenario 1 keer om te kijken wat de
-     * verschillen zijn") — drie fasen, ÉÉN doorloop (was: oneindig herhalen
+     * 29/08/2026 (editor, RONDE 163, op verzoek — de lijst bleef voorheen
+     * oneindig herhalen, terwijl het nuttiger is om met 3 keer een vaste
+     * instelbare Bg te beginnen, dan de lijst af te spelen en daarna weer
+     * naar de ingestelde waarde te springen, zodat het systeem virtueel met
+     * een bepaalde IOB kan beginnen met het oude algoritme; daarna kan de
+     * testversie geïnstalleerd worden (IOB weer gelijk gezet) en hetzelfde
+     * scenario nog een keer gedraaid om de verschillen te vergelijken) —
+     * drie fasen, ÉÉN doorloop (was: oneindig herhalen
      * van alleen de lijst, zie de oude kdoc-tekst hieronder voor de
      * eerdere reden daarvoor, die nu vervangen is door dit A/B-testdoel):
      * 1. [baselineMgdl] [BASELINE_REPEAT_COUNT] keer versturen — een stabiele
@@ -78,8 +78,8 @@ sealed interface SimulatorCommand {
 }
 
 /**
- * 30/07/2026 (editor, na feedback: "moet 15 dagen door kunnen draaien zonder
- * open scherm") — SimulatorCommand hierboven is een EENMALIG signaal (een
+ * 30/07/2026 (editor, na feedback dat het 15 dagen door moet kunnen draaien
+ * zonder open scherm) — SimulatorCommand hierboven is een EENMALIG signaal (een
  * MutableSharedFlow zonder replay): prima zolang de driver die het
  * ontvangt continu blijft draaien, maar niet genoeg om 15 dagen onbeheerd
  * mee te draaien. Android kan BleConnectionService alsnog een keer stoppen

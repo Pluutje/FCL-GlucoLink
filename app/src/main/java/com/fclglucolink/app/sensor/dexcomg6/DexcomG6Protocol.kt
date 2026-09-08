@@ -255,8 +255,8 @@ object DexcomG6Protocol {
     }
 
     /**
-     * 22/08/2026 (editor, RONDE 121, op verzoek — "of uit de transmitter ook
-     * het start tijdstip valt af te leiden") — opcode 0x24 (xDrip+'s
+     * 22/08/2026 (editor, RONDE 121, op verzoek of het starttijdstip ook uit
+     * de transmitter zelf valt af te leiden) — opcode 0x24 (xDrip+'s
      * `TransmitterTimeTxMessage`, `uploads/xDrip-2026.08.08.zip`), 3 bytes:
      * opcode+CRC, zelfde eenvoudige vorm als [buildGlucoseRequest]/
      * [buildBatteryInfoRequest]. Vraagt de transmitter's HUIDIGE klok + het
@@ -275,9 +275,9 @@ object DexcomG6Protocol {
     }
 
     /**
-     * 09/08/2026 (editor, RONDE 66, op verzoek — "een anubis transmitter
-     * [...] klopt dat niet [de aanname van 2 uur opwarmtijd] [...] xdrip
-     * heild hier rekening mee") — opcode 0x52 (xDrip+'s
+     * 09/08/2026 (editor, RONDE 66, op verzoek, naar aanleiding van de
+     * observatie dat een Anubis-transmitter niet aan de aanname van 2 uur
+     * opwarmtijd voldeed en xDrip daar wel rekening mee hield) — opcode 0x52 (xDrip+'s
      * `VersionRequestTxMessage`-"versie 2"-variant), 3 bytes: opcode+CRC,
      * zelfde eenvoudige vorm als [buildGlucoseRequest]/[buildBatteryInfoRequest].
      * Vraagt de transmitter's EIGEN, werkelijke opwarmtijd + sensor-
@@ -302,8 +302,8 @@ object DexcomG6Protocol {
     )
 
     /**
-     * 09/08/2026 (editor, RONDE 68, CORRECTIE — na live-test: "ik zie
-     * namelijk geen info over de transmitter" op v72, ondanks een geldige
+     * 09/08/2026 (editor, RONDE 68, CORRECTIE — na live-test dat er geen info
+     * over de transmitter te zien was op v72, ondanks een geldige
      * BLE-verbinding en werkende battery-/glucose-uitwisseling) — de fout
      * zat hier: xDrip+'s eigen `VersionRequest2RxMessage.java` accepteert
      * TWEE verschillende antwoordvormen op precies dezelfde 3-byte-

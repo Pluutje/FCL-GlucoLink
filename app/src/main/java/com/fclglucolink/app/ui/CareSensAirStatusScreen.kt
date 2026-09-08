@@ -144,9 +144,9 @@ fun CareSensAirStatusScreen(
  * DexcomG6StatusScreen.kt's dexcomG6CompactSummaryText(): zelfde idee,
  * CareSens-kant.
  *
- * 09/08/2026 (editor, RONDE 75, op verzoek — "Bij de caresens staat er nu
- * op het hoofdscherm connected en dan het serienr dat moet worden de
- * lastconnected info net als bij de dexcom") — was `"Connected · #serial"`
+ * 09/08/2026 (editor, RONDE 75, op verzoek om op het hoofdscherm net als
+ * bij de Dexcom de lastconnected-info te tonen i.p.v. connected + serienr)
+ * — was `"Connected · #serial"`
  * zolang `connectionState is ConnectionState.Connected`, wat op het
  * hoofdscherm nogal wisselvallig oogde (CareSens Air verbindt/ontkoppelt
  * net als de G6 periodiek per poll, zie ConnectionStatusBridge) en niet

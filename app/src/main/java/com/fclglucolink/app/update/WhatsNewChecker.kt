@@ -11,13 +11,11 @@ import kotlinx.coroutines.withContext
  * dezelfde gedeelde Google Drive-map als UpdateChecker.kt (RONDE 170)
  * ============================================================================
  *
- * 05/09/2026 (editor, op verzoek: "als er een update beschikbaar is een
- * 'whats new' knop [...] die zou dan per versie moeten tonen wat er is
- * veranderd/aangepast/toegevoegd [...] Hij moet alles wat er is aangepast
- * sinds de versie die gebruikt is moeten tonen. Dus stel iemand gebruikt
- * v180 en in de drive staan v181, v182 en v183 klaar dan moeten de
- * aanpassingen van 181,182 en 183 worden getoond, maar zit iemand al op
- * 182 dan moet alleen 183 worden getoond.") —
+ * 05/09/2026 (editor, op verzoek voor een "What's new"-knop die per versie
+ * toont wat er is veranderd/aangepast/toegevoegd sinds de versie die de
+ * gebruiker momenteel draait — bijvoorbeeld: bij v180 geïnstalleerd en
+ * v181/182/183 klaarstaand in de Drive-map worden de wijzigingen van alle
+ * drie getoond, maar bij v182 geïnstalleerd alleen die van v183) —
  *
  * ONTWERP: UpdateChecker.kt's bestandsnaam-detectie (Ronde 165) kan alleen
  * zeggen DAT er een nieuwere versie is, niet WAT daarin veranderd is — die

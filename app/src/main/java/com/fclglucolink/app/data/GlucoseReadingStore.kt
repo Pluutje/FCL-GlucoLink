@@ -13,8 +13,8 @@ import java.util.concurrent.TimeUnit
  * geheugen nodig — Room's Flow geeft toch al reactief bijgewerkte data aan
  * de UI door.
  *
- * 30/07/2026 (editor, na feedback: "wil in de grafiek tot zeker 24u, liever
- * 48u terug kunnen swipen") — bewaarde eerder maar 24u (en StatusScreen.kt
+ * 30/07/2026 (editor, na feedback dat er verder terug in de grafiek
+ * geswiped moet kunnen worden) — bewaarde eerder maar 24u (en StatusScreen.kt
  * vroeg daar zelfs maar 6u van op, zie daar) — nu 48u, met een kleine marge
  * (49u) in de opruimgrens zodat de oudste nog-gevraagde meting niet precies
  * op de grens verdwijnt tussen opvragen en opruimen door. Bij een meting
@@ -43,9 +43,9 @@ class GlucoseReadingStore(context: Context) {
      * slot geeft alleen die slot's eigen historie (voor de Dexcom G6-/
      * CareSens-tabs).
      *
-     * 28/08/2026 (editor, RONDE 153, CRITIEKE FIX — live-melding: twee
-     * gelijktijdig gekoppelde CareSens Air-sensoren "lijken weer samen te
-     * vloeien [...] geen goede scheiding tussen de beide slots") — deze
+     * 28/08/2026 (editor, RONDE 153, CRITIEKE FIX — live-melding dat twee
+     * gelijktijdig gekoppelde CareSens Air-sensoren weer door elkaar liepen,
+     * zonder goede scheiding tussen de beide slots) — deze
      * functie filterde voorheen op [SensorType] i.p.v. [SensorSlot]. Dat
      * werkte toevallig zolang de twee actieve slots verschillende
      * sensortypes draaiden, maar zodra beide slots HETZELFDE type draaien

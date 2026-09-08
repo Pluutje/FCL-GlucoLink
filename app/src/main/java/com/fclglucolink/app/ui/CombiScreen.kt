@@ -58,10 +58,10 @@ import kotlinx.coroutines.flow.flowOf
  * ============================================================================
  *
  * 10/08/2026 (editor, RONDE 79 — 2-sensoren-architectuur, taak #317, op
- * oorspronkelijk verzoek — "onderaan een rij met settings en info knop,
- * daarboven 3 tabbladen die elk 1/3 van de breedte innemen: [sensor van
- * slot A] / [sensor van slot B] / Combi, tabblad-kleur groen als die slot
- * naar AAPS zendt, anders rood") — vervangt StatusScreen.kt als het
+ * oorspronkelijk verzoek voor onderaan een rij met settings-/info-knop,
+ * daarboven 3 even brede tabbladen (sensor slot A / sensor slot B / Combi)
+ * met tabbladkleur groen als die slot naar AAPS zendt, anders rood) —
+ * vervangt StatusScreen.kt als het
  * STARTSCHERM van de app (ROUTE_COMBI, zie FclGlucoLinkNavHost.kt).
  * StatusScreen.kt zelf blijft gewoon bestaan (op zichzelf staand, werkend
  * scherm — zie kdoc daar) — de eigenlijke per-slot inhoud die dit scherm
@@ -112,9 +112,9 @@ fun CombiScreen(
     onSwitchSensorType: (SensorSlot) -> Unit,
     onOpenSensorStatus: (SensorSlot) -> Unit,
     onOpenSettings: () -> Unit,
-    // 10/08/2026 (editor, RONDE 81, CRITICAL BUGFIX, live-melding —
-    // "kalibraties die bij het ene slot worden ingevoerd verschijnen ook bij
-    // de andere") — was `() -> Unit`, ÉÉN gedeelde callback voor beide
+    // 10/08/2026 (editor, RONDE 81, CRITICAL BUGFIX, live-melding dat
+    // kalibraties die bij het ene slot ingevoerd werden ook bij de andere
+    // verschenen) — was `() -> Unit`, ÉÉN gedeelde callback voor beide
     // tabbladen, waardoor de "Calibration"-knop op ELK tabblad naar exact
     // dezelfde, niet-slot-bewuste route navigeerde (zie FclGlucoLinkNavHost.kt's
     // uitgebreide kdoc bij ROUTE_CALIBRATION voor de volledige root-cause).
@@ -131,8 +131,8 @@ fun CombiScreen(
     // rememberSaveable i.p.v. gewone remember: overleeft een configuratie-
     // wijziging (bv. rotatie) zonder terug te vallen naar tabblad 0.
     //
-    // 28/08/2026 (editor, RONDE 155, op verzoek — "neem dan gelijk de aaps
-    // actieve sensor als open slot mee") — start-sentinel -1 i.p.v.
+    // 28/08/2026 (editor, RONDE 155, op verzoek om bij het openen gelijk de
+    // AAPS-actieve sensor als open slot te tonen) — start-sentinel -1 i.p.v.
     // meteen 0: op een ECHTE koude start (nieuw process, geen bewaarde
     // staat) triggert de LaunchedEffect hieronder dan éénmalig de opening
     // op de AAPS-zendende slot (Slot B als díe zendt, anders Slot A —
@@ -223,14 +223,14 @@ fun CombiScreen(
                 }
             }
 
-            // 10/08/2026 (editor, RONDE 79, letterlijk verzoek: "onderaan een
-            // rij met settings en info knop") — ÉÉN gedeelde rij, buiten de
+            // 10/08/2026 (editor, RONDE 79, op verzoek om onderaan een rij
+            // met een settings- en info-knop toe te voegen) — ÉÉN gedeelde rij, buiten de
             // per-tabblad-inhoud, zodat Settings/Manual niet per tabblad
             // gedupliceerd hoeven te worden (zie kdoc hierboven bij
             // CombiScreen()).
             //
-            // 10/08/2026 (editor, RONDE 80, op verzoek — "Ik wil de i rechts
-            // onder vervangen door een knop 'manual'") — was een ronde,
+            // 10/08/2026 (editor, RONDE 80, op verzoek om de info-knop
+            // rechtsonder te vervangen door een "Manual"-knop) — was een ronde,
             // icoon-only IconButton (geen tekstlabel, dus niet vanzelf
             // duidelijk wat 'm doet); nu een gewone gelabelde OutlinedButton
             // met "Manual"-tekst (plus hetzelfde help-icoontje ervoor), zelfde
@@ -280,14 +280,14 @@ private fun CombiTabChip(
     stripeColor: Color?,
     modifier: Modifier = Modifier
 ) {
-    // Bewust laag-contrast/"weinig opvallend" wanneer NIET geselecteerd (op
-    // verzoek: "de tabbladkopjes kunnen dan allemaal weinig opvallend
-    // behalve de geselecteerde die dan juist oplicht") — gewone surface +
+    // Bewust laag-contrast/weinig opvallend wanneer NIET geselecteerd (op
+    // verzoek dat de tabbladkopjes weinig opvallend zijn behalve het
+    // geselecteerde, dat juist oplicht) — gewone surface +
     // gedimde tekst voor de rest.
     //
-    // 10/08/2026 (editor, RONDE 82, BUGFIX na live-melding — "het
-    // geselecteerde tabblad mag nog wel iets meer opvallen [...] een veel
-    // duidelijkere accent kleur") — de EERSTE versie (RONDE 80) gebruikte
+    // 10/08/2026 (editor, RONDE 82, BUGFIX na live-melding dat het
+    // geselecteerde tabblad nog duidelijker mocht opvallen met een
+    // duidelijkere accentkleur) — de EERSTE versie (RONDE 80) gebruikte
     // hier `colorScheme.surfaceVariant` voor geselecteerd vs. `colorScheme.
     // surface` voor de rest, in de veronderstelling dat dat twee verschillende
     // kleuren waren. Bleek niet zo: Theme.kt's DarkColors zet `surfaceVariant
@@ -295,8 +295,8 @@ private fun CombiTabChip(
     // om Material3 Card's eigen te-lichte standaard-surfaceVariant te
     // overschrijven) — dus de "selectie-achtergrond" van RONDE 80 was in de
     // praktijk precies dezelfde kleur als een niet-geselecteerd tabblad, en
-    // alleen de tekstkleur verschilde (exact de gemelde klacht: "nu is
-    // alleen de titel witter gekleurd"). Nu een ECHTE, duidelijk zichtbare
+    // alleen de tekstkleur verschilde (exact de gemelde klacht dat alleen
+    // de titel witter kleurde). Nu een ECHTE, duidelijk zichtbare
     // accentkleur — bewust GEEN groen/rood (die betekenen hier al iets
     // anders: de AAPS-zend-status-streep hieronder, zie kdoc bij
     // CombiScreen()) — een neutrale blauwe accent, zodat "geselecteerd" een
@@ -352,17 +352,15 @@ private fun CombiTabChip(
  * gecombineerd overzicht van BEIDE slots naast elkaar, ÉÉN oogopslag i.p.v.
  * heen-en-weer tikken tussen de eerste twee tabbladen.
  *
- * 10/08/2026 (editor, RONDE 80, letterlijk verzoek — "Op het combi tabblad
- * wil ik ook graag een grafiek waarin de beide data sets worden getoond met
- * ieder een eigen kleur de kleur van de lijn kan dan overeen komen met de
- * kleur van de naam balk er boven") — het "bekende, interim-gat" dat hier tot
- * nu stond, is nu gedicht: [DualGlucoseChart] (nieuw, in GlucoseChart.kt)
+ * 10/08/2026 (editor, RONDE 80, op verzoek om op het combi-tabblad ook een
+ * grafiek te tonen met beide datasets in een eigen kleur, waarbij de
+ * lijnkleur overeenkomt met de kleur van de naambalk erboven) — het
+ * bekende, interim-gat dat hier tot nu stond, is nu gedicht: [DualGlucoseChart] (nieuw, in GlucoseChart.kt)
  * tekent beide slots als twee los ingekleurde lijnen in ÉÉN grafiek, boven de
  * bestaande samenvattingskaarten. [colorA]/[colorB] komen rechtstreeks van
  * CombiScreen() over (dezelfde groen/rood-AAPS-streepjeskleur als op de
- * tabbladkopjes hierboven, zie kdoc bij CombiScreen()) — dat is letterlijk de
- * gevraagde "kleur van de lijn komt overeen met de kleur van de naam balk
- * erboven".
+ * tabbladkopjes hierboven, zie kdoc bij CombiScreen()) — dat matcht de
+ * gevraagde koppeling tussen lijnkleur en naambalk-kleur.
  *
  * Zie CalibrationScreen.kt's kdoc (RONDE 80) voor de reden dat hier expliciet
  * `selectedSensorX?.let { store.recentReadings(slot = SensorSlot.X) } ?: flowOf(
@@ -378,11 +376,9 @@ private fun CombiTabChip(
  * voor de volledige analyse (twee gelijktijdig gekoppelde sensoren van
  * HETZELFDE type konden hun metingen anders niet meer uit elkaar houden).
  *
- * 10/08/2026 (editor, RONDE 81, letterlijk verzoek — "het combi tabblad mag
- * boven de grafiek wel een tabelletje krijgen met de volgende data: slot A /
- * slot B daaronder de groene of rode stip met sensor naam, daaronder de
- * laatste Bg waarde en daaronder sending to aaps (voor de sensor die
- * aanstaat)") — nieuw [CombiSlotTable] hieronder, een 2-koloms tabelletje
+ * 10/08/2026 (editor, RONDE 81, op verzoek om boven de grafiek een tabelletje
+ * te tonen met per slot: de groene/rode stip met sensornaam, de laatste
+ * Bg-waarde, en of er naar AAPS gezonden wordt) — nieuw [CombiSlotTable] hieronder, een 2-koloms tabelletje
  * (Slot A/Slot B) BOVEN [DualGlucoseChart], met precies de 3 gevraagde rijen
  * per kolom. Vervangt de eerdere, kleinere [CombiChartLegend] (kleurstipje +
  * sensornaam) van RONDE 80 — die was feitelijk al de eerste rij van dit
@@ -408,8 +404,8 @@ private fun CombiTabContent(
     // AppSettings.kt's PREDICTION_ENABLED-kdoc.
     val predictionEnabled by settings.predictionEnabled.collectAsState(initial = false)
 
-    // 11/08/2026 (editor, RONDE 90, op verzoek: "de ingevoerde vingerprik
-    // voor de calibraties ook zichtbaar te maken in de combi curve") —
+    // 11/08/2026 (editor, RONDE 90, op verzoek om de ingevoerde vingerprik-
+    // calibraties ook zichtbaar te maken in de combi-curve) —
     // AANGEVINKTE fingerstick-entries van beide slots (elk gescoped op zijn
     // eigen sensor-start-tijd, zie CalibrationStore.kt/AppSettings.kt's
     // RONDE-90-kdoc's), samengevoegd en op `id` ontdubbeld — een vingerprik
@@ -474,9 +470,8 @@ private fun CombiTabContent(
     // as-autoscale hield alleen rekening met de twee sensor-curven, niet met
     // de vingerprik-punten zelf). Zie de RONDE-94-kdoc daar voor de fix.
     // Diagnostiek hier weer verwijderd, geen gedragswijziging in dit bestand.
-    // 11/08/2026 (editor, RONDE 95 — na live-melding: "Ik meen me overigens
-    // te herinneren dat de x-as over 48 uur verschoven moest kunnen worden
-    // en niet 24 uur zoals nu.") — klopte: StatusScreen.kt (de losse
+    // 11/08/2026 (editor, RONDE 95 — na live-melding dat de x-as over 48 uur
+    // terug te swipen moest zijn i.p.v. de huidige 24 uur) — klopte: StatusScreen.kt (de losse
     // per-sensor schermen) gebruikt hier al `hours = 48`
     // (GlucoseReadingStore.kt's eigen default is ook 48), de Combi-tab
     // stond nog op de oudere `hours = 24`. Gelijkgetrokken.
@@ -553,10 +548,9 @@ private fun CombiTabContent(
  * een "echte" Compose-tabel-component (die bestaat hier nergens anders in de
  * app en zou voor precies 2 vaste kolommen overkill zijn).
  *
- * 10/08/2026 (editor, RONDE 82, na live-testfeedback — "boven de tabel moet
- * dan nog slot 1 en slot 2 worden ingevoerd. Als de tabel dan nog wat meer
- * tabel uiterlijk krijgt met een kopje [...] en daar onder de info ziet het
- * er net iets netter uit") — tot nu toe begon deze kaart direct met
+ * 10/08/2026 (editor, RONDE 82, na live-testfeedback dat de tabel een
+ * kopregel met slot-labels miste om er echt als tabel uit te zien) — tot
+ * nu toe begon deze kaart direct met
  * [CombiSlotTableColumn]'s eigen eerste rij (stip + sensornaam), zonder
  * aparte kop; de twee losse CombiSlotSummaryCard-kaartjes eronder (RONDE 79,
  * inmiddels overbodig na dit tabelletje) waren het enige dat "Slot A"/"Slot

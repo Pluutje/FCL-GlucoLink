@@ -11,12 +11,11 @@ import kotlinx.coroutines.withContext
  * een nieuwere APK klaarstaat dan de geïnstalleerde versie (RONDE 165)
  * ============================================================================
  *
- * 04/09/2026 (editor, op verzoek: "Ik kreeg het verzoek om te onderzoeken of
- * er in de app ook een mogelijkheid is om een melding te krijgen als er een
- * update beschikbaar is. Ik stel de apk beschikbaar als download via mijn
- * google drive in een gedeelde map [...]") — het oorspronkelijke voorstel
- * ("kijk of het apk-bestand in die map een nieuwere DATUM heeft dan de
- * geïnstalleerde versie") bleek om twee redenen fragiel: (1) Drive's publieke
+ * 04/09/2026 (editor, op verzoek om binnen de app een melding te tonen zodra
+ * er een update beschikbaar is; de APK wordt als download aangeboden via een
+ * gedeelde Google Drive-map) — het oorspronkelijke voorstel om te kijken of
+ * het apk-bestand in die map een nieuwere DATUM heeft dan de geïnstalleerde
+ * versie bleek om twee redenen fragiel: (1) Drive's publieke
  * downloadlink toont voor grotere bestanden (en een APK van deze app zit al
  * snel op enkele tientallen MB's, zie build.gradle.kts's dependencies) een
  * "kan niet scannen op virussen"-tussenpagina i.p.v. het bestand zelf, wat

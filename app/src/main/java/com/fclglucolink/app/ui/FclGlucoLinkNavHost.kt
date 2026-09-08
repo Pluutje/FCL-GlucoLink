@@ -94,8 +94,9 @@ private val ROUTE_DEXCOM_G7_SETUP = "$BASE_DEXCOM_G7_SETUP/{slot}"
 // Geen slot-argument nodig voor onderstaande twee: app-brede
 // instellingen/documentatie, niet gekoppeld aan één specifieke sensor-slot.
 //
-// 10/08/2026 (editor, RONDE 81, CRITICAL BUGFIX, live-melding — "kalibraties
-// die bij het ene slot worden ingevoerd verschijnen ook bij de andere") —
+// 10/08/2026 (editor, RONDE 81, CRITICAL BUGFIX, live-melding dat
+// kalibraties die bij het ene slot ingevoerd werden ook bij de andere
+// verschenen) —
 // ROUTE_CALIBRATION was HIER nog steeds een kale, niet-slot-geparametriseerde
 // route (`"calibration"`, geen `{slot}`), een overblijfsel van vóór taak
 // #321 (RONDE 80) calibratie per-slot maakte — die ronde maakte wel
@@ -133,9 +134,9 @@ private const val ROUTE_MANUAL_TOPIC = "manual_topic/{topic}"
  * broadcast aan/uit — + appinfo, geopend via het ⋮-menu). Zie kdoc bij
  * StatusScreen.kt/SettingsScreen.kt.
  *
- * 09/08/2026 (editor, RONDE 64, op verzoek — "de sensor knop naast de Bg
- * waarde is bedoeld om van sensor type te wisselen [...] Ieder sensor type
- * krijgt dan zijn eigen specifiek status/koppel/wissel scherm") — het
+ * 09/08/2026 (editor, RONDE 64, op verzoek om de sensorknop naast de
+ * Bg-waarde te gebruiken voor het wisselen van sensortype, waarbij elk
+ * sensortype zijn eigen status-/koppel-/wisselscherm krijgt) — het
  * vroegere, ENE gedeelde ROUTE_SENSOR_MANAGEMENT (SensorManagementScreen.kt,
  * nu vervallen) mengde acties van verschillende sensortypes op één scherm.
  * StatusScreen's "Sensor"-knop opent het type-KEUZEMENU
@@ -144,9 +145,9 @@ private const val ROUTE_MANUAL_TOPIC = "manual_topic/{topic}"
  * van het HUIDIGE type gaat.
  *
  * 10/08/2026 (editor, RONDE 79 — 2-sensoren-architectuur, taak #317, op
- * oorspronkelijk verzoek — "beide slots moeten kunnen zenden naar aaps
- * waarbij er uiteraard maar max 1 actief kan zijn, maar ze moeten ook
- * beiden uit kunnen" + de tab-UI-spec, zie CombiScreen.kt's kdoc) — de
+ * oorspronkelijk verzoek dat beide slots naar AAPS moeten kunnen zenden
+ * (met maximaal 1 actief tegelijk, maar ook allebei uit), plus de tab-UI-
+ * spec, zie CombiScreen.kt's kdoc) — de
  * BELANGRIJKSTE wijziging deze ronde: CombiScreen (ROUTE_COMBI) vervangt
  * StatusScreen als startscherm, en zowat elke route hieronder is nu
  * geparametriseerd met `{slot}` (zie slotRoute()/slotArg() bovenaan dit
@@ -176,10 +177,10 @@ fun FclGlucoLinkNavHost() {
      *  plakt zelf de juiste slot erachter, want deze functie kent alleen
      *  het sensortype, niet voor welke slot 'm aangeroepen wordt.
      *
-     *  27/08/2026 (editor, RONDE 127, bug gemeld tijdens een live G7-test —
-     *  "als ik op het hoofdscherm op de status info klik komt hij op de
-     *  'choose you sensor' pagina en klikt bij de g7 niet door naar de
-     *  extra info pagina") — DEXCOM_G7 had hier GEEN eigen case, viel dus in
+     *  27/08/2026 (editor, RONDE 127, bug gemeld tijdens een live G7-test:
+     *  een tik op de status-info op het hoofdscherm bracht bij de G7 alleen
+     *  de "choose your sensor"-pagina, zonder door te klikken naar de extra
+     *  info-pagina) — DEXCOM_G7 had hier GEEN eigen case, viel dus in
      *  de `else -> BASE_SENSOR_SELECTION`-val: een "status info"-tik voor
      *  een G7-slot landde daardoor altijd op SensorSelectionScreen i.p.v.
      *  ergens G7-specifieks. Erger nog: SensorSelectionScreen's eigen
@@ -187,12 +188,12 @@ fun FclGlucoLinkNavHost() {
      *  SensorSelectionScreen.kt) roept DEZE functie opnieuw aan — tikken op
      *  de dan al-actieve G7-tegel navigeerde dus telkens naar dezelfde
      *  BASE_SENSOR_SELECTION-route waar de gebruiker al stond, wat als een
-     *  scherm voelt dat niets doet ("klikt niet door").
+     *  scherm voelt dat niets doet.
      *
      *  Tussenoplossing in RONDE 127: bij gebrek aan een eigen G7-
      *  statusscherm stuurde dit voor DEXCOM_G7 door naar de generieke
-     *  PairingScreen. RONDE 129 (op verzoek — "wat we in ieder geval alvast
-     *  kunnen doen is een statusscherm maken") bouwt dat eigen scherm alsnog
+     *  PairingScreen. RONDE 129 (op verzoek voor een eigen G7-statusscherm)
+     *  bouwt dat eigen scherm alsnog
      *  (DexcomG7StatusScreen.kt), dus DEXCOM_G7 krijgt nu net als G6/
      *  CareSens/Simulator een eigen, echte case.
      */

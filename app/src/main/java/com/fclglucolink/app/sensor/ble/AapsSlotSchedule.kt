@@ -8,12 +8,11 @@ import java.util.concurrent.ConcurrentHashMap
  * FCLGlucoLink — gedeelde "wijk voor de andere slot"-planning
  * ============================================================================
  *
- * 12/08/2026 (editor, RONDE 100 — op verzoek, na analyse van
- * `fclglucolink_2026-08-12.txt`: "wat ik wel belangrijk vind is dat het slot
- * wat naar aaps zend ... altijd de voorkeur heeft en als dat tot gevolg heeft
- * dat het andere slot zo nu en dan een meting mist dan is dat maar zo.
- * Uiteraard moet als er maar 1 slot actief is dat ene slot ook streven naar
- * 100% betrouwbaarheid.").
+ * 12/08/2026 (editor, RONDE 100 — na analyse van
+ * `fclglucolink_2026-08-12.txt`) — het slot dat naar AAPS zendt moet altijd
+ * voorrang krijgen, ook als dat betekent dat het andere slot af en toe een
+ * meting mist; bij maar 1 actief slot moet dat ene slot uiteraard wel naar
+ * 100% betrouwbaarheid blijven streven.
  *
  * **Waarom dit BOVENOP Ronde 83's `ScanRateLimiter`-voorrang nodig is.**
  * Ronde 83 loste alleen het GEDEELDE 5-scans-per-31s software-budget op. De
@@ -24,11 +23,11 @@ import java.util.concurrent.ConcurrentHashMap
  * moment zelf), niet in het teller-budget.
  *
  * 13/08/2026 (editor, RONDE 101 — BUGFIX + op voorstel na
- * `fclglucolink_2026-08-13 08.30.txt`: "is het dan geen optie om ... de
- * timing van de caresens zo te verschuiven dat hij minimaal 1 minuut voor of
- * na de door de transmitter bepaalde update van de dexcom valt ... de
- * caresens [kan] worden uitgevraagd wanneer je dat wilt en ... de dexcom is
- * alleen aan het zenden als de transmitter zich zelf opent").
+ * `fclglucolink_2026-08-13 08.30.txt`, naar aanleiding van het voorstel om de
+ * timing van CareSens Air zo te verschuiven dat die minimaal 1 minuut voor of
+ * na de door de transmitter bepaalde Dexcom-update valt — CareSens Air kan op
+ * elk gewenst moment uitgevraagd worden, terwijl Dexcom alleen zendt zodra de
+ * transmitter zichzelf opent).
  *
  * **Gevonden bug.** [publishedSlot]/[predictedReadingAtMs] waren tot deze
  * ronde EEN gedeeld, overschrijfbaar paar — niet per slot. Omdat BEIDE
@@ -81,16 +80,16 @@ object AapsSlotSchedule {
     private val predictedReadingAtMs = ConcurrentHashMap<SensorSlot, Long>()
 
     /** Minimale afstand die CareSensAirDriver.kt's proactieve verschuiving
-     *  aanhoudt tot Dexcom's rasterpunt ("minimaal 1 minuut voor of na",
-     *  letterlijk gebruikersvoorstel). Ook hergebruikt als [guardDelayMs]'s
-     *  reactieve beschermvenster, voor consistentie. */
+     *  aanhoudt tot Dexcom's rasterpunt (minimaal 1 minuut voor of na). Ook
+     *  hergebruikt als [guardDelayMs]'s reactieve beschermvenster, voor
+     *  consistentie. */
     const val MIN_SEPARATION_MS = 60_000L
 
-    // 13/08/2026 (editor, RONDE 103 — op controlevraag: "als de caresens de
-    // aaps sensor wordt dan wordt [de verschuiving] ook uitgeschakeld en
-    // krijgt caresens wel altijd de voorrang (in dat laatste geval is het
-    // namelijk niet belangrijk dat de dexcom zo nu en dan even een cyclus
-    // overslaat want er wordt toch niet op gedoseerd)") — Ronde 101's
+    // 13/08/2026 (editor, RONDE 103 — op controlevraag of de verschuiving ook
+    // uitgeschakeld wordt zodra CareSens Air zelf de AAPS-sensor wordt, zodat
+    // CareSens Air dan altijd voorrang krijgt — in dat geval is het immers
+    // niet belangrijk dat Dexcom zo nu en dan een cyclus overslaat, want daar
+    // wordt toch niet op gedoseerd) — Ronde 101's
     // proactieve verschuiving in CareSensAirDriver.kt was ONVOORWAARDELIJK
     // (elke keer weg van "de andere slot", ongeacht wie de AAPS-slot is) —
     // dat klopte dus NIET meer zodra CareSens Air zelf de AAPS-slot wordt.
@@ -143,9 +142,9 @@ object AapsSlotSchedule {
         predictedReadingAtMs.entries.firstOrNull { it.key != callerSlot }?.value
 
     /**
-     * 13/08/2026 (editor, RONDE 102 — op controlevraag: "als alleen de
-     * caresens actief is dan wordt die niet verschoven neem ik aan en blijft
-     * die gewoon netjes iedere 5 minuten een waarde produceren") — klopt
+     * 13/08/2026 (editor, RONDE 102 — op controlevraag of CareSens Air, als
+     * enige actieve sensor, niet verschoven wordt en dus gewoon netjes iedere
+     * 5 minuten een waarde blijft produceren) — klopt
      * ALLEEN als de andere slot deze sessie nooit gepubliceerd heeft. Zonder
      * deze functie bleef een publicatie van een slot die de gebruiker
      * TUSSENTIJDS stopt (bijv. van dual-slot terug naar alleen CareSens Air,

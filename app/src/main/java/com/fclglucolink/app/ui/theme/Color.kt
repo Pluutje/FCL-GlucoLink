@@ -17,9 +17,9 @@ val ErrorRed = Color(0xFFCF6679)
 val TextPrimary = Color(0xFFE7ECEF)
 val TextSecondary = Color(0xFFA8B3BD)
 
-// 06/08/2026 (editor, RONDE 51, na live-melding: "de knoppen settings,
-// sensor en calibration moeten echt meer het uiterlijk van een knop
-// krijgen") — root cause: Theme.kt zet colorScheme.surfaceVariant gelijk
+// 06/08/2026 (editor, RONDE 51, na live-melding dat de settings/sensor/
+// calibration-knoppen echt meer het uiterlijk van een knop moesten krijgen)
+// — root cause: Theme.kt zet colorScheme.surfaceVariant gelijk
 // aan colorScheme.surface (beide SurfaceDark hierboven), nodig om Material3
 // Card's eigen te-lichte standaard surfaceVariant te overschrijven (zie de
 // kdoc daar). Bijeffect: StatusScreen.kt's secundaire knoppen (Settings/
@@ -35,9 +35,9 @@ val TextSecondary = Color(0xFFA8B3BD)
 val ButtonSurfaceDark = Color(0xFF262F3B)
 val OnButtonSurfaceDark = TextPrimary
 
-// 06/08/2026 (editor, RONDE 53, op verzoek: "misschien moet het wel zwarte
-// letters op witte achtergrond (dat dan dus alleen voor de manual)") —
-// bewust een APARTE, kleine set kleuren, alleen gebruikt door
+// 06/08/2026 (editor, RONDE 53, op verzoek voor zwarte tekst op een witte
+// achtergrond, specifiek alleen voor de manual) — bewust een APARTE, kleine
+// set kleuren, alleen gebruikt door
 // ui/theme/Theme.kt's FCLGlucoLinkManualTheme (op zijn beurt alleen
 // gebruikt binnen ManualScreen.kt/ManualTopicScreen) — de rest van de app
 // (StatusScreen, Settings, Calibration, ...) blijft het gewone donkere

@@ -9,10 +9,10 @@ import com.fclglucolink.app.logging.DiagnosticFileLogger
  * 08/08/2026)
  * ============================================================================
  *
- * AANLEIDING (op verzoek, na een gesprek over een Android One-toestel waarop
- * andere apps regelmatig een sensor-bond kwijtraakten: "Is het ook mogelijk
- * om in plaats van tik op opnieuw koppelen de app dat automatisch te laten
- * doen") — zonder dit mechanisme is de enige weg terug na een OS- of
+ * AANLEIDING (na een gesprek over een Android One-toestel waarop
+ * andere apps regelmatig een sensor-bond kwijtraakten, met de vraag of de app
+ * het opnieuw koppelen automatisch zou kunnen doen in plaats van dat de
+ * gebruiker zelf moet tikken) — zonder dit mechanisme is de enige weg terug na een OS- of
  * andere-app-veroorzaakt bond-verlies: de gebruiker moet zelf handmatig
  * "opnieuw koppelen" tikken. Deze utility automatiseert precies dat ene
  * stapje — niets meer — voor beide drivers (CareSensAirDriver.kt en
@@ -29,9 +29,9 @@ import com.fclglucolink.app.logging.DiagnosticFileLogger
  * "verlies"), ÉN (c) BluetoothDevice.getBondState() nu BOND_NONE teruggeeft
  * — een pure lokale OS-opvraging, geen BLE-verkeer.
  *
- * RISICO, EXPLICIET (op verzoek: "Zijn er ook risico's aan verbonden zoals
- * in mijn geval waar er eigenlijk geen verlies optreedt") — twee dingen om
- * te weten:
+ * RISICO, EXPLICIET (naar aanleiding van de vraag of hier risico's aan
+ * verbonden zijn in een geval waar eigenlijk geen bond-verlies optreedt) —
+ * twee dingen om te weten:
  *
  * 1) removeBond() is een OS-BREDE actie, geen FCLGlucoLink-interne toestand.
  *    Als een ANDERE app (xDrip+, BYODA, de officiële CareSens/Dexcom-app)

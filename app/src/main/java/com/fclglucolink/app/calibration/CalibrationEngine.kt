@@ -5,14 +5,12 @@ package com.fclglucolink.app.calibration
  * FCLGlucoLink — kalibratie-engine: één berekening, geen aparte plugins
  * ============================================================================
  *
- * 05/08/2026 (editor, RONDE 43 — op verzoek: "Het moeten dus geen 2 plugin
- * achtige dingen worden maar gewoon 1 berekening die bij lineair gewoon
- * lineair gedwongen wordt") — in tegenstelling tot AAPS's eigen opzet (twee
- * losse plugins, `LinearCalibrationPlugin` en `SplineCalibrationPlugin`, elk
- * met hun eigen aan/uit-schakeling) is dit hier ÉÉN functie met een
+ * 05/08/2026 (editor, RONDE 43) — bewust geen twee losse plugins zoals in
+ * AAPS's eigen opzet (`LinearCalibrationPlugin` en `SplineCalibrationPlugin`,
+ * elk met hun eigen aan/uit-schakeling), maar één functie met een
  * modus-vlag:
  *   - [CalibrationMode.LINEAR]: altijd [fitLinearCalibration], nooit een
- *     spline-poging — "geforceerd lineair" zoals gevraagd.
+ *     spline-poging — geforceerd lineair.
  *   - [CalibrationMode.SPLINE]: eerst [fitSplineCalibration] proberen, bij
  *     mislukking terugvallen op de lineaire fit — identiek aan AAPS's eigen
  *     `SplineCalibrationPlugin.calibrate()`-gedrag.
@@ -20,10 +18,9 @@ package com.fclglucolink.app.calibration
  * Extra t.o.v. AAPS: als er nog HELEMAAL GEEN kalibratie-entry is (dus geen
  * fit mogelijk, `Full`/`SlopeClamped`/`OffsetOnly` allemaal onbereikbaar),
  * werkt de handmatige offset alsnog — een pure lineaire curve `y = x +
- * offset` — expliciet op verzoek: "De offset moet ook werken zonder dat er
- * een kalibratie waarde is ingevoerd". AAPS zelf doet dit niet (daar is
- * zonder fit gewoon identity, ook als er een manual offset staat), maar hier
- * is dat bewust wél zo.
+ * offset`, zodat de offset ook werkt zonder dat er een kalibratiewaarde is
+ * ingevoerd. AAPS zelf doet dit niet (daar is zonder fit gewoon identity,
+ * ook als er een manual offset staat), maar hier is dat bewust wél zo.
  */
 enum class CalibrationMode { LINEAR, SPLINE }
 

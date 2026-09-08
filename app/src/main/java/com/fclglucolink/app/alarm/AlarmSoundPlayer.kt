@@ -32,8 +32,7 @@ import kotlinx.coroutines.launch
  *
  * [AlarmEscalation.IMMEDIATE]: direct op volle sterkte. [AlarmEscalation.
  * GRADUAL]: begint zacht, klimt geleidelijk (elke 5s +10%) naar vol —
- * tempo bewust hardcoded/niet instelbaar (letterlijk verzoek: "daarbij
- * hoeft de opbouw tempo niet instelbaar te zijn").
+ * tempo bewust hardcoded/niet instelbaar.
  *
  * Bewust een EIGEN, object-brede CoroutineScope ([playerScope]) i.p.v. de
  * scope van de aanroeper (AlarmController.trigger(), zelf aangeroepen
@@ -57,9 +56,9 @@ object AlarmSoundPlayer {
     private const val VOLUME_STEP_INTERVAL_MS = 5_000L
 
     /**
-     * 13/08/2026 (editor, RONDE 107b, op verzoek: "ik wil per alarm kunnen
-     * kiezen tussen alarm of vibrate of both") — [alertMode] vervangt de
-     * oude `vibrationEnabled: Boolean`-parameter: [AlarmAlertMode.SOUND]
+     * 13/08/2026 (editor, RONDE 107b) — per alarm instelbaar tussen geluid,
+     * trilling of beide. [alertMode] vervangt de oude
+     * `vibrationEnabled: Boolean`-parameter: [AlarmAlertMode.SOUND]
      * slaat het opzetten van de Vibrator hieronder helemaal over,
      * [AlarmAlertMode.VIBRATE] slaat MediaPlayer helemaal over (geen
      * stille MediaPlayer die toch draait) — geen van beide doet onnodig

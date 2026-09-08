@@ -20,10 +20,9 @@ import java.net.URLEncoder
  * opent Android's eigen installatiebevestiging (RONDE 165)
  * ============================================================================
  *
- * 04/09/2026 (editor, op verzoek: "Hij hoeft denk ik niet automatisch te
- * updaten dat kunnen de gebruikers wel handmatig doen. Wat dan wel handig is
- * als de google drive link toch al in de app bekend is dat hij dan zelf op
- * verzoek kan updaten.") — dus BEWUST geen stille/automatische achtergrond-
+ * 04/09/2026 (editor, op verzoek om niet automatisch te updaten, maar wel
+ * een manier te bieden om zelf op verzoek te updaten nu de Drive-link toch
+ * al bekend is bij de app) — dus BEWUST geen stille/automatische achtergrond-
  * update: [downloadAndLaunchInstall] wordt alleen aangeroepen vanuit een
  * expliciete "Update now"-knoptik op AboutScreen.kt, en het resultaat is
  * altijd Android's eigen systeem-installatiescherm (waar de gebruiker zelf

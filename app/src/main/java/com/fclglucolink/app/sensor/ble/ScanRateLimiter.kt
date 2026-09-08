@@ -8,9 +8,9 @@ package com.fclglucolink.app.sensor.ble
  * 08/08/2026 (editor, RONDE 55 — bij het starten van de Dexcom G6-driver) —
  * VERPLAATST vanuit CareSensAirDriver.kt (was daar een top-level `private
  * object`) naar dit gedeelde bestand, precies zoals de kdoc op de oude plek
- * al aankondigde: "als een toekomstige BLE-sensor (Accu-Chek SmartGuide/
- * Dexcom G7) hier ooit bijkomt, moet die dit object hergebruiken i.p.v. een
- * eigen kopie te maken." De Dexcom G6-driver is die eerste nieuwe gebruiker.
+ * al aankondigde: een toekomstige BLE-sensor hoort dit object te
+ * hergebruiken i.p.v. een eigen kopie te maken. De Dexcom G6-driver is die
+ * eerste nieuwe gebruiker.
  *
  * Mirror van Juggluco's `SensorBluetooth.q`/`k()` (zie CareSensAirDriver.kt's
  * klasse-kdoc voor de volledige aanleiding/decompile-geschiedenis): een
@@ -23,9 +23,9 @@ package com.fclglucolink.app.sensor.ble
  * `scanner.startScan()` [delayBeforeNextScanMs] respecteren en er vlak
  * ervoor [recordScanStart] op aanroepen.
  *
- * 10/08/2026 (editor, RONDE 83, op verzoek na live-melding — "wat ik in
- * ieder geval wil is dat de sensor die aan aaps is gekoppeld altijd de
- * voorrang krijgt en dus precies om de 5 minuten blijft data binnenhalen")
+ * 10/08/2026 (editor, RONDE 83, na live-melding — de sensor die aan AAPS
+ * gekoppeld is moet altijd voorrang krijgen en dus precies om de 5 minuten
+ * data blijven binnenhalen)
  * — vóór deze ronde telde elke scan-start hier ongeacht welke slot 'm
  * veroorzaakte gewoon mee tegen hetzelfde gedeelde plafond, dus de twee
  * slots concurreerden om exact hetzelfde budget. Zichtbaar in een live

@@ -41,8 +41,8 @@ import kotlinx.coroutines.launch
  * FCLGlucoLink — Dexcom G6: nieuwe sensor starten
  * ============================================================================
  *
- * 08/08/2026 (editor, RONDE 56, op verzoek — "ik start een sensor op in
- * xdrip [...] met een specifieke sensor code") — NIET hetzelfde scherm als
+ * 08/08/2026 (editor, RONDE 56, op verzoek voor het starten van een sensor
+ * met een specifieke sensorcode, zoals ook in xDrip mogelijk is) — NIET hetzelfde scherm als
  * DexcomG6SetupScreen.kt (dat koppelt de TRANSMITTER, eenmalig). Dit scherm
  * is voor het starten van een NIEUWE FYSIEKE SENSOR op een al gekoppelde
  * transmitter (elke ~10-60 dagen, afhankelijk van transmitter/hack) — de
@@ -61,30 +61,29 @@ import kotlinx.coroutines.launch
  * @OptIn(ExperimentalMaterial3Api::class) — zie kdoc bij PairingScreen.kt,
  * puur vanwege TopAppBar.
  *
- * 09/08/2026 (editor, RONDE 60, op verzoek — "als je een sensor koppelt
- * springt hij na invoeren van de code weer op het zelfde scherm met de kans
- * dat je het nog een keer doet als er niks gebeurt") — was: `onStarted()`
+ * 09/08/2026 (editor, RONDE 60, op verzoek na de melding dat het scherm na
+ * het invoeren van de code weer op hetzelfde scherm terugsprong, met het
+ * risico dat de code per ongeluk nogmaals ingevoerd werd) — was: `onStarted()`
  * riep direct `navController.popBackStack()` aan, zonder enige bevestiging
  * dat de code daadwerkelijk klaargezet is. Dat gaf twee problemen: (1) geen
  * zichtbare feedback dat de tik iets gedaan heeft, (2) niets hield de
- * gebruiker tegen om — als het scherm "zomaar" weer verdwijnt — de knop
+ * gebruiker tegen om — als het scherm zomaar weer verdwijnt — de knop
  * gewoon nogmaals te gebruiken. Nu: de knop wordt na de eerste tik meteen
  * uitgeschakeld (geen dubbele indiening meer mogelijk) en het formulier
  * wordt vervangen door een expliciete bevestigingskaart — de gebruiker moet
  * zelf op "Back to Sensor" tikken om terug te gaan, in plaats van dat het
  * scherm automatisch dichtklapt.
  *
- * 09/08/2026 (editor, RONDE 66, op verzoek — "als je nu zegt start new
- * sensor stopt hij dan automatisch de lopende? Zoja, dan hoeft er geen stop
- * sensor knop te komen maar moet er wel een waarschuwing komen of je de
- * oude wel wilt stoppen") — nee, tot deze ronde stopte de app de lopende
+ * 09/08/2026 (editor, RONDE 66, op verzoek om te verduidelijken of "start
+ * new sensor" de lopende sessie automatisch stopt, en zo niet, een
+ * waarschuwing te tonen of de oude sessie gestopt moet worden) — nee, tot deze ronde stopte de app de lopende
  * sessie NOOIT (queued gewoon een nieuwe start-met-code, wat de transmitter
  * — mirror van xDrip+'s eigen handmatige procedure, zie
  * DexcomG6Protocol.parseSessionStart()'s kdoc — dan simpelweg afwijst met
  * infoCode 0x02 "already started" zonder de nieuwe code toe te passen).
- * 22/08/2026 (editor, RONDE 121, herontwerp op verzoek — "een start sensor
- * knop die gewoon eerst checkt of er een actieve sensor is [...] dan zelf
- * automatisch het stop commando zend") — de handmatige "Sensor already
+ * 22/08/2026 (editor, RONDE 121, herontwerp op verzoek om de start-sensor-
+ * knop eerst te laten checken of er een actieve sensor is en dan zelf
+ * automatisch het stopcommando te sturen) — de handmatige "Sensor already
  * active?"-bevestigingsdialoog (met `sessionAppearsActive`/`stopFirst`
  * hierboven beschreven, gebaseerd op de laatst bekende statusbyte) is
  * VERVALLEN. Dit scherm zet nu altijd gewoon de nieuwe code klaar — DexcomG6

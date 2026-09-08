@@ -37,19 +37,19 @@ import com.fclglucolink.app.ui.theme.FCLGlucoLinkManualTheme
  * opmaak + inhoud verder verfijnd in ronde 53)
  * ============================================================================
  *
- * 06/08/2026 (editor, RONDE 50, op verzoek: "een 'info' knop [...] Die knop
- * moet een handleiding geven van de opties binnen de app") — geopend via
+ * 06/08/2026 (editor, RONDE 50, op verzoek voor een info-knop die een
+ * handleiding geeft van de opties binnen de app) — geopend via
  * het info-knopje rechtsonder op StatusScreen.kt.
  *
- * 06/08/2026 (editor, RONDE 52, op verzoek: "een soort menu structuur [...]
- * met knoppen per onderdeel [...] ieder stukje zijn eigen pagina") — een
+ * 06/08/2026 (editor, RONDE 52, op verzoek voor een menustructuur met een
+ * knop per onderdeel en een eigen pagina per stukje) — een
  * menu/index ([ManualScreen]) met een tikbare rij per onderwerp, die elk
  * naar [ManualTopicScreen] navigeren. Zie FclGlucoLinkNavHost.kt voor de
  * twee routes.
  *
- * 06/08/2026 (editor, RONDE 53, op verzoek: "een mooiere opmaak met bv een
- * kopje boven iedere paragraaf, nu leest het best lastig en misschien moet
- * het wel zwarte letters op witte achtergrond") — twee wijzigingen:
+ * 06/08/2026 (editor, RONDE 53, op verzoek voor een mooiere opmaak met een
+ * kopje boven iedere paragraaf en zwarte letters op een witte achtergrond,
+ * omdat het tot dan toe lastig leesbaar was) — twee wijzigingen:
  * 1) [ManualSection]: elk onderwerp bestaat nu uit een lijst van
  *    (kopje, alinea)-paren i.p.v. losse alinea's zonder eigen titel — elke
  *    alinea krijgt zo een kort, scanbaar kopje erboven, i.p.v. één lange
@@ -61,16 +61,16 @@ import com.fclglucolink.app.ui.theme.FCLGlucoLinkManualTheme
  *    `MaterialTheme{}` i.p.v. de app-brede FCLGlucoLinkTheme aanpassen —
  *    dit raakt dus letterlijk alleen deze twee schermen.
  *
- * 06/08/2026 (editor, RONDE 53, op verzoek: "ik wil graag de 'about' knop
- * ergens anders [...] beter om het onder het laatste hoofdstuk te zetten
- * in de manual") — [ManualTopic.BEST_RESULTS] krijgt als enige
+ * 06/08/2026 (editor, RONDE 53, op verzoek om de "about"-knop elders te
+ * plaatsen, bij voorkeur onder het laatste hoofdstuk in de manual) —
+ * [ManualTopic.BEST_RESULTS] krijgt als enige
  * [showAboutLink] = true; [ManualTopicScreen] toont dan een extra tikbare
  * rij onderaan die [onOpenAbout] aanroept. SettingsScreen.kt's eigen
  * About-rij is in dezelfde ronde verwijderd, zie de kdoc daar.
  *
- * 10/08/2026 (editor, RONDE 77, op verzoek: "die link naar de knop moet dan
- * wel in de manual komen en niet in de andere interfaces want hij wordt
- * maar 1 malig gebruikt") — [ManualTopic.BEST_RESULTS] krijgt als enige
+ * 10/08/2026 (editor, RONDE 77, op verzoek om deze link in de manual te
+ * plaatsen en niet in de andere interfaces, omdat hij maar eenmalig
+ * gebruikt wordt) — [ManualTopic.BEST_RESULTS] krijgt als enige
  * [showLocationPermissionLink] = true: een knop die de systeem-appinfo-
  * pagina van FCLGlucoLink opent (zie [LocationPermissionLinkRow]), zodat
  * een Android-11-gebruiker eenmalig "Altijd toestaan" voor locatie kan
@@ -79,13 +79,13 @@ import com.fclglucolink.app.ui.theme.FCLGlucoLinkManualTheme
  * op StatusScreen/SettingsScreen — dit is een eenmalige instelstap per
  * toestel, geen terugkerende actie, dus hoort thuis in de handleiding.
  *
- * Tekst bewust in het Engels (zie ronde-88's "vertaal alle
- * gebruikers-zichtbare tekst naar het Engels"-beslissing) — alleen de
+ * Tekst bewust in het Engels (zie ronde-88's beslissing om alle
+ * gebruikers-zichtbare tekst naar het Engels te vertalen) — alleen de
  * code-commentaren/kdoc blijven Nederlands.
  *
- * 04/09/2026 (editor, RONDE 165, op verzoek: "de about knop [...] als
- * aparte knop onder 'getting the best results' ipv als onderdeel er van
- * wil hebben") — [AboutLinkRow] stond tot nu toe ALLEEN op
+ * 04/09/2026 (editor, RONDE 165, op verzoek om de about-knop als aparte
+ * knop onder "Getting the best results" te plaatsen i.p.v. als onderdeel
+ * daarvan) — [AboutLinkRow] stond tot nu toe ALLEEN op
  * [ManualTopic.BEST_RESULTS]'s eigen inhoudspagina, onderaan, als link
  * binnen die pagina's content ([ManualTopicScreen]'s [showAboutLink]-blok).
  * Nu verplaatst naar [ManualScreen] zelf: een eigen, aparte rij in het
@@ -95,8 +95,8 @@ import com.fclglucolink.app.ui.theme.FCLGlucoLinkManualTheme
  * [ManualTopic] is hiermee vervallen (was alleen BEST_RESULTS's eigen
  * vlag); [ManualTopicScreen] roept [onOpenAbout] niet langer aan.
  *
- * 05/09/2026 (editor, RONDE 170, op verzoek: "de manual weer een keer
- * doorlopen en die in lijn brengen met de huidige versie") — een aantal
+ * 05/09/2026 (editor, RONDE 170, op verzoek om de manual weer eens door te
+ * lopen en in lijn te brengen met de huidige versie) — een aantal
  * instellingen die de afgelopen rondes zijn toegevoegd stonden nergens in
  * de handleiding: de mg/dL-vs-mmol/L-keuze (Ronde 104), Bg-voorspelling op
  * de grafiek (Ronde 160-162), de universele vertrouwde xDrip-broncode
@@ -111,8 +111,8 @@ import com.fclglucolink.app.ui.theme.FCLGlucoLinkManualTheme
  * optie was — inmiddels unit-onafhankelijk geformuleerd. [AboutLinkRow]'s
  * subtitel noemt nu ook de nieuwe "What's new"-knop (zie AboutScreen.kt).
  *
- * 10/08/2026 (editor, RONDE 84, op verzoek: "kun je daarnaast ook de manual
- * aanpassen aan de nieuwe opties") — de tekst hieronder dateerde nog
+ * 10/08/2026 (editor, RONDE 84, op verzoek om de manual ook aan te passen
+ * aan de nieuwe opties) — de tekst hieronder dateerde nog
  * volledig uit vóór de 2-sensoren-architectuur (Ronde 78+) en was op
  * meerdere punten feitelijk ACHTERHAALD, niet alleen onvolledig:
  *  - HOME_SCREEN beschreef één enkel thuisscherm; de app heeft sindsdien
@@ -135,11 +135,10 @@ import com.fclglucolink.app.ui.theme.FCLGlucoLinkManualTheme
  *    één algemene aan/uit-knop, die op elk tabblad de Calibration-knop
  *    tevoorschijn haalt).
  *
- * 13/08/2026 (editor, RONDE 108, op verzoek: "kun je de manual nu ook weer
- * even doornemen zodat die weer in lijn is met de huidige code. Ik zag dat
- * de alarms er nog niet in stonden [...] het hoeft echter niet per type
- * heel uitgebreid want de namen spreken al voorzich, gewoon even algemeen
- * [...]") — nieuw [ManualTopic.ALARMS] (Ronde 106-108's alarmsysteem was
+ * 13/08/2026 (editor, RONDE 108, op verzoek om de manual weer bij te
+ * werken naar de huidige code — de alarms ontbraken nog, maar hoefden niet
+ * per type uitgebreid beschreven te worden, de namen spreken al redelijk
+ * voor zich, dus een algemene beschrijving volstaat) — nieuw [ManualTopic.ALARMS] (Ronde 106-108's alarmsysteem was
  * tot nu toe nergens in de handleiding terug te vinden). Bewust op het
  * gevraagde algemene niveau — GEEN opsomming van wat elk van de zeven
  * types precies doet (de namen spreken voor zich, letterlijk het
@@ -442,11 +441,10 @@ data class ManualSection(val heading: String, val body: String)
  * vaste rij in [ManualScreen]'s menu i.p.v. een per-topic vlag, zie
  * [AboutLinkRow]'s kdoc.
  *
- * SENSORS's inhoud (06/08/2026, op verzoek: "het stukje info over de
- * sensors moet wat uitgebreider [...] dan ook de sensors noemen die
- * mogelijk nog gaan komen en ook specifiek de virtuele sensors en hun doel
- * [...] willekeurige virtuele data maar ook reproduceerbaar met een test
- * file") — overgenomen uit de daadwerkelijke broncode i.p.v. uit het hoofd
+ * SENSORS's inhoud (06/08/2026, op verzoek om het stukje info over de
+ * sensors uit te breiden met mogelijk nog komende sensoren en specifiek de
+ * virtuele sensors en hun doel, zowel willekeurige virtuele data als
+ * reproduceerbaar via een testbestand) — overgenomen uit de daadwerkelijke broncode i.p.v. uit het hoofd
  * geschreven: de drie simulator-modi komen rechtstreeks uit
  * `ui/SimulatorSetupScreen.kt`, en de twee nog-niet-beschikbare
  * sensortypes uit `sensor/SensorDriver.kt`'s `SensorType`-enum

@@ -8,8 +8,7 @@ import androidx.room.PrimaryKey
  * FCLGlucoLink — kalibratie-invoer (ronde 43)
  * ============================================================================
  *
- * 05/08/2026 (editor, RONDE 43 — op verzoek, "kalibratie optie toevoegen",
- * gebaseerd op de door de gebruiker aangeleverde AAPS-broncode
+ * 05/08/2026 (editor, RONDE 43, gebaseerd op de aangeleverde AAPS-broncode
  * `CalibrationMath.kt`/`SplineCalibrationMath.kt`/`*CalibrationPlugin.kt`)
  * — één vingerprik-tegen-sensor-koppel. `sensorMgdlAtPairing` is de RUWE
  * (ongekalibreerde) sensorwaarde op het moment van de vingerprik — exact
@@ -36,9 +35,9 @@ import androidx.room.PrimaryKey
  * bestaande rijen van vóór deze kolom blijven gewoon null (onschadelijke,
  * niet meer opgehaalde rommel, geen migratie-crash).
  *
- * 11/08/2026 (editor, RONDE 90 — op verzoek: één gedeelde vingerprik-
- * database waar BEIDE slots uit kunnen putten, met een aan/uit-vinkje per
- * sensor) — vier nieuwe velden, alle met een backward-compatible default
+ * 11/08/2026 (editor, RONDE 90) — één gedeelde vingerprik-database waar
+ * BEIDE slots uit kunnen putten, met een aan/uit-vinkje per sensor — vier
+ * nieuwe velden, alle met een backward-compatible default
  * zodat bestaande rijen zich exact gedragen als vóór deze ronde:
  *
  * [sensorType]/[sensorMgdlAtPairing] blijven de "herkomst"-sensor (waar de
@@ -49,10 +48,11 @@ import androidx.room.PrimaryKey
  * `null` als die andere slot op dat moment geen (recente) meting had, in
  * welk geval deze vingerprik simpelweg niet voor die sensor bruikbaar is).
  *
- * [includedForOriginSensor] (default true — "de sensor waar je 'm invoert
- * staat 'm automatisch aangevinkt") en [includedForOtherSensor] (default
- * false — "de andere sensor komt 'm wel in de lijst maar standaard
- * uitgevinkt") sturen per sensor aan of deze entry meetelt in de fit — zie
+ * [includedForOriginSensor] (default true — de sensor waar de vingerprik
+ * voor ingevoerd wordt, staat automatisch aangevinkt) en
+ * [includedForOtherSensor] (default false — de andere sensor komt wel in
+ * de lijst maar staat standaard uitgevinkt) sturen per sensor aan of deze
+ * entry meetelt in de fit — zie
  * CalibrationStore.kt's kdoc voor hoe deze twee vlaggen samen met de
  * "alleen na sensor-start"-tijdfilter de oude, hardere `clearAllForSensorType()`-
  * aanpak (die de HELE rij wegveegde bij een nieuwe sensor-sessie) vervangen.

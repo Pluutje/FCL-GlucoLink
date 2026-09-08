@@ -20,8 +20,8 @@ import androidx.compose.runtime.Composable
 // bleef terugkomen ondanks het aanpassen van SurfaceDark zelf — de
 // titelbalk (TopAppBar) gebruikt wél colorScheme.surface standaard, vandaar
 // dat die kleur daar al goed stond.
-// 06/08/2026 (editor, RONDE 51, na live-melding: "de knoppen [...] moeten
-// echt meer het uiterlijk van een knop krijgen") — zie ButtonSurfaceDark's
+// 06/08/2026 (editor, RONDE 51, na live-melding dat de knoppen echt meer
+// het uiterlijk van een knop moesten krijgen) — zie ButtonSurfaceDark's
 // kdoc in Color.kt voor de rootcause (surfaceVariant hierboven al gelijk
 // aan surface, dus knoppen die surfaceVariant als vulkleur gebruikten waren
 // onzichtbaar tegen de Cards erachter). secondaryContainer/
@@ -74,9 +74,9 @@ private val ManualLightColors = lightColorScheme(
 )
 
 /**
- * 06/08/2026 (editor, RONDE 53, op verzoek: "een mooiere opmaak [...] en
- * misschien moet het wel zwarte letters op witte achtergrond (dat dan dus
- * alleen voor de manual)") — een GENEST `MaterialTheme(...)`-blok
+ * 06/08/2026 (editor, RONDE 53, op verzoek voor een mooiere opmaak, mogelijk
+ * met zwarte tekst op een witte achtergrond specifiek voor de manual) — een
+ * GENEST `MaterialTheme(...)`-blok
  * (standaard Compose-patroon: alles in [content] gebruikt vanaf hier deze
  * kleuren i.p.v. de ambient FCLGlucoLinkTheme eromheen) — alleen gebruikt
  * door ManualScreen.kt/ManualTopicScreen, die er hun hele Scaffold

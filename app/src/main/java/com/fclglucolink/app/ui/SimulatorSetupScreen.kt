@@ -48,8 +48,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 private const val INTERVAL_REALTIME_MS = 5 * 60_000L
-// 31/07/2026 (editor, na feedback: "5sec-5min instelbaar -> zet dat op 5
-// minuten (default) en 1 minuut") — was 5_000L (5 sec); nu 1 minuut, voor
+// 31/07/2026 (editor, na feedback om 5sec-5min instelbaar te maken, met
+// 5 minuten als default en 1 minuut als snelle optie) — was 5_000L (5 sec); nu 1 minuut, voor
 // beide simulator-sensoren (Random values + External list) die deze
 // constante delen.
 private const val INTERVAL_FAST_MS = 60_000L

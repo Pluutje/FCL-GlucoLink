@@ -83,8 +83,8 @@ import kotlin.math.sin
  * (algemene instellingen: xDrip-broadcast aan/uit + About), niet meer
  * sensor-specifieke acties — zie SettingsScreen.kt/AboutScreen.kt.
  *
- * 02/08/2026 (editor, op verzoek: "info direct op het hoofdscherm tonen
- * samen met sensor connected") — de VOLLEDIGE sensor-info (type/serienr/
+ * 02/08/2026 (editor, op verzoek om sensor-info direct op het hoofdscherm
+ * te tonen samen met de connected-status) — de VOLLEDIGE sensor-info (type/serienr/
  * status/start/eind/laatste verbinding, zie SensorInfoBlock) staat nu
  * direct hier op het startscherm, niet meer alleen achter een tik op een
  * compacte samenvattingskaart — alleen de koppel-ACTIES (wisselen/
@@ -98,16 +98,16 @@ import kotlin.math.sin
  * @OptIn(ExperimentalMaterial3Api::class) — zie kdoc bij PairingScreen.kt,
  * puur vanwege TopAppBar.
  *
- * 05/08/2026 (editor, RONDE 43 — "Bij het menu. komt een kalibratie aan/uit
- * knop. Als die wordt aan gezet verschijnt er op het hoofdscherm een
- * kalibratie knop") — nieuwe parameter [onOpenCalibration], alleen benut
+ * 05/08/2026 (editor, RONDE 43 — bij het menu komt een kalibratie-aan/uit-
+ * knop; zodra die aan staat verschijnt op het hoofdscherm een kalibratie-
+ * knop) — nieuwe parameter [onOpenCalibration], alleen benut
  * (knop getoond) als AppSettings.calibrationEnabled aan staat, zie
  * SettingsScreen.kt voor de aan/uit-schakelaar zelf. Zie ook BgRingDisplay's
  * kdoc voor de bijbehorende ruwe/gekalibreerde dubbele weergave.
  *
- * 06/08/2026 (editor, RONDE 50, op verzoek: "de 3 puntjes wil ik dan boven
- * sensor als 'settings' knop [...] nog een 'info' knop die het mooist
- * rechts onderin kan") — twee wijzigingen: (1) het ⋮-icoontje dat eerder in
+ * 06/08/2026 (editor, RONDE 50, op verzoek om het ⋮-menu boven "Sensor" te
+ * vervangen door een "Settings"-knop, plus een "info"-knop rechtsonder) —
+ * twee wijzigingen: (1) het ⋮-icoontje dat eerder in
  * de TopAppBar stond (opende hetzelfde Settings-scherm) is vervangen door
  * een gewone "Settings"-knop, in dezelfde kolom en stijl als "Sensor"/
  * "Calibration" — zie de kdoc bij die Row hieronder voor de volledige
@@ -153,8 +153,8 @@ fun StatusScreen(
             TopAppBar(title = { Text("FCLGlucoLink") })
         }
     ) { padding ->
-        // 06/08/2026 (editor, RONDE 50, op verzoek: "nog een 'info' knop die
-        // het mooist rechts onderin kan") — Box i.p.v. rechtstreeks de
+        // 06/08/2026 (editor, RONDE 50, op verzoek voor een extra info-knop
+        // rechtsonder) — Box i.p.v. rechtstreeks de
         // scrollende Column als Scaffold-content: zo kan het info-knopje
         // ONAFHANKELIJK van de scrollpositie vast rechtsonder in het
         // zichtbare scherm blijven staan (Alignment.BottomEnd), i.p.v. mee
@@ -336,8 +336,8 @@ fun SlotStatusContent(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 30/07/2026 (editor, na feedback: "voorkeur voor de weergave zoals
-        // die nu in AAPS is") — zie kdoc bij BgRingDisplay hieronder voor de
+        // 30/07/2026 (editor, na feedback voor een weergave zoals die in
+        // AAPS gebruikelijk is) — zie kdoc bij BgRingDisplay hieronder voor de
         // volledige AAPS-ring-geschiedenis.
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -446,8 +446,8 @@ fun SlotStatusContent(
 }
 
 /**
- * 06/08/2026 (editor, RONDE 47, op verzoek: "de knop moet dat iets minder
- * afgerond en minder opvallend kwa kleur [zijn]") — bewust een ANDERE stijl
+ * 06/08/2026 (editor, RONDE 47, op verzoek om de knop iets minder afgerond
+ * en minder opvallend van kleur te maken) — bewust een ANDERE stijl
  * dan de grote, volledig ronde (pill-vormige), primary-gekleurde knoppen
  * elders op dit scherm ("Connect sensor") — een kleinere hoekradius (10dp
  * i.p.v. de standaard volledig ronde vorm) en `surfaceVariant`/
@@ -455,18 +455,19 @@ fun SlotStatusContent(
  * duidelijk ondergeschikt ogen aan de BG-waarde ernaast, niet als
  * gelijkwaardige call-to-actions.
  *
- * 06/08/2026 (editor, RONDE 48, op verzoek: "de knoppen mogen iets meer
- * knop uiterlijk krijgen [...] boven de knop 'calibration' [mag] een knop
- * 'sensor' komen") — was `CalibrationEntryButton` (één vaste knop, alleen
+ * 06/08/2026 (editor, RONDE 48, op verzoek om de knoppen iets meer een
+ * knop-uiterlijk te geven en boven de "Calibration"-knop ook een "Sensor"-
+ * knop te plaatsen) — was `CalibrationEntryButton` (één vaste knop, alleen
  * "Calibration"); nu generiek gemaakt (`text`-parameter) zodat StatusScreen
  * 'm ook voor de nieuwe "Sensor"-knop kan hergebruiken — beide moeten
- * immers dezelfde, samen herkenbare stijl delen. "Iets meer knop uiterlijk"
- * — een dunne rand (`BorderStroke`) toegevoegd; de vlakke `surfaceVariant`-
+ * immers dezelfde, samen herkenbare stijl delen. Voor het gevraagde meer-
+ * knop-uiterlijk — een dunne rand (`BorderStroke`) toegevoegd; de vlakke `surfaceVariant`-
  * achtergrond alleen gaf te weinig contrast met de kaarten eromheen om
  * meteen als knop herkenbaar te zijn.
  *
- * 06/08/2026 (editor, RONDE 50, op verzoek: "de knoppen [...] iets meer
- * knop vorm maken en even groot [...] dichter bij elkaar") — twee dingen:
+ * 06/08/2026 (editor, RONDE 50, op verzoek om de knoppen iets meer
+ * knopvorm te geven, even groot te maken en dichter bij elkaar te zetten)
+ * — twee dingen:
  * (1) hoekradius 10dp -> 14dp, samen met een tikje meer verticale padding
  * (8dp -> 10dp) — samen met de bestaande rand oogt dat net iets meer als
  * een "echte" knop, minder als een plat label met een randje. (2) nieuwe
@@ -475,8 +476,8 @@ fun SlotStatusContent(
  * Column voor hoe dat samen met `width(IntrinsicSize.Max)` de knoppen
  * "even groot" maakt.
  *
- * 06/08/2026 (editor, RONDE 51, na live-melding: "de knoppen [...] moeten
- * echt meer het uiterlijk van een knop krijgen") — de ronde-50-aanpassingen
+ * 06/08/2026 (editor, RONDE 51, na live-melding dat de knoppen echt meer
+ * het uiterlijk van een knop moesten krijgen) — de ronde-50-aanpassingen
  * hierboven (hoekradius/padding) losten het probleem niet echt op: de
  * ROOTCAUSE was dat `containerColor = surfaceVariant` hier feitelijk exact
  * dezelfde kleur was als de Cards eromheen (zie Theme.kt's kdoc — Card
@@ -508,8 +509,8 @@ private fun HomeSecondaryButton(text: String, onClick: () -> Unit, modifier: Mod
 }
 
 /**
- * 30/07/2026 (editor, na feedback: "voorkeur voor de weergave zoals die nu
- * in AAPS is") — AAPS toont de huidige BG als een gekleurde RING (kleur
+ * 30/07/2026 (editor, na feedback voor een weergave zoals die in AAPS
+ * gebruikelijk is) — AAPS toont de huidige BG als een gekleurde RING (kleur
  * volgt of de waarde binnen bereik is) met delta boven, de waarde in het
  * midden en "Xm ago" eronder, plus een driehoekige "vlag" tegen de ring aan
  * die de trendrichting aangeeft.
@@ -522,12 +523,11 @@ private fun HomeSecondaryButton(text: String, onClick: () -> Unit, modifier: Mod
  * simpel symmetrisch driehoekje i.p.v. AAPS' exacte, licht gebogen
  * vlagvorm.
  *
- * 05/08/2026 (editor, RONDE 43 — op verzoek: "Hij moet overal gebruikt
- * worden [...] Op het scherm wil ik ook de ruwe waarden blijven zien
- * vergelijkbaar met zoals aaps hem toont op het hoofd scherm, de
- * gekalibreerde waarde gewoon volledig en ruwe waarde er bij maar dan veel
- * minder opvallend dus open cirkel en misschien gewoon licht grijs ipv
- * groen of rood of oranje") — [latest.glucoseMgdl] is (dankzij
+ * 05/08/2026 (editor, RONDE 43 — op verzoek om dit overal te gebruiken en
+ * op het hoofdscherm ook de ruwe waarde te blijven tonen naast de volledig
+ * weergegeven gekalibreerde waarde, vergelijkbaar met AAPS, maar dan veel
+ * minder opvallend: een open cirkel in een neutrale lichtgrijze kleur i.p.v.
+ * de gebruikelijke bereikskleuren) — [latest.glucoseMgdl] is (dankzij
  * BleConnectionService's applyCalibrationIfEnabled(), zie kdoc daar) al de
  * gekalibreerde waarde zodra kalibratie aan staat; die blijft de hoofdwaarde
  * in de ring, volledig formaat, met de normale bereikskleur. Wanneer
@@ -573,8 +573,8 @@ private fun BgRingDisplay(
     // tekstkleur i.p.v. de delta in de bereikskleur en de tijd in grijs.
     val neutralTextColor = MaterialTheme.colorScheme.onSurface
 
-    // 31/07/2026 (editor, na feedback: "cirkel mag iets kleiner") — was
-    // 140.dp/36.dp.
+    // 31/07/2026 (editor, na feedback om de cirkel iets kleiner te maken) —
+    // was 140.dp/36.dp.
     val ringSize = 120.dp
     val chevronSize = 30.dp
 
@@ -626,10 +626,10 @@ private fun BgRingDisplay(
                 // zichtbaar zodra kalibratie de waarde daadwerkelijk
                 // veranderde (`abs(raw - final) > 0.01`).
                 //
-                // 18/08/2026 (editor, RONDE 113, op verzoek: "ik zit me nu ook
-                // aftevragen of we het ongekalibreerde getal [...] wel in de
-                // cirkel moeten tonen want dat is in de grafiek ook duidelijk
-                // zichtbaar als open-bolletjes-lijn") — VERWIJDERD: dubbelop
+                // 18/08/2026 (editor, RONDE 113, op verzoek om te heroverwegen
+                // of het ongekalibreerde getal wel in de cirkel getoond moet
+                // worden, aangezien dat al duidelijk zichtbaar is in de
+                // grafiek als open-bolletjeslijn) — VERWIJDERD: dubbelop
                 // met de open-bolletjes-raw-lijn die GlucoseChart.kt al toont,
                 // én had een niet-instelbare, onzichtbare drempel (dezelfde
                 // soort probleem dat elders in dit gesprek net was afgekeurd
@@ -644,8 +644,8 @@ private fun BgRingDisplay(
         // Modifier), vandaar geen aparte import nodig/mogelijk — resolvet
         // hier automatisch omdat deze regel binnen de content-lambda van de
         // buitenste Box{} staat (BoxScope als impliciete receiver).
-        // 31/07/2026 (editor, na feedback: "bij +0,2 lijkt hij al op 45
-        // graden te staan, dat zou ik eerder op 30 graden zetten") — de
+        // 31/07/2026 (editor, na feedback dat de rotatie bij +0,2 al op 45
+        // graden leek te staan, terwijl 30 graden meer voor de hand lag) — de
         // rotatiehoek werd tot nu toe gestuurd door latest.trendMgdlPerMin
         // (de per-MINUUT-genormaliseerde helling van de sensor-driver), die
         // een ANDERE grootheid is dan de hierboven getoonde delta-tekst (het
@@ -765,10 +765,9 @@ private fun formatDelta(deltaMgdl: Double, unit: GlucoseUnit): String = when (un
  * StatusScreen — compacte, sensortype-bewuste samenvatting boven de BG-grafiek
  * ============================================================================
  *
- * 09/08/2026 (editor, RONDE 64, op verzoek: "het beknopte status schermpje
- * boven de Bg grafiek [...] moet dus ook sensortype specifieke info kunnen
- * krijgen indien van toepassing [...] met een knop/i erop waarmee het status
- * scherm van die sensor wordt geopend") — dit vervangt het vroegere, altijd-
+ * 09/08/2026 (editor, RONDE 64, op verzoek om het beknopte statuskaartje
+ * boven de Bg-grafiek ook sensortype-specifieke info te laten tonen, met
+ * een (i)-knop die het statusscherm van die sensor opent) — dit vervangt het vroegere, altijd-
  * volledig-uitgeklapte SensorInfoBlock op het startscherm (zie kdoc daar,
  * hieronder — dat blijft bestaan, maar nu alleen nog gebruikt op de
  * type-specifieke statusschermen zelf, niet meer hier).
@@ -799,9 +798,9 @@ private fun CompactSensorSummary(
 
     val context = LocalContext.current
     val settings = remember { AppSettings(context) }
-    // 09/08/2026 (editor, RONDE 75, op verzoek — "dan wil ik bij beide (en
-    // ook de toekomstige) sensoren daar onder ook de looptijd van de sensor.
-    // Dus de huidige tijd min de starttijd uitgedrukt in dagen en uren") —
+    // 09/08/2026 (editor, RONDE 75, op verzoek om bij beide (en toekomstige)
+    // sensoren ook de looptijd te tonen — de huidige tijd min de starttijd,
+    // uitgedrukt in dagen en uren) —
     // `summaryText` (de bestaande statusregel) en `sensorStartedAtMs` (de
     // bevestigde sensor-startmoment, waaruit de looptijd hieronder berekend
     // wordt via sensorRuntimeText()) samen per sensortype bepaald — bewust
@@ -836,7 +835,7 @@ private fun CompactSensorSummary(
             // aftelling te blijven hangen.
             val typicalSensorDays by settings.dexcomG6TypicalSensorDays(slot).collectAsState(initial = null)
             // 22/08/2026 (editor, RONDE 124, CRITICAL FIX — op verzoek na
-            // live-melding: "de info die terug komt klopt niet", dit
+            // live-melding dat de teruggekregen info niet klopte: dit
             // kaartje toonde het generieke "no response from the
             // transmitter (timeout)" terwijl het volle statusscherm
             // gelijktijdig de ECHTE reden ("invalid") toonde) — deze drie
@@ -920,9 +919,9 @@ private fun CompactSensorSummary(
 }
 
 /**
- * 09/08/2026 (editor, RONDE 75, op verzoek — "dan wil ik bij beide (en ook
- * de toekomstige) sensoren daar onder ook de looptijd van de sensor. Dus de
- * huidige tijd min de starttijd uitgedrukt in dagen en uren") — bewust hier,
+ * 09/08/2026 (editor, RONDE 75, op verzoek om bij beide (en toekomstige)
+ * sensoren ook de looptijd te tonen — de huidige tijd min de starttijd,
+ * uitgedrukt in dagen en uren) — bewust hier,
  * op top-level i.p.v. binnen CompactSensorSummary() zelf, zodat een
  * toekomstig sensortype (Accu-Chek SmartGuide/G7, zie taken #73/#74) 'm
  * simpelweg kan hergebruiken zonder duplicatie. `null` bij een onbekende
@@ -968,8 +967,9 @@ fun SensorInfoBlock(
     connectionState: ConnectionState,
     latest: GlucoseReading?,
     endDateText: String = "—",
-    // 02/08/2026 (editor, op verzoek: "type en nr sensor met start en
-    // einddatum ... connected ... laatste connecting tijd") — vier nieuwe,
+    // 02/08/2026 (editor, op verzoek om type en serienummer van de sensor te
+    // tonen met start- en einddatum, connected-status en laatste connectie-
+    // tijd) — vier nieuwe,
     // optionele parameters (allemaal met een neutrale standaardwaarde, dus
     // geen bestaande aanroeper breekt): serialNumber (uit de barcode-scan,
     // AppSettings.careSensAirScan — dezelfde fysieke sensor als waarmee
@@ -980,10 +980,9 @@ fun SensorInfoBlock(
     // lastConnectedAtMs (laatste geslaagde BLE-verbinding, apart van "Xm
     // ago" dat over de laatste MEETWAARDE gaat).
     //
-    // 02/08/2026 (editor, op verzoek: "je hebt de expiry datum weer
-    // opgenomen maar die is alleen interessant bij plaatsing sensor om te
-    // checken maar dan lees je hem gewoon op de verpakking dus hij hoeft
-    // niet op het scherm getoond te worden") — was hier ook een
+    // 02/08/2026 (editor, op verzoek om de expiry-datum weer te verwijderen:
+    // die is alleen interessant bij het plaatsen van de sensor, en dan staat
+    // hij toch al op de verpakking, dus hoeft niet op het scherm) — was hier ook een
     // packageExpiryText-parameter (fabrieks-/verpakkingsvervaldatum uit de
     // barcode) met een eigen "Package expiry"-rij; beide vervallen — die
     // datum staat toch al op de doos zelf, geen reden om 'm ook nog op dit
@@ -991,9 +990,9 @@ fun SensorInfoBlock(
     serialNumber: String? = null,
     sensorStartedAtMs: Long? = null,
     lastConnectedAtMs: Long? = null,
-    // 08/08/2026 (editor, RONDE 56, op verzoek — "de status info die xdrip
-    // bij de G6 ook weergeeft over de transmitter zoals laatste verbinding,
-    // de spanning van de batterij, de temperatuur") — G6-specifiek, net als
+    // 08/08/2026 (editor, RONDE 56, op verzoek om dezelfde G6-transmitter-
+    // statusinfo te tonen die xDrip ook weergeeft: laatste verbinding,
+    // batterijspanning, temperatuur) — G6-specifiek, net als
     // serialNumber/sensorStartedAtMs hierboven zijn voor CareSens Air.
     // Ruwe transmitter-eenheden (mV/°C), rechtstreeks van
     // DexcomG6Protocol.BatteryInfoRx — geen verdere interpretatie/kleuring
@@ -1001,16 +1000,16 @@ fun SensorInfoBlock(
     batteryVoltageA: Int? = null,
     batteryVoltageB: Int? = null,
     temperatureC: Int? = null,
-    // 02/08/2026 (editor, op verzoek: "info direct op het hoofdscherm
-    // tonen ... samen met sensor connected") — optioneel, zodat
+    // 02/08/2026 (editor, op verzoek om sensor-info direct op het hoofdscherm
+    // te tonen samen met de connected-status) — optioneel, zodat
     // StatusScreen.kt dit blok nu ZELF op het startscherm kan tonen (tikbaar
     // -> SensorManagementScreen voor de acties) i.p.v. alleen het eerder
     // hier gebruikte compacte SensorSummaryCard. SensorManagementScreen.kt
     // zelf geeft niets door (daar staat dit blok al op een eigen scherm,
     // een geneste klik-actie zou daar geen zin hebben).
     onClick: (() -> Unit)? = null,
-    // 09/08/2026 (editor, RONDE 65, op verzoek — "no connection wil ik ook
-    // niet zien") — optioneel: als gezet, vervangt dit de "Status"-rij
+    // 09/08/2026 (editor, RONDE 65, op verzoek om "no connection" niet meer
+    // te tonen) — optioneel: als gezet, vervangt dit de "Status"-rij
     // hieronder VOLLEDIG (tekst én kleur — geen rode foutkleuring meer),
     // i.p.v. de generieke connectionStatusText(connectionState) die anders
     // rechtstreeks een ConnectionState.Error's ruwe boodschap zou tonen.
@@ -1053,8 +1052,8 @@ fun SensorInfoBlock(
                     null
                 }
             )
-            // 02/08/2026 (editor, op verzoek: "ipv het kanaal kan daar beter
-            // het serienr van de sensor staan") — de losse "Device"/"Device
+            // 02/08/2026 (editor, op verzoek om hier het serienummer van de
+            // sensor te tonen ipv het kanaal) — de losse "Device"/"Device
             // (connecting)"-regel die hier stond (het ruwe Bluetooth-MAC-
             // adres, bv. "2C:D3:AD:54:BF:AA") is vervallen: dat adres zegt de
             // gebruiker niets, en "Serial number" hierboven (het echte,
@@ -1063,8 +1062,8 @@ fun SensorInfoBlock(
             // logcat te vinden (zie CareSensAirDriver.kt) voor het geval dat
             // ooit weer nodig is bij het debuggen van een koppelprobleem.
             //
-            // 02/08/2026 (editor, op verzoek: "start en eind tijd ... op 1
-            // regel") — was twee losse rijen ("Started"/"End date"); dat las
+            // 02/08/2026 (editor, op verzoek om start- en eindtijd op 1 regel
+            // te tonen) — was twee losse rijen ("Started"/"End date"); dat las
             // ook los van elkaar niet lekker (twee keer bijna dezelfde
             // datum-tijd-notatie onder elkaar). sensorStartedAtMs komt uit
             // AppSettings.careSensAirSensorStartedAtMs, gezet zodra de
@@ -1151,10 +1150,10 @@ fun InfoRow(label: String, value: String, valueColor: Color? = null) {
  * omlaag toeneemt. Dezelfde tekens gelden voor deltaMmol (rauw
  * mmol-verschil met de vorige meting), zie kdoc bij BgRingDisplay.)
  *
- * 31/07/2026 (editor, ronde 14, na feedback: "bij +0,2 lijkt hij al op 45
- * graden te staan, dat zou ik eerder op 30 graden zetten" + "driehoek moet
- * dichter op de cirkel, geen zwart ertussen" + "basis mag iets groter dan
- * de hoogte") — drie aanpassingen: (a) drempels nu gebaseerd op deltaMmol
+ * 31/07/2026 (editor, ronde 14, na live-feedback dat de rotatiehoek bij
+ * +0,2 te fors overkwam (45° i.p.v. de gewenste ~30°), dat de driehoek
+ * dichter tegen de cirkel moest zonder zichtbare zwarte tussenruimte, en
+ * dat de basis iets groter mocht zijn dan de hoogte) — drie aanpassingen: (a) drempels nu gebaseerd op deltaMmol
  * i.p.v. trendMgdlPerMin, zie kdoc bij BgRingDisplay voor waarom dat een
  * andere/kleinere grootheid is; (b) aanhechtpunt-straal met de helft van de
  * ringrand (6dp) naar binnen getrokken, zodat de basis van de driehoek in
@@ -1244,8 +1243,8 @@ private fun formatTime(timestampMs: Long): String {
     return SimpleDateFormat("dd-MM HH:mm", Locale.getDefault()).format(Date(timestampMs))
 }
 
-// 02/08/2026 (editor, op verzoek: "bij status kan dan beter alleen
-// 'connected', de tussen haakjes caresensair voegt niks toe") — was
+// 02/08/2026 (editor, op verzoek om de statusregel te vereenvoudigen tot
+// alleen "Connected", zonder het sensortype tussen haakjes) — was
 // "Connected" + " ($deviceName)" (bv. "Connected (CareSens Air)"); de
 // sensortype staat al apart op de "Sensor type"-rij hierboven, dus die
 // herhaling hier voegde niets toe.

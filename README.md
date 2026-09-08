@@ -10420,4 +10420,224 @@ eerst bijstonden zijn weer verwijderd, zie de kanttekening hierboven).
 
 versionCode 183, versionName "0.9.84-whats-new-and-manual-refresh".
 
+## Ronde 171 (08/09/2026) — predictieve-alarmen begrensd (false triggers) + echte melding bij een beschikbare update
+
+**Aanleiding 1.** Live-melding met vier screenshots (alarmscherm, xDrip+ BG-
+geschiedenis, alarminstellingen, nog een alarmscherm): "Kun je eens kijken
+naar de voorspellende alarmen. In dit geval gaat 2 keer een hoog alarm af
+(ingesteld op 15 minuten voor hij 15mmol/l zal worden) De eerste keer bij
+een Bg van 4,5 midden in de nacht, en de 2de keer bij 6,4 in beide gevallen
+is het verloop van de Bg in de tijd voorafgaand aan het alarm ook mee
+genomen in de screenshot. Mocht dit voor laag ook verkeerd staan dan ook
+graag daar even naar kijken."
+
+**Diagnose 1.** Om van 4,5 mmol/L (81 mg/dL) binnen 15 minuten 15,0 mmol/L
+(270 mg/dL) te "voorspellen" is een trend van ~12,6 mg/dL/min nodig (bij
+6,4 mmol/L: ~10,3 mg/dL/min) — beide ruim boven wat fysiologisch ooit
+voorkomt, en ruim boven deze app's eigen "DoubleUp"-conventie (3 mg/dL/min,
+zie `XDripBroadcaster.kt`'s `trendName()`). De xDrip+-geschiedenis in de
+screenshots liet ter plekke ook helemaal geen trend van die orde zien
+(hooguit een normale ⬆⬆-stijging). Root cause gevonden in
+`AlarmEvaluator.kt`'s `predictiveHighFires()`/`predictiveLowFires()`:
+`projectedMgdl = huidige waarde + reading.trendMgdlPerMin × leadTimeMinutes`
+— zonder ENIGE begrenzing op `trendMgdlPerMin`. Dat veld komt rechtstreeks
+van een RUWE, ongevalideerde transmitterbyte (bv. `DexcomG6Protocol.
+trendByteToMgdlPerMin()` = ruwe_byte / 10) — een Explore-onderzoek
+bevestigde dat GEEN van de vier sensortypes (G6/G7/CareSens Air/simulator)
+dit ooit begrenzen, en `GlucoseReading` zelf heeft geen validatie. Eén
+rare/beschadigde ruwe byte (bv. een eigenaardigheid van de Anubis-kloon-
+transmitter, of gewone BLE-ruis) kan zo een absurd hoge waarde opleveren,
+die vervolgens klakkeloos werd doorgetrokken.
+
+**Wijziging 1.**
+- `alarm/AlarmEvaluator.kt`: nieuwe `PLAUSIBLE_TREND_CLAMP_MGDL_PER_MIN =
+  8f` (ruim boven de eigen DoubleUp-grens van 3, zodat een echt extreme
+  genuine stijging/daling nooit onterecht afgekapt wordt). Zowel
+  `predictiveHighFires()` als `predictiveLowFires()` (op expliciet verzoek
+  ook Low gecontroleerd — had exact dezelfde ongebreidelde kwetsbaarheid)
+  clampen `reading.trendMgdlPerMin` nu hiermee vóór gebruik in de
+  projectie. Bewust ALLEEN hier (niet in `GlucoseReading` zelf of de
+  drivers) — de getoonde trendpijl/xDrip-broadcast-slope blijven
+  ongemoeid, die kdoc noemt dat veld toch al "geen kritiek invoerveld".
+- `sensor/dexcomg6/DexcomG6Driver.kt`: de bestaande diagnose-logregel bij
+  elke geslaagde G6-meting logt nu ook `trendRaw`/`trendMgdlPerMin` —
+  eerder stond dat nergens gelogd, dus was een vergelijkbare uitschieter
+  achteraf niet te bevestigen. Mocht dit zich herhalen, is de ruwe waarde
+  nu direct terug te vinden in het diagnose-logboek.
+
+**Aanleiding 2 (zelfde melding).** "Ook graag even kijken of er als er een
+update beschikbaar is dat er wel een notificatie komt."
+
+**Diagnose 2.** De periodieke 12-uurs achtergrondcheck in
+`BleConnectionService.kt` (Ronde 165) schreef een gevonden update tot nu
+toe ALLEEN weg naar `AppSettings` — nergens werd een daadwerkelijke
+Android-melding getoond. Een gebruiker kwam een nieuwe versie dus alleen
+tegen als die toevallig zelf het About-scherm opende.
+
+**Wijziging 2.** `sensor/ble/BleConnectionService.kt`:
+- Nieuw, apart notificatiekanaal `fclglucolink_updates`
+  (`IMPORTANCE_DEFAULT`, i.t.t. de stille `IMPORTANCE_LOW` van de
+  permanente BLE-statusmelding).
+- In de periodieke check-lus: vóór het overschrijven van de bewaarde
+  `availableUpdateVersionCode` wordt eerst de OUDE waarde gelezen: alleen
+  als de nieuw gevonden versionCode daar STRIKT boven zit, wordt
+  `notifyUpdateAvailable()` aangeroepen — zo geen herhaalde melding elke 12
+  uur voor dezelfde, al eerder gemelde update.
+- De melding zelf is wegveegbaar (`setAutoCancel(true)`, geen
+  `setOngoing`), tikken erop opent de app (zelfde patroon als de
+  bestaande permanente statusmelding — een gerichte deep-link naar
+  precies het About-scherm bestaat nog niet).
+- `android.permission.POST_NOTIFICATIONS` staat al in `AndroidManifest.xml`
+  (nodig voor de bestaande BLE-statusmelding) — geen manifestwijziging
+  nodig.
+
+**Verificatie.** Alle drie gewijzigde bestanden gecontroleerd met de
+Kotlin-string-template-bewuste tokenizer — accolades/haakjes in balans.
+Geen Gradle/Android-SDK beschikbaar om te compileren — handmatige review.
+Nog niet live getest.
+
+Gewijzigd: `alarm/AlarmEvaluator.kt`, `sensor/dexcomg6/DexcomG6Driver.kt`,
+`sensor/ble/BleConnectionService.kt`, `app/build.gradle.kts`. Nieuw:
+`whatsnew/FCLGlucoLink_v184_whatsnew.txt` — v184 is de eerste versie ná
+Ronde 170 waarvoor een changelog-bestand ook daadwerkelijk zin heeft (zie
+Ronde 170's kanttekening); moet samen met de v184-apk naar de Drive-map
+geüpload worden.
+
+versionCode 184, versionName "0.9.85-predictive-alarm-clamp-and-update-notify".
+
+## Ronde 172 (08/09/2026) — predictieve alarmen: ruwe trend gecorroboreerd tegen echte metingen
+
+**Aanleiding.** Live-melding direct na het installeren van v184, met drie
+screenshots (alarmscherm "Predictive High" bij 9,0 mmol/L, xDrip+ BG-
+geschiedenis, de Alarms-instellingen): "Ik heb net de nieuwe versie
+geinstalleerd maar nu krijg ik bij een dalende Bg een alarm van een
+predictive high. Wat wel opvallend is is de dubbele pijl omhoog om 13:54
+terwijl de Bg 0,7 zakt. De daling is waarschijnlijk omdat de sensor kort
+daarna een in error schoot, wat niet wordt weergegeven. Maar zelfs als de Bg
+nog 9,7 was is het bijna onmolgelijk om 15 minuten later boven de 15 te
+komen."
+
+**Diagnose.** De Ronde 171-clamp (8 mg/dL/min) begrenst alleen de GROOTTE
+van de ruwe trendbyte, niet of de RICHTING klopt. De xDrip+-geschiedenis
+laat 13:49→13:54 een daling zien (9,7 → 9,0 mmol/L), terwijl de ruwe
+trendbyte een dubbele-pijl-omhoog opleverde. 8 mg/dL/min sustained is
+precies genoeg om vanaf 9,7 mmol/L (174,6 mg/dL) binnen 15 minuten de 15,0
+mmol/L (270 mg/dL)-drempel te bereiken (174,6 + 8×15 = 294,6 mg/dL), dus de
+clamp alléén voorkwam dit incident niet. Verder verlagen van de clamp lost
+dit niet fundamenteel op: een kapotte/rare byte kan net zo goed toevallig
+onder een lagere grens uitkomen, en een te lage grens zou ook echte snelle
+stijgingen (bv. na snelwerkende koolhydraten) onterecht gaan afkappen. De
+gebruiker se eigen hypothese (sensor die kort erna in error schoot) is
+aannemelijk als verklaring voor de rare byte.
+
+**Wijziging.** `alarm/AlarmEvaluator.kt`: naast de bestaande clamp wordt de
+ruwe trend nu ook gecorroboreerd tegen de laatste twee daadwerkelijk
+opgeslagen metingen (`measuredTrendMgdlPerMin()` — puur het tweepuntsverschil
+tussen de twee meest recente metingen, GEEN eigen regressie over meerdere
+punten, dat blijft bewust buiten scope zoals Ronde 107 al vastlegde). Alleen
+gebruikt als sanity-check op de richting: als die twee metingen 2-15 minuten
+uit elkaar liggen (te dichtbij is ruisgevoelig, te ver is een meetgat zonder
+zinnige uitspraak) én ze spreken de richting van de ruwe trend tegen, vuurt
+het predictieve alarm niet. Ontbreekt een bruikbare vorige meting (sensor
+net gestart, groot meetgat), dan valt dit terug op het oude clamp-only
+gedrag van Ronde 171 — geen regressie voor die gevallen. `evaluate()` kreeg
+hiervoor een nieuwe, optionele `previousReading`-parameter.
+`alarm/AlarmMonitor.kt`: haalt nu ook de meting vóór de laatste op (via de
+al bestaande `GlucoseReadingStore.recentReadings()`, los van de bewust
+ongefilterde `latestReading`-flow die STALE_DATA nodig heeft) en geeft die
+door aan `evaluate()`.
+
+De dubbele-pijl-omhoog in xDrip+ zelf blijft ongemoeid — dat is de
+onveranderde, bewust ongeklemde broadcast-trend uit Ronde 171 (puur voor de
+UI-trendpijl elders, geen alarm-invoer) en reflecteert dus gewoon dezelfde
+rare ruwe byte.
+
+**Verificatie.** Beide gewijzigde bestanden gecontroleerd met de Kotlin-
+string-template-bewuste tokenizer — accolades/haakjes in balans. Geen
+Gradle/Android-SDK beschikbaar om te compileren — handmatige review. Nog
+niet live getest.
+
+Gewijzigd: `alarm/AlarmEvaluator.kt`, `alarm/AlarmMonitor.kt`,
+`app/build.gradle.kts`. Nieuw: `whatsnew/FCLGlucoLink_v185_whatsnew.txt`.
+
+versionCode 185, versionName "0.9.86-predictive-alarm-measured-trend-corroboration".
+
+## Ronde 173 (08/09/2026) — xDrip-broadcast synchroon met thuisscherm-trend + G6-startcode toont voortaan de nieuwe code
+
+**Aanleiding 1.** Live-melding met drie screenshots (thuisscherm met -0,3
+delta/pijl-omlaag bij 7,3, AAPS-cirkel met dezelfde richting, xDrip+ BG-
+geschiedenis): "Ik wil toch de pijlen die worden mee gezonden (ik wil dat
+sowieso voor de g6 maar indien de andere sensoren daar ook in zouden kunnen
+afwijken die andere ook allemaal) toch aanpassen. [...] wat er in de xdrip
+zend naar aaps vanuit blijkbaar de transmitter wordt meegestuurd is een
+dubbele pijl omhoog (dat is ook wat ik op mijn horloge zie) [...] Ik wil
+echter dat [...] de waarde van de pijlen (lees richting) die op het scherm
+van fclglucolink wordt getoond ook via de xdrip broadcast naar aaps wordt
+gestuurd zodat alles gewoon synchroon loopt. Ik schrik namelijk regelmatig
+[...] om dan later te zien dat de Bg eigenlijk redelijk stabiel is."
+
+**Diagnose 1.** Bevestigt exact de Ronde 171/172-analyse: `XDripBroadcaster.
+kt`'s `buildBundle()` gebruikte voor zowel `EXTRA_BG_SLOPE_NAME` als
+`EXTRA_BG_SLOPE` rechtstreeks `reading.trendMgdlPerMin` — de RUWE,
+ongevalideerde transmitterbyte. Het thuisscherm zelf (`StatusScreen.kt`'s
+`BgRingDisplay`) gebruikt daarentegen altijd het GEMETEN verschil tussen de
+twee laatst opgeslagen metingen. Die twee kunnen dus uit elkaar lopen — hier
+zichtbaar als thuisscherm/AAPS-cirkel "-0,3, pijl omlaag" tegenover xDrip+/
+horloge "dubbele pijl omhoog", exact dezelfde soort ruwe-byte-afwijking als
+Ronde 171/172, nu zichtbaar in de UI in plaats van als vals alarm.
+
+**Wijziging 1.**
+- Nieuw `sensor/TrendCalculator.kt`: `measuredMgdlPerMin()` — het
+  tweepuntsverschil tussen twee metingen (2-15 minuten uit elkaar), verhuisd
+  uit `AlarmEvaluator.kt`'s Ronde 172-toevoeging zodat alarm-corroboratie EN
+  broadcast exact dezelfde berekening delen. `AlarmEvaluator.kt` roept 'm nu
+  aan via deze nieuwe klasse i.p.v. zijn eigen kopie (pure verhuizing, geen
+  gedragswijziging daar).
+- `broadcast/XDripBroadcaster.kt`: `buildBundle()`/`broadcast()` krijgen een
+  nieuwe `previousReading`-parameter; de verzonden trend is nu
+  `TrendCalculator.measuredMgdlPerMin(reading, previousReading) ?:
+  reading.trendMgdlPerMin` — de ruwe byte blijft alleen nog de terugval als
+  er geen bruikbare vorige meting is (sensor net gestart, groot meetgat).
+  Bewust generiek per `GlucoseReading`, geen sensorType-onderscheid: werkt
+  zo identiek voor G6/G7/CareSens Air/simulator, zoals gevraagd.
+- `sensor/ble/BleConnectionService.kt`: haalt vlak vóór `readingStore.
+  record()` de dan nog "laatste" (dus voor de nieuwe meting "vorige")
+  meting op en geeft die door aan `XDripBroadcaster.broadcast()`.
+
+**Aanleiding 2 (zelfde melding).** "Wat bij de start van een nieuwe sensor
+(dexcom g6) ook nog even aangepast moet worden is het, tijdens het starten,
+van een nieuwe sensor de sensor code van de oude nog een keer wordt getoond.
+[...] wordt in dit screen shot nog 9117 getoond terwijl de reeds ingevoerde
+waarde 9311 was. Nadat hij is confirmed komt 9311 wel inbeeld maar tijdens
+het starten ga je toch twijfelen of je de juiste code wel hebt ingevoerd."
+
+**Diagnose 2.** `DexcomG6StatusScreen.kt`'s "Code"-rij in de sensor-
+infotabel toonde altijd `lastConfirmedSensorCode` (de code van de VORIGE,
+al bevestigde sessie) — ook terwijl er al een nieuwe, nog-onbevestigde code
+klaarstond in `pendingSensorStartCode` (exact hetzelfde veld dat de
+"Started"-rij ernaast al wél als terugval gebruikte, zie Ronde 124).
+
+**Wijziging 2.** `ui/DexcomG6StatusScreen.kt`: de "Code"-rij toont nu
+`pendingSensorStartCode` (met "(unconfirmed)"-label, zelfde stijl als
+"Started") zodra die non-null is, en valt pas terug op
+`lastConfirmedSensorCode` zodra er geen pending code meer is. Volgens
+`DexcomG6Driver.kt`'s bestaande sessionStart-succesafhandeling wordt de
+pending code pas gewist NADAT `lastConfirmedSensorCode` al gezet is, dus de
+weergave schakelt naadloos over zonder ooit een lege "—" ertussen te tonen.
+
+**Verificatie.** Alle vijf gewijzigde/nieuwe bestanden (`alarm/
+AlarmEvaluator.kt`, `sensor/TrendCalculator.kt`, `broadcast/
+XDripBroadcaster.kt`, `sensor/ble/BleConnectionService.kt`, `ui/
+DexcomG6StatusScreen.kt`) gecontroleerd met de Kotlin-string-template-
+bewuste tokenizer — accolades/haakjes overal in balans. Geen Gradle/
+Android-SDK beschikbaar om te compileren — handmatige review. Nog niet live
+getest.
+
+Gewijzigd: `alarm/AlarmEvaluator.kt`, `broadcast/XDripBroadcaster.kt`,
+`sensor/ble/BleConnectionService.kt`, `ui/DexcomG6StatusScreen.kt`,
+`app/build.gradle.kts`. Nieuw: `sensor/TrendCalculator.kt`,
+`whatsnew/FCLGlucoLink_v186_whatsnew.txt`.
+
+versionCode 186, versionName "0.9.87-broadcast-trend-sync-and-g6-code-display-fix".
+
 versionCode 117, versionName `0.9.20-alarm-alert-mode-fix`.

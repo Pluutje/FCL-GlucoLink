@@ -7,10 +7,9 @@ import kotlin.math.exp
  * FCLGlucoLink — kalibratie-wiskunde (ronde 43)
  * ============================================================================
  *
- * 05/08/2026 (editor, RONDE 43 — op verzoek, "kalibratie optie toevoegen...
- * vergelijkbaar met die in aaps") — LETTERLIJKE poort van de door de
- * gebruiker aangeleverde AAPS-broncode `CalibrationMath.kt` (gewogen
- * kleinste-kwadraten lineaire fit, tijd-verval, veiligheidsklemmen). Enige
+ * 05/08/2026 (editor, RONDE 43) — LETTERLIJKE poort van de aangeleverde
+ * AAPS-broncode `CalibrationMath.kt` (gewogen kleinste-kwadraten lineaire
+ * fit, tijd-verval, veiligheidsklemmen). Enige
  * wijziging: AAPS's `CAL`-model (`app.aaps.core.data.model.CAL`) is
  * vervangen door de lokale `CalibrationEntry` — verder ongewijzigd, inclusief
  * de exacte constantes.

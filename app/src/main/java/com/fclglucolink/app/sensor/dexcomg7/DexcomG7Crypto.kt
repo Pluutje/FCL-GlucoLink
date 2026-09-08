@@ -23,10 +23,9 @@ import javax.crypto.spec.SecretKeySpec
  * FCLGlucoLink — Dexcom G7/ONE+ EC-J-PAKE koppel-handshake (RONDE 112)
  * ============================================================================
  *
- * 17/08/2026 (editor, RONDE 112, op verzoek: "wil ik graag verder met de
- * verdere implementatie van de dexcom g7 [...] code zover in orde brengen
- * dat zodra ik er eentje krijg ik gelijk kan beginnen met testen. [...] Heb
- * je daarvoor nog de xdrip of juggluco code nodig") — de gebruiker had de
+ * 17/08/2026 (editor, RONDE 112, op verzoek om verder te gaan met de
+ * implementatie van de Dexcom G7, zodat de code zo ver in orde is dat er
+ * gelijk getest kan worden zodra er een G7-sensor beschikbaar is) — de
  * volledige xDrip+-broncode (`uploads/xDrip-2026.08.08.zip`, hetzelfde
  * archief dat destijds ook voor de G6-driver als referentie diende) én
  * Juggluco's broncode (`uploads/Juggluco.zip`) al eerder aangeleverd; dit

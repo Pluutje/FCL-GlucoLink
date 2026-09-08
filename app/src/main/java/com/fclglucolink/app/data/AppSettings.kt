@@ -47,22 +47,21 @@ import kotlinx.coroutines.flow.map
  * (Kan later alsnog per-slot worden als daar behoefte aan blijkt; bewust
  * NIET vooruit-gebouwd zonder concreet verzoek.)
  *
- * 10/08/2026 (editor, RONDE 80, op verzoek na live-test — "functioneel moet
- * de calibratie ook sensor afhankelijk worden nu kan ik wel een ofset kiezen
- * maar die wordt dan gelijk bij zowel slot a als b gebruikt") —
- * calibrationMode/calibrationManualOffsetMmol zijn NU WEL per-slot (de
- * concrete behoefte die de kdoc hierboven al voorzag). calibrationEnabled
- * (de aan/uit-hoofdschakelaar, geen waarde) blijft bewust globaal — daar is
- * geen apart verzoek voor. Zie [migrateLegacyCalibrationToSlotAOnce] voor de
+ * 10/08/2026 (editor, RONDE 80, na een live-test waaruit bleek dat de
+ * kalibratie ook sensor-afhankelijk moest worden — een gekozen offset werkte
+ * tot dan toe voor beide slots tegelijk) — calibrationMode/
+ * calibrationManualOffsetMmol zijn NU WEL per-slot (de concrete behoefte die
+ * de kdoc hierboven al voorzag). calibrationEnabled (de aan/uit-
+ * hoofdschakelaar, geen waarde) blijft bewust globaal — daar was geen apart
+ * verzoek voor. Zie [migrateLegacyCalibrationToSlotAOnce] voor de
  * bijbehorende, SEPARAAT bewaakte migratie (de hoofdmigratie
  * [migrateLegacySingleSlotDataOnce] had op het moment van dit verzoek al op
  * bestaande installaties gedraaid, dus kon niet simpelweg uitgebreid worden).
  *
  * De oude blunte `broadcastEnabled`-schakelaar (simpel aan/uit, geen
- * bronkeuze) is vervangen door `aapsActiveSlot: SensorSlot?` — precies het
- * gevraagde model: "beide slots kunnen zenden naar AAPS waarbij er
- * uiteraard maar max 1 actief kan zijn, maar ze moeten ook beiden uit
- * kunnen" (null = geen van beide zendt).
+ * bronkeuze) is vervangen door `aapsActiveSlot: SensorSlot?`: beide slots
+ * kunnen naar AAPS zenden, maar er kan er maar één tegelijk actief zijn, en
+ * ze kunnen ook allebei uit staan (null = geen van beide zendt).
  *
  * Migratie: [migrateLegacySingleSlotDataOnce] kopieert bij de eerste start
  * na deze update alle bestaande (pre-multi-slot) waarden één keer naar Slot
@@ -85,9 +84,9 @@ class AppSettings(private val context: Context) {
         val CALIBRATION_ENABLED = booleanPreferencesKey("calibration_enabled")
         val SMOOTHING_ENABLED = booleanPreferencesKey("smoothing_enabled")
 
-        // 29/08/2026 (editor, RONDE 160, op verzoek: "Aan/uit bij de settings
-        // is een goede aanvulling" — voor de nieuwe 1-uur-Bg-voorspellingsband
-        // op de grafiek, zie prediction/GlucosePrediction.kt) — app-breed
+        // 29/08/2026 (editor, RONDE 160) — aan/uit-instelling voor de nieuwe
+        // 1-uur-Bg-voorspellingsband op de grafiek (zie prediction/
+        // GlucosePrediction.kt) — app-breed
         // (geen per-slot), net als SMOOTHING_ENABLED/CALIBRATION_ENABLED
         // hierboven: dezelfde toggle geldt voor GlucoseChart (per-slot) EN
         // DualGlucoseChart (Combi-tab). Default UIT — zelfde conventie als
@@ -96,9 +95,8 @@ class AppSettings(private val context: Context) {
         // niet aanraakt, ziet niets veranderen.
         val PREDICTION_ENABLED = booleanPreferencesKey("prediction_enabled")
 
-        // 18/08/2026 (editor, RONDE 114, op verzoek: "een algemene filtering
-        // sterkte 3 keuze schakelaar [...] onder de enable smoothing die dan
-        // indien enable uitgeschakeld ook grijs wordt") — zie
+        // 18/08/2026 (editor, RONDE 114) — algemene filtersterkte, 3 keuzes,
+        // onder de smoothing-schakelaar (grijs als smoothing uit staat) — zie
         // smoothing/KalmanSmoother.kt's SmoothingStrength-kdoc. Bewust
         // GLOBAAL (net als SMOOTHING_ENABLED hierboven), niet per-slot —
         // dezelfde reden als daar: dit is een algemene, sensor-onafhankelijke
@@ -106,15 +104,14 @@ class AppSettings(private val context: Context) {
         val SMOOTHING_STRENGTH = stringPreferencesKey("smoothing_strength")
         val BOND_LOSS_AUTO_RECOVERY_ENABLED = booleanPreferencesKey("bond_loss_auto_recovery_enabled")
 
-        // 16/08/2026 (editor, RONDE 111, op verzoek: "zou er een instelbare
-        // filtering mogelijk zijn die de eerste 2 dagen iets heftiger
-        // filtert en dan langzaam afbouwt" — n.a.v. community-meldingen dat
-        // CareSens Air de eerste dag(en) "springerig" kan zijn en AAPS/
-        // FCLvNext daardoor onterecht kan reageren op ruisgevoelige
-        // STIJGINGEN) — app-breed, geen per-slot (net als SMOOTHING_ENABLED
-        // zelf): de gebruiker wil één instelling die voor elke sensor in elk
-        // slot geldt, niet per sensortype (zie het gesprek — "in principe
-        // heeft iedere sensor er last van"). Hangt bewust ONDER smoothing
+        // 16/08/2026 (editor, RONDE 111) — instelbare filtering die de eerste
+        // 2 dagen iets heftiger filtert en dan langzaam afbouwt, naar
+        // aanleiding van community-meldingen dat CareSens Air de eerste
+        // dag(en) "springerig" kan zijn en AAPS/FCLvNext daardoor onterecht
+        // kan reageren op ruisgevoelige STIJGINGEN. App-breed, geen per-slot
+        // (net als SMOOTHING_ENABLED zelf): één instelling die voor elke
+        // sensor in elk slot geldt, niet per sensortype — in principe heeft
+        // elke sensor er last van. Hangt bewust ONDER smoothing
         // (alleen relevant als smoothing zelf aan staat) — zie
         // smoothing/KalmanSmoother.kt's klasse-kdoc voor het volledige
         // mechanisme en de doorgerekende afweging.
@@ -124,20 +121,20 @@ class AppSettings(private val context: Context) {
         // afgebouwd — exponentieel, τ = deze waarde / 5 (zie KalmanSmoother.kt).
         val SMOOTHING_BREAK_IN_FILTER_DURATION_HOURS = doublePreferencesKey("smoothing_breakin_filter_duration_hours")
 
-        // 18/08/2026 (editor, RONDE 113, op verzoek: "toon gefilterde data op
-        // hoofdscherm") — losse, app-brede (niet per-slot) aan/uit-toggle voor
-        // de nieuwe raw/gekalibreerd/gefilterd-regel op StatusScreen.kt/
+        // 18/08/2026 (editor, RONDE 113) — losse, app-brede (niet per-slot)
+        // aan/uit-toggle om gefilterde data op het hoofdscherm te tonen: de
+        // nieuwe raw/gekalibreerd/gefilterd-regel op StatusScreen.kt/
         // CombiScreen.kt. Bewust ONAFHANKELIJK van of de waarden daadwerkelijk
         // verschillen — zie GlucoseReading.calibratedMgdl's kdoc en
         // StatusScreen.kt's SlotStatusContent voor de volledige aanleiding
-        // (het gesprek verwierp expliciet het bestaande "alleen tonen bij
-        // verschil"-patroon van de oude raw-indicator in BgRingDisplay).
+        // (vervangt het oudere "alleen tonen bij verschil"-patroon van de
+        // oude raw-indicator in BgRingDisplay).
         val SMOOTHING_SHOW_PIPELINE_ON_MAIN_SCREEN = booleanPreferencesKey("smoothing_show_pipeline_on_main_screen")
 
-        // 24/08/2026 (editor, RONDE 125, op verzoek: "een breakout filter wat
-        // eigenlijk precies omgekeerd werkt tov de breakin" — na CareSens
-        // Air-meldingen dat sensoren de laatste dagen van hun looptijd weer
-        // instabiel worden) — spiegelbeeld van SMOOTHING_BREAK_IN_FILTER_*
+        // 24/08/2026 (editor, RONDE 125) — een break-out filter, het
+        // spiegelbeeld van het break-in filter, na meldingen dat CareSens
+        // Air-sensoren de laatste dagen van hun looptijd weer instabiel
+        // worden. Spiegelbeeld van SMOOTHING_BREAK_IN_FILTER_*
         // hierboven, app-breed net als die twee. Zie
         // BleConnectionService.kt's computeBreakOutDecayFactor() voor hoe de
         // "einde van de looptijd"-schatting per sensortype bepaald wordt en
@@ -151,14 +148,14 @@ class AppSettings(private val context: Context) {
         // omgekeerd. UI-max 96u (SettingsScreen.kt).
         val SMOOTHING_BREAK_OUT_FILTER_DURATION_HOURS = doublePreferencesKey("smoothing_breakout_filter_duration_hours")
 
-        // 13/08/2026 (editor, RONDE 104 — Fase 1, op verzoek: "een mg/dl vs
-        // mmol/l knop") — app-breed, geen per-slot: de weergave-eenheid is een
+        // 13/08/2026 (editor, RONDE 104 — Fase 1) — mg/dL vs mmol/L-knop,
+        // app-breed, geen per-slot: de weergave-eenheid is een
         // voorkeur van de gebruiker, geen eigenschap van een fysieke sensor
         // (zie klasse-kdoc's globaal-vs-per-slot-regel bovenaan dit bestand).
         val DISPLAY_UNIT = stringPreferencesKey("display_unit")
 
-        // 13/08/2026 (editor, RONDE 106, Fase 2 stap 1, op verzoek: "1 overal
-        // knop om in 1 keer alle alarmen aan/uit te zetten") — hoofdschakelaar
+        // 13/08/2026 (editor, RONDE 106, Fase 2 stap 1) — één overall-knop om
+        // in één keer alle alarmen aan/uit te zetten — hoofdschakelaar
         // voor het hele alarmsysteem, zie alarm/AlarmType.kt's klasse-kdoc.
         // De losse per-type instellingen (aan/uit/drempel/voorlooptijd/
         // geluid/trilling × 7 types) gebruiken de alarmXxx()-sleutelfabrieken
@@ -188,9 +185,9 @@ class AppSettings(private val context: Context) {
         // blunte aan/uit-schakelaar zonder bronkeuze). "A"/"B"/afwezig=null.
         val AAPS_ACTIVE_SLOT = stringPreferencesKey("aaps_active_slot")
 
-        // 20/08/2026 (editor, RONDE 115, op verzoek: "een knop in te voeren
-        // die bij ingeschakeld iedere sensor (ook de virtuele) een
-        // universele code mee geeft die zowel in aaps 3 als 4 werkt") — zie
+        // 20/08/2026 (editor, RONDE 115) — een knop die, ingeschakeld, elke
+        // sensor (ook de virtuele) een universele code meegeeft die zowel in
+        // AAPS 3 als 4 werkt — zie
         // XDripBroadcaster.kt's kdoc bij [XDripBroadcaster.sourceInfo] voor
         // de volledige analyse (AAPS v3.4 vs v4-dev SourceSensor-whitelists)
         // die tot de gekozen waarde leidde. Bewust GLOBAAL (net als
@@ -277,10 +274,10 @@ class AppSettings(private val context: Context) {
     // AAPS-routing (nieuw, RONDE 79) — vervangt broadcastEnabled
     // ============================================================
 
-    /** 10/08/2026 (editor, RONDE 79, op verzoek: "beide slots moeten kunnen
-     *  zenden naar aaps waarbij er uiteraard maar max 1 actief kan zijn,
-     *  maar ze moeten ook beiden uit kunnen") — null = geen enkele slot
-     *  zendt. `BleConnectionService` broadcast alleen readings van de slot
+    /** 10/08/2026 (editor, RONDE 79) — beide slots kunnen naar AAPS zenden,
+     *  maar er kan er maar één tegelijk actief zijn, en ze kunnen ook allebei
+     *  uit staan: null = geen enkele slot zendt. `BleConnectionService`
+     *  broadcast alleen readings van de slot
      *  die hier staat; de andere slot blijft gewoon lokaal verzamelen/tonen
      *  (hot standby). Wisselen is bewust één expliciete actie
      *  (setAapsActiveSlot), geen automatische arbitrage. */
@@ -456,9 +453,8 @@ class AppSettings(private val context: Context) {
     suspend fun isBreakInFilterEnabledOnce(): Boolean =
         context.dataStore.data.first()[Keys.SMOOTHING_BREAK_IN_FILTER_ENABLED] ?: false
 
-    /** RONDE 111 — default 24 uur, zoals in het gesprek als voorbeeld
-     *  genoemd ("een instelling van 24 uur betekent dat het na 24 uur
-     *  volledig is uitgewerkt"). */
+    /** RONDE 111 — default 24 uur: een instelling van 24 uur betekent dat
+     *  het filter na 24 uur volledig is uitgewerkt. */
     val breakInFilterDurationHours: Flow<Double> = context.dataStore.data.map { prefs ->
         prefs[Keys.SMOOTHING_BREAK_IN_FILTER_DURATION_HOURS] ?: 24.0
     }
@@ -587,8 +583,8 @@ class AppSettings(private val context: Context) {
     }
 
     /**
-     * 10/08/2026 (editor, RONDE 80, letterlijk verzoek — "dat ik als sensor
-     * ook geen kan kiezen bij de sensoren") — expliciete "None"-keuze voor een
+     * 10/08/2026 (editor, RONDE 80, op verzoek om ook "geen sensor" te kunnen
+     * kiezen bij de sensorkeuze) — expliciete "None"-keuze voor een
      * slot: verwijdert zowel de gekozen sensor-TYPE-sleutel als het device-
      * adres van deze slot (zelfde adres-wis-stap als [clearDeviceAddress]/de
      * bestaande "Disconnect"-knoppen, zodat BleConnectionService's
@@ -679,10 +675,10 @@ class AppSettings(private val context: Context) {
         }
 
     /**
-     * 22/08/2026 (editor, RONDE 122, CRITICAL FIX — op verzoek na live-
-     * melding: "het viel me op dat de calibratie curve van de vorige sensor
-     * nog steeds actief was nadat deze was gestart") — het EFFECTIEVE,
-     * sensortype-bewuste sessie-startmoment voor deze slot: gebruikt bij
+     * 22/08/2026 (editor, RONDE 122, CRITICAL FIX — na een live-melding dat
+     * de kalibratiecurve van de vorige sensor nog actief bleef nadat een
+     * nieuwe sensor gestart was) — het EFFECTIEVE, sensortype-bewuste
+     * sessie-startmoment voor deze slot: gebruikt bij
      * voorkeur de sensortype-specifieke, ECHT bij elke NIEUWE fysieke
      * sensor herziene starttijd (CareSens Air's [careSensAirSensorStartedAtMs]/
      * Dexcom G6's [dexcomG6SessionStartConfirmedAtMs] — die worden
@@ -770,9 +766,9 @@ class AppSettings(private val context: Context) {
     suspend fun getCareSensAirLastConnectedAtMsOnce(slot: SensorSlot): Long? =
         context.dataStore.data.first()[slotLong("caresens_last_connected_at_ms", slot)]
 
-    /** 28/08/2026 (editor, RONDE 154, CRITIEKE FIX — live-melding: "bij het
-     *  koppelen van een nieuwe caresens sensor bakt hij de start en einde
-     *  tijd van de oude vorige sensor nog op") — [careSensAirSensorStartedAtMs]
+    /** 28/08/2026 (editor, RONDE 154, CRITIEKE FIX — live-melding dat het
+     *  koppelen van een nieuwe CareSens-sensor de start-/eindtijd van de
+     *  vorige sensor nog liet zien) — [careSensAirSensorStartedAtMs]
      *  wordt uitsluitend geschreven vanuit CareSensAirDriver.kt's handler
      *  voor het 0xC0/2-antwoord (StartSensorResponse), dus pas zodra de
      *  NIEUWE fysieke sensor daadwerkelijk een live GATT-uitwisseling heeft
@@ -824,10 +820,10 @@ class AppSettings(private val context: Context) {
             prefs[slotString("dexcom_g6_pending_new_sensor_code", slot)] = code
             prefs.remove(slotLong("dexcom_g6_session_start_confirmed_at_ms", slot))
             prefs.remove(slotInt("dexcom_g6_session_start_fail_count", slot))
-            // 22/08/2026 (editor, RONDE 124, op verzoek — "als de starttijd
-            // niet terug komt uit de transmitter dan moeten we gewoon de
-            // starttijd [...] van het invoeren van de sensorcode
-            // gebruiken") — bewaart het moment waarop DEZE code klaargezet
+            // 22/08/2026 (editor, RONDE 124) — als de starttijd niet
+            // terugkomt uit de transmitter, wordt de invoertijd van de
+            // sensorcode als terugval gebruikt. Bewaart het moment waarop
+            // DEZE code klaargezet
             // is, als terugvaloptie voor de "Started"/"End (est.)"-weergave
             // (DexcomG6StatusScreen.kt) wanneer de transmitter zelf nooit
             // een bevestigde start teruggeeft (bijv. de aanhoudende
@@ -909,9 +905,9 @@ class AppSettings(private val context: Context) {
     }
 
     /**
-     * 22/08/2026 (editor, RONDE 120, op verzoek — "kun je kijken wat er fout
-     * gaat en dan bij de status in ieder ook wat meer info tonen [...] het
-     * is nu een beetje een blackbox") — de RAUWE infoCode van de laatst
+     * 22/08/2026 (editor, RONDE 120) — het statusscherm liet weinig zien
+     * over wat er precies misging bij een mislukte sensorstart. De RAUWE
+     * infoCode van de laatst
      * MISLUKTE SessionStart-poging (zie DexcomG6Protocol.kt's
      * `SessionStartRx.infoCode` en het nieuwe `sessionStartInfoMessage()`
      * dat 'm naar leesbare tekst vertaalt). Tot deze ronde toonde
@@ -1135,8 +1131,8 @@ class AppSettings(private val context: Context) {
      *  `parseBatteryInfo` voor de protocol-herkomst en DexcomG7Driver.kt
      *  voor de aanroep/cache-gating. */
     /**
-     * 29/08/2026 (editor, RONDE 159, op verzoek — "Ik wil hier in principe
-     * alle info getoond kunnen hebben die de sensor zelf terug geeft") —
+     * 29/08/2026 (editor, RONDE 159) — doel is alle info te tonen die de
+     * sensor zelf teruggeeft, in plaats van alleen een deelverzameling.
      * [status]/[resistance]/[runtimeDays] waren al langer beschikbaar in
      * DexcomG7Protocol.BatteryInfoRx (zie [parseBatteryInfo]) maar werden
      * hier nooit opgeslagen — alleen voltageA/voltageB/temperatureC. -1
@@ -1204,11 +1200,10 @@ class AppSettings(private val context: Context) {
     suspend fun getDexcomG7FirmwareQueryAttemptAtMsOnce(slot: SensorSlot): Long? =
         context.dataStore.data.first()[slotLong("dexcom_g7_firmware_query_attempt_at_ms", slot)]
 
-    /** 28/08/2026 (editor, RONDE 152, op verzoek — "een g7 gaat 10 dagen
-     *  mee, dat zou dus sowieso bij iedere nieuwe sensor start moeten
-     *  worden uitgevraagd [...] bij eerste opstart vult hij direct de
-     *  batterij met ook de datum van de vorige test") — de gebruiker wees
-     *  er terecht op dat [BATTERY_QUERY_INTERVAL_MS]/
+    /** 28/08/2026 (editor, RONDE 152) — een G7 gaat 10 dagen mee, dus hoort
+     *  bij elke nieuwe sensorstart opnieuw uitgevraagd te worden; zonder
+     *  reset toonde de eerste opstart van een nieuwe sensor nog de batterij-
+     *  en testdatum van de vorige. [BATTERY_QUERY_INTERVAL_MS]/
      *  [FIRMWARE_QUERY_INTERVAL_MS] (8u/30 dagen) alleen zinnig zijn
      *  BINNEN het leven van ÉÉN fysieke sensor — zonder deze reset zou een
      *  NIEUWE G7 (elke ~10 dagen) de batterij-/firmwaregegevens van de VORIGE
@@ -1241,8 +1236,8 @@ class AppSettings(private val context: Context) {
      *  "laatst-opgevraagd"-staleness-aanpak als batterij/versie2 hierboven,
      *  zie DexcomG7Driver.kt. */
     /**
-     * 29/08/2026 (editor, RONDE 159, op verzoek — "Ik wil hier in principe
-     * alle info getoond kunnen hebben die de sensor zelf terug geeft") —
+     * 29/08/2026 (editor, RONDE 159) — doel is alle info te tonen die de
+     * sensor zelf teruggeeft, in plaats van alleen een deelverzameling.
      * zeven nieuwe optionele velden, mirror van
      * DexcomG7Protocol.FirmwareVersionRx's RONDE-159-uitbreiding: dekt zowel
      * de 0x21-antwoordvariant (otherFirmwareVersion/asic) als de 0x4A/0x4B-
@@ -1325,9 +1320,9 @@ class AppSettings(private val context: Context) {
         context.dataStore.data.first()[slotLong("dexcom_g7_last_firmware_query_at_ms", slot)]
 
     /**
-     * 29/08/2026 (editor, RONDE 158, op verzoek — "Deze sensor geeft een
-     * error het zou goed zijn als die bij sensor status getoond wordt") —
-     * DexcomG7Driver.kt's `handleGlucoseResult()` berekende al ELKE cyclus
+     * 29/08/2026 (editor, RONDE 158) — toont een door de sensor gerapporteerde
+     * error ook op het statusscherm. DexcomG7Driver.kt's
+     * `handleGlucoseResult()` berekende al ELKE cyclus
      * een `DexcomG6CalibrationState` (hergebruikt van G6, zie die klasse se
      * kdoc) uit de sensor se eigen statusbyte — precies de "SensorFailed7"
      * die in het diagnose-logboek al zichtbaar was — maar schreef die tot nu
@@ -1352,11 +1347,10 @@ class AppSettings(private val context: Context) {
     }
 
     /**
-     * 29/08/2026 (editor, RONDE 158, op verzoek — "ik dacht dat er wel een
-     * Bg waarde uit het Bg slot in de sensor wordt doorgegeven het zou fijn
-     * zijn die ook op het status overzicht te tonen [...] maar als het een
-     * foutieve waarde is niet door te zetten naar het hoofdscherm en ook
-     * niet naar AAPS") — BEWUST een aparte opslagplek, LOS van de normale
+     * 29/08/2026 (editor, RONDE 158) — de Bg-waarde uit het Bg-slot van de
+     * sensor wordt nu ook op het statusoverzicht getoond, maar een foutieve
+     * waarde mag nooit doorgezet worden naar het hoofdscherm of naar AAPS.
+     * BEWUST een aparte opslagplek, LOS van de normale
      * [GlucoseReadingStore]/AAPS-broadcast-keten: `handleGlucoseResult()`
      * schrijft dit voor ELKE ontvangen meting (geaccepteerd of genegeerd,
      * zie [accepted]), terwijl `_readings.emit(...)` — de daadwerkelijke
@@ -1366,8 +1360,8 @@ class AppSettings(private val context: Context) {
      * ergens anders laten doorsijpelen.
      */
     /**
-     * 29/08/2026 (editor, RONDE 159, op verzoek — "Ik wil hier in principe
-     * alle info getoond kunnen hebben die de sensor zelf terug geeft") —
+     * 29/08/2026 (editor, RONDE 159) — doel is alle info te tonen die de
+     * sensor zelf teruggeeft, in plaats van alleen een deelverzameling.
      * vier nieuwe velden, allemaal al aanwezig in
      * DexcomG7Protocol.GlucoseRx maar tot deze ronde nergens opgeslagen:
      * [trendMgdlPerMin] (null = "ongeldig/onbekend", zie die klasse se
@@ -1511,9 +1505,9 @@ class AppSettings(private val context: Context) {
         context.dataStore.edit { prefs -> prefs[slotString("simulator_external_list_uri", slot)] = uri }
     }
 
-    // 29/08/2026 (editor, RONDE 163, op verzoek — "3 keer een vaste
-    // instelbare Bg te laten beginnen [...] daarna weer naar de ingestelde
-    // waarde te springen") — de instelbare baseline-waarde zelf, los van
+    // 29/08/2026 (editor, RONDE 163) — de simulator kan telkens vanaf een
+    // vaste, instelbare Bg-waarde beginnen en daarna naar het ingestelde
+    // scenario springen. Dit is de instelbare baseline-waarde zelf, los van
     // welke modus 'm gebruikt (alleen de lijst-scenario-modus doet dat
     // vandaag, zie SimulatorSetupScreen.kt). 126 mg/dL (7,0 mmol/L) — zelfde
     // default als het bestaande "Manual value"-veld op dat scherm, geen
@@ -1528,12 +1522,11 @@ class AppSettings(private val context: Context) {
 
     // ============================================================
     // Expert-modus — welke SensorType's zichtbaar zijn in de sensorkeuze
-    // (ui/SensorSelectionScreen.kt), RONDE 164, op verzoek: "het kunnen
-    // kiezen van de virtuele sensor (en ook de andere) onder een expert
-    // modus [...] alle sensoren staan met een selectie vakje er achter die
-    // default op aan staan maar die je ook uit kunt zetten zodat als je in
-    // 1 van de slots kiest je alleen de ingestelde/geactiveerde sensoren
-    // ziet." Bewust GLOBAAL (niet per-slot) — dit gaat over welke
+    // (ui/SensorSelectionScreen.kt), RONDE 164: de virtuele sensor (en
+    // eventueel andere) kunnen onder een expertmodus per type aan- of
+    // uitgevinkt worden, zodat de sensorkeuze per slot alleen de
+    // geactiveerde sensoren toont. Bewust GLOBAAL (niet per-slot) — dit gaat
+    // over welke
     // sensortypes een gebruiker in het algemeen wil kunnen kiezen (bv. de
     // testsensoren verbergen voor niet-expert-gebruik), niet over een
     // per-slot-keuze. Default AAN voor elk type (`?: true`) zodat een
@@ -1605,13 +1598,12 @@ class AppSettings(private val context: Context) {
     // als displayUnit hierboven.
     // ============================================================
 
-    /** Hoofdschakelaar — op verzoek: "1 overal knop om in 1 keer alle
-     *  alarmen aan/uit te zetten". Staat deze uit, dan wordt (zodra de
+    /** Hoofdschakelaar — één overall-knop om in één keer alle alarmen
+     *  aan/uit te zetten. Staat deze uit, dan wordt (zodra de
      *  evaluatie-motor in een latere ronde gebouwd is) geen enkel alarm
      *  afgevuurd, ongeacht de losse per-type aan/uit-standen hieronder — die
-     *  blijven gewoon opgeslagen (op verzoek: "de laatst ingestelde waarde
-     *  wel persistent over een restart dan wel app update"), zodat
-     *  opnieuw inschakelen precies de vorige configuratie teruggeeft, geen
+     *  blijven gewoon opgeslagen, persistent over een restart of app-update,
+     *  zodat opnieuw inschakelen precies de vorige configuratie teruggeeft, geen
      *  enkele per-type instelling gaat verloren door de hoofdschakelaar om
      *  te zetten. Default UIT — een bewuste, expliciete opt-in (geen
      *  installatie draait vandaag al met alarmen, dus er is geen "bestaand
@@ -1681,10 +1673,9 @@ class AppSettings(private val context: Context) {
         context.dataStore.edit { prefs -> prefs[alarmInt("stale_minutes", type)] = minutes }
     }
 
-    /** 13/08/2026 (editor, RONDE 106b, op verzoek: "ik wil echter per
-     *  alarmsoort een eigen geluid kunnen kiezen uit de geluiden op de
-     *  telefoon (zoals je ook een ringtone voor de telefoon kunt kiezen)")
-     *  — vervangt het oude, vaste "Urgent"/"Gentle"-geluidsprofiel uit
+    /** 13/08/2026 (editor, RONDE 106b) — per alarmsoort een eigen geluid
+     *  kiezen uit de geluiden op de telefoon (zoals een ringtone-keuze) —
+     *  vervangt het oude, vaste "Urgent"/"Gentle"-geluidsprofiel uit
      *  RONDE 106. De waarde is de URI (als string) die Android's eigen
      *  RingtoneManager.ACTION_RINGTONE_PICKER teruggeeft (zie
      *  AlarmSettingsScreen.kt's SoundPickerRow) — `null` = nog geen keuze
@@ -1723,9 +1714,9 @@ class AppSettings(private val context: Context) {
     private fun parseAlarmEscalation(raw: String?): AlarmEscalation? =
         raw?.let { runCatching { AlarmEscalation.valueOf(it) }.getOrNull() }
 
-    /** 13/08/2026 (editor, RONDE 107b, op verzoek: "ik wil per alarm kunnen
-     *  kiezen tussen alarm of vibrate of both") — vervangt de oude losse
-     *  aan/uit-vibratieschakelaar (Ronde 106/107) door één 3-standen-keuze
+    /** 13/08/2026 (editor, RONDE 107b) — per alarm instelbaar tussen alarm,
+     *  vibrate of both — vervangt de oude losse aan/uit-vibratieschakelaar
+     *  (Ronde 106/107) door één 3-standen-keuze
      *  per type, zie alarm/AlarmType.kt's [AlarmAlertMode]-kdoc. Default
      *  BOTH — meest opvallend, zelfde bedoeling als de oude AAN-default. */
     fun alarmAlertMode(type: AlarmType): Flow<AlarmAlertMode> = context.dataStore.data.map { prefs ->

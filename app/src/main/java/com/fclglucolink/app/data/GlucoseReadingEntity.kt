@@ -29,8 +29,9 @@ data class GlucoseReadingEntity(
     // toReading()) — functioneel identiek aan "geen kalibratie toegepast",
     // wat voor die oude rijen ook gewoon waar is.
     val rawSensorMgdl: Double? = null,
-    // 21/08/2026 (editor, RONDE 119 — BUGFIX na live-melding: "Calibrated en
-    // Filtered zijn continu gelijk") — [GlucoseReading.calibratedMgdl]
+    // 21/08/2026 (editor, RONDE 119 — BUGFIX na live-melding dat de Calibrated-
+    // en Filtered-waarden op het scherm continu gelijk waren) —
+    // [GlucoseReading.calibratedMgdl]
     // (Ronde 113) werd HELEMAAL NIET opgeslagen: deze kolom ontbrak
     // volledig, dus toReading() hieronder viel steeds terug op de klasse-
     // default (`= glucoseMgdl`, oftewel de FINALE, al-gesmoothde waarde).
@@ -44,10 +45,10 @@ data class GlucoseReadingEntity(
     // wat voor die oude rijen (waar dit veld sowieso al verloren was) niet
     // meer te reconstrueren is.
     val calibratedMgdl: Double? = null,
-    // 28/08/2026 (editor, RONDE 153, CRITIEKE FIX — live-melding: twee
-    // gelijktijdig gekoppelde CareSens Air-sensoren (slot A + slot B)
-    // "lijken weer samen te vloeien [...] geen goede scheiding tussen de
-    // beide slots") — vóór deze ronde had deze tabel GEEN kolom die
+    // 28/08/2026 (editor, RONDE 153, CRITIEKE FIX — live-melding dat twee
+    // gelijktijdig gekoppelde CareSens Air-sensoren (slot A + slot B) weer
+    // door elkaar liepen, zonder goede scheiding tussen de beide slots) —
+    // vóór deze ronde had deze tabel GEEN kolom die
     // vastlegde uit WELKE slot een meting kwam, alleen [sensorType]. De
     // per-slot-filtering die sinds RONDE 79 bestaat (GlucoseReadingDao.
     // recentReadingsForSensorType()/latestReadingForSensorType(), nu

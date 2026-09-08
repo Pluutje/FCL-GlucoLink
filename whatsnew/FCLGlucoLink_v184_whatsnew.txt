@@ -1,0 +1,1 @@
+Fixed predictive Low/High alarms sometimes firing incorrectly on a normal reading, caused by an unvalidated raw sensor value being used unbounded in the forecast. You'll now also get a real notification when a new update becomes available, instead of only seeing it if you happen to open the About screen.

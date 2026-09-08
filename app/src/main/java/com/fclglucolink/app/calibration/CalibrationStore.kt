@@ -19,16 +19,16 @@ import kotlinx.coroutines.flow.map
  * detectie op de ene slot ook de nog geldige kalibratiedata van de andere
  * gelijktijdig actieve slot wegvegen bij [clearAll]).
  *
- * 11/08/2026 (editor, RONDE 90 — op verzoek: "een algemene lijst met alle
- * vingerprikken [...] waarvan de lijst dan zichtbaar is bij beide sensoren
- * (slots) en je een vinkje kunt zetten als je hem voor die sensor wilt
- * gebruiken") — elke vingerprik is nu ÉÉN gedeelde rij (i.p.v. impliciet
- * "eigendom" van precies één sensor), met per sensor een los aan/uitvinkje
- * (zie CalibrationEntryEntity.kt's kdoc). Dat heeft twee gevolgen:
+ * 11/08/2026 (editor, RONDE 90) — één gedeelde lijst met alle vingerprikken,
+ * zichtbaar bij beide sensoren (slots), met een vinkje per sensor om hem
+ * daar wel of niet te gebruiken. Elke vingerprik is nu ÉÉN gedeelde rij
+ * (i.p.v. impliciet "eigendom" van precies één sensor), met per sensor een
+ * los aan/uitvinkje (zie CalibrationEntryEntity.kt's kdoc). Dat heeft twee
+ * gevolgen:
  *
  * 1) [delete] verwijdert nu ALTIJD overal tegelijk — er is nog maar één rij
  *    per ingevoerde vingerprik, dus "verwijderen" en "overal weg" zijn nu
- *    hetzelfde, precies zoals gevraagd. Geen aparte code nodig.
+ *    hetzelfde. Geen aparte code nodig.
  * 2) [clearAll]/[clearAllForSensorType] (nog steeds beschikbaar, zie de
  *    DAO's kdoc — een eventuele toekomstige "wis echt alles"-noodknop) worden
  *    NIET meer automatisch aangeroepen bij een nieuwe sensor-sessie (zie
@@ -36,13 +36,12 @@ import kotlinx.coroutines.flow.map
  *    gedeelde rij zou dat nu een vingerprik kunnen wegvegen die de ANDERE,
  *    gelijktijdig actieve slot nog gebruikt. In plaats daarvan filtert
  *    [entries]/[listEntries] hieronder nu op [sinceMs] (de sensor-start-tijd
- *    van de bekijkende sessie, door de caller meegegeven) — exact het
- *    gevraagde gedrag: "bij de sensoren moeten alleen die vingerprikken
- *    getoond worden die kwa tijd na de sensor start liggen". Een oude
- *    vingerprik van vóór een sensorwissel wordt zo simpelweg niet meer
- *    OPGEHAALD voor de nieuwe sessie, zonder 'm te hoeven wissen — blijft
- *    intact voor de andere slot (of voor de oude sessie's eigen historie,
- *    mocht die ooit nog relevant zijn).
+ *    van de bekijkende sessie, door de caller meegegeven), zodat bij de
+ *    sensoren alleen de vingerprikken van ná de sensor-start getoond worden.
+ *    Een oude vingerprik van vóór een sensorwissel wordt zo simpelweg niet
+ *    meer OPGEHAALD voor de nieuwe sessie, zonder 'm te hoeven wissen —
+ *    blijft intact voor de andere slot (of voor de oude sessie's eigen
+ *    historie, mocht die ooit nog relevant zijn).
  */
 class CalibrationStore(context: Context) {
 

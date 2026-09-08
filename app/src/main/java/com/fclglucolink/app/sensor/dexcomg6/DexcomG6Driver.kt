@@ -52,8 +52,8 @@ import kotlinx.coroutines.withTimeoutOrNull
  * ============================================================================
  *
  * 08/08/2026 (editor) — geport van xDrip+'s `Ob1G5CollectionService`/
- * `Ob1G5StateMachine` (broncode door de gebruiker aangeleverd — "dat heb ik
- * eigenlijk altijd gebruikt en was gewoon 99,9% stabiel"), plus de crypto/
+ * `Ob1G5StateMachine` (broncode aangeleverd — deze werd altijd gebruikt en
+ * was gewoon 99,9% stabiel), plus de crypto/
  * pakket-lagen in DexcomG6Crypto.kt/DexcomG6Protocol.kt. Zelfde architectuur
  * als CareSensAirDriver.kt (scan-dan-verbind, gedeelde ScanRateLimiter,
  * PredictiveReconnectAlarm) — met twee bewuste, aan xDrip+ ontleende
@@ -62,7 +62,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  * 1) NA elke geslaagde meting wordt de GATT-verbinding actief gesloten
  *    (`gatt.disconnect()`), in plaats van open te blijven staan — mirror van
  *    xDrip+'s eigen `prepareToWakeup()`/`stopConnect()`-patroon, en precies
- *    het gedrag dat de gebruiker als "99,9% stabiel" ervoer.
+ *    het gedrag dat als 99,9% stabiel ervaren werd.
  * 2) Oplopende foutenbackoff (1s, +100ms per mislukking, tot 10s) i.p.v. een
  *    vaste 60s-fallback bij een mislukte verbindpoging.
  *
@@ -171,10 +171,10 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
     private var cadenceAnchorAtMs: Long? = null
     private var sensorStartedAtMs: Long = 0L
 
-    // 05/09/2026 (editor, RONDE 169 — na live-melding: "geeft heel even
-    // 'last connected' maar al heel snel geeft hij dan weer connecting...
-    // continu probeert te connecten via de bluetooth terwijl hij na de
-    // laatste connectie gewoon 4 minuten kan wachten") — zie de kdoc bij
+    // 05/09/2026 (editor, RONDE 169 — na live-melding dat de status heel even
+    // "last connected" toont maar al snel weer "connecting" wordt, met
+    // continue reconnect-pogingen via bluetooth terwijl na de laatste
+    // connectie gewoon 4 minuten gewacht kan worden) — zie de kdoc bij
     // de STATE_DISCONNECTED-tak hieronder voor de volledige analyse: de
     // oude `wasSuccessfulRead`-check (any successful read <60s geleden)
     // bleef de voorspellende computeReconnectCooldownMs() vertrouwen voor
@@ -218,9 +218,9 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
     private var pendingTransmitterTimeDeferred: CompletableDeferred<DexcomG6Protocol.TransmitterTimeRx?>? = null
 
     companion object {
-        // 10/08/2026 (editor, RONDE 85 — op verzoek, na live-log-analyse:
-        // "dexcom zendt gewoon om de 5 minuten dus als je afgerond zegt
-        // 5:11 en 9:48 dan valt er bij de 9:48 gewoon eentje weg") — WAS
+        // 10/08/2026 (editor, RONDE 85 — op verzoek, na live-log-analyse dat
+        // Dexcom gewoon om de 5 minuten zendt, en dat als je afgerond op
+        // 5:11 en 9:48 uitkomt, er bij de 9:48 gewoon eentje wegvalt) — WAS
         // 280_000L (4m40s, dus maar 20s marge vóór de verwachte 300s-markering).
         // Analyse van fclglucolink_2026-08-10-c3960ea6.txt (21 metingen sinds
         // koppeling 19:33) liet een strikt patroon zien: seq+1/~311s ("raak",
@@ -240,8 +240,8 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
         // ruim vóór de Dexcom-koppeling van vanavond al zo, onafhankelijk van
         // welke slot de AAPS-actieve is) zit in de leadtime-marge zelf.
         //
-        // 10/08/2026 (editor, RONDE 86 — vervolg-melding, zelfde avond: "sinds
-        // 22:40 komt de caresens om de 6 minuten") — vervangen door twee losse
+        // 10/08/2026 (editor, RONDE 86 — vervolg-melding, zelfde avond, dat
+        // de CareSens sinds enig moment om de 6 minuten kwam) — vervangen door twee losse
         // constanten. Zie computeReconnectCooldownMs()'s kdoc hieronder en
         // CareSensAirDriver.kt's zelfde-ronde-kdoc voor de volledige analyse:
         // een eenmalige scanbotsing tussen de twee slots verschoof CareSens
@@ -254,11 +254,11 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
         private const val SENSOR_PERIOD_MS = 300_000L // 5 min — Dexcom G6's eigen meetcadans.
         private const val SCAN_START_MARGIN_MS = 60_000L // marge vóór het verwachte rasterpunt.
 
-        // 08/08/2026 (editor, RONDE 56, op verzoek — "de spanning van de
-        // batterij, de temperatuur [...] worden een keer per 8 uur
-        // opgevraagd") — xDrip+'s eigen standaardwaarde is 12 uur
-        // (BATTERY_READ_PERIOD_MS), maar de gebruiker noemde expliciet 8 uur
-        // als wat die gewend is te zien — dat aangehouden.
+        // 08/08/2026 (editor, RONDE 56, op verzoek) — de spanning van de
+        // batterij en de temperatuur moeten een keer per 8 uur
+        // opgevraagd worden — xDrip+'s eigen standaardwaarde is 12 uur
+        // (BATTERY_READ_PERIOD_MS), maar 8 uur is wat gewend was te zien —
+        // dat aangehouden.
         private const val BATTERY_QUERY_INTERVAL_MS = 8L * 60 * 60 * 1000
 
         private const val KEEP_ALIVE_INTERVAL_MS = 45_000L
@@ -293,17 +293,17 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
         // volgende dag.
         private const val VERSION_REQUEST2_RETRY_INTERVAL_MS = 15L * 60 * 1000
 
-        // 09/08/2026 (editor, RONDE 76, CRITICAL — na live-melding: "de
-        // samsung telefoon blijft hangen zodra het scherm zwart wordt en hij
-        // gaat ook niet meer lopen") — zie scheduleRearm()'s kdoc hieronder
+        // 09/08/2026 (editor, RONDE 76, CRITICAL — na live-melding dat de
+        // Samsung-telefoon blijft hangen zodra het scherm zwart wordt en de
+        // app niet meer verder loopt) — zie scheduleRearm()'s kdoc hieronder
         // voor de volledige analyse. Zelfde waarde (390s) als CareSens Air's
         // al langer bewezen SCAN_REARM_INTERVAL_MS (CareSensAirDriver.kt,
         // sinds ronde 26) — bewust hetzelfde getal overgenomen i.p.v. een
         // eigen gok, dit is geen Dexcom-specifieke afweging.
         private const val SCAN_REARM_INTERVAL_MS = 390_000L
 
-        // 11/08/2026 (editor, RONDE 90 — na live-melding: "Bij de dexcom
-        // staat er error terwijl er geen error is") — zelfde constante en
+        // 11/08/2026 (editor, RONDE 90 — na live-melding dat bij de Dexcom
+        // een error stond terwijl er geen error was) — zelfde constante en
         // zelfde waarde als CareSensAirDriver.kt's
         // RECONNECT_STATUS_WARNING_MINUTES (sinds ronde 33): zie
         // updateConnectionStatusAfterDisconnect()'s kdoc hieronder voor de
@@ -670,9 +670,9 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
     }
 
     /**
-     * 09/08/2026 (editor, RONDE 76, CRITICAL — na live-melding: "de samsung
-     * telefoon blijft hangen zodra het scherm zwart wordt en hij gaat ook
-     * niet meer lopen", met een meegestuurde diagnostic-log
+     * 09/08/2026 (editor, RONDE 76, CRITICAL — na live-melding dat de Samsung-
+     * telefoon blijft hangen zodra het scherm zwart wordt en de app niet meer
+     * verder loopt, met een meegestuurde diagnostic-log
      * (fclglucolink_2026-08-09.txt) die een volkomen gezonde cyclus om
      * 18:53 toont — nette connect, meting, schone disconnect — gevolgd door
      * TOTALE, urenlange stilte: geen enkele volgende regel, ook geen
@@ -784,12 +784,12 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
                     updateConnectionStatusAfterDisconnect()
                     if (ctx != null) {
                         // 05/09/2026 (editor, RONDE 169, KRITIEKE FIX — na
-                        // live-melding: "geeft heel even 'last connected'
-                        // maar al heel snel geeft hij dan weer connecting
-                        // [...] ik krijg het vermoeden dat hij continu
-                        // probeert te connecten via de bluetooth terwijl
-                        // hij na de laatste connectie gewoon 4 minuten kan
-                        // wachten") — logcat bevestigde dit exact: ná een
+                        // live-melding dat de status heel even "last
+                        // connected" toont maar al snel weer "connecting"
+                        // wordt, met het vermoeden dat er continu
+                        // reconnect-pogingen via bluetooth gedaan worden
+                        // terwijl na de laatste connectie gewoon 4 minuten
+                        // gewacht kan worden) — logcat bevestigde dit exact: ná een
                         // geslaagde meting (glucose=94.0 om 09:28:57) volgde
                         // een reeks mislukte reconnects (status=19, telkens
                         // binnen ~1s van elkaar, om 09:29:02/03/03/04/05...)
@@ -985,13 +985,13 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
          *  in onConnectionStateChange handelt de rest af, geen aparte
          *  foutafhandeling hier nodig). */
         private suspend fun runControlSequence(gatt: BluetoothGatt, controlChar: BluetoothGattCharacteristic) {
-            // 09/08/2026 (editor, RONDE 70, op verzoek — "een stop sensor
-            // knop die een stop signaal zend... zodat ik de sensor kan
-            // stoppen, de transmitter verwijderen 5 minuten wachten en weer
-            // opstarten") — LOSSTAANDE actie, bewust vóór de pendingCode-
+            // 09/08/2026 (editor, RONDE 70, op verzoek voor een stop-sensor-
+            // knop die een stopsignaal zendt, zodat de sensor gestopt kan
+            // worden, de transmitter verwijderd, 5 minuten gewacht en weer
+            // opgestart) — LOSSTAANDE actie, bewust vóór de pendingCode-
             // combo-flow hieronder: alleen stoppen, GEEN nieuwe sessie
-            // starten in dezelfde cyclus (de gebruiker verwijdert de
-            // transmitter fysiek en wacht zelf 5 minuten, dan pas een nieuwe
+            // starten in dezelfde cyclus (de transmitter wordt fysiek
+            // verwijderd en er wordt zelf 5 minuten gewacht, dan pas een nieuwe
             // "Start new sensor" vanuit het bestaande scherm). Zelfde
             // buildSessionStop()/SessionStopRx-machinerie als de bestaande
             // "stop-before-start"-combo hierboven, alleen niet gevolgd door
@@ -1015,18 +1015,18 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
 
             val pendingCode = settings.getDexcomG6PendingNewSensorCodeOnce(slot)
 
-            // 22/08/2026 (editor, RONDE 121, herontwerp op verzoek — "de
-            // start sensor knop die eerst checkt of er een actieve sensor
-            // is [...] dan zelf automatisch het stop commando zend. en bij
-            // de volgende cycles 5 minuten later het start commando" +
-            // "of uit de transmitter ook het start tijdstip valt af te
-            // leiden") — VERVANGT de oude "stop-before-start"-combo (Ronde
+            // 22/08/2026 (editor, RONDE 121, herontwerp op verzoek) — de
+            // start-sensor-knop moet eerst checken of er een actieve sensor
+            // is, dan zelf automatisch het stop-commando zenden en bij de
+            // volgende cyclus 5 minuten later het start-commando, en er is
+            // gevraagd of het starttijdstip ook uit de transmitter zelf valt
+            // af te leiden — VERVANGT de oude "stop-before-start"-combo (Ronde
             // 66/71, t/m Ronde 120 in gebruik): die stuurde Stop ÉN Start
             // binnen DEZELFDE BLE-verbindcyclus, met maar een willekeurige
             // 1500ms-pauze ertussen als marge voor de transmitter om de
             // stop intern te verwerken — de meest waarschijnlijke verklaring
-            // voor de herhaalde infoCode=3 "Invalid"-afwijzingen die de
-            // gebruiker bleef zien (zie
+            // voor de herhaalde infoCode=3 "Invalid"-afwijzingen die daarbij
+            // bleven optreden (zie
             // DexcomG6Protocol.sessionStartInfoMessage()'s Ronde-120-kdoc).
             //
             // Nu: ÉÉN TransmitterTime-aanvraag (opcode 0x24/0x25, zie
@@ -1154,8 +1154,9 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
                 pendingSessionStartDeferred = deferred
                 val nowSec = (System.currentTimeMillis() / 1000L).toInt()
                 // 22/08/2026 (editor, RONDE 124, poging — op verzoek na
-                // live-melding: "de starttijd komt niet [...] de info die
-                // terug komt klopt niet", logcat toonde infoCode=3 "Invalid"
+                // live-melding dat de starttijd niet klopte en de
+                // teruggekomen info niet correct was; logcat toonde
+                // infoCode=3 "Invalid"
                 // OOK op een compleet verse poging, zónder dat er in
                 // diezelfde cyclus net gestopt was — dat ondermijnt de
                 // eerdere "te snel na een stop"-hypothese, zie de kdoc bij
@@ -1383,20 +1384,19 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
          * aangemaakt (net als xDrip+, dat hier bewust een gat in de
          * grafiek laat i.p.v. een verzonnen/foutief getal te tonen).
          *
-         * 09/08/2026 (editor, RONDE 74, op verzoek — "de waarden mogen pas
-         * getoond worden resp. 30 en 60 minuten nadat de sensor cfm de info
-         * in het overzicht is gestart", n.a.v. een live-screenshot met een
+         * 09/08/2026 (editor, RONDE 74, op verzoek dat waarden pas getoond
+         * mogen worden resp. 30 en 60 minuten nadat de sensor volgens de info
+         * in het overzicht gestart is, n.a.v. een live-screenshot met een
          * fysiek onwaarschijnlijke sprong van ~2 naar 16 mmol/L amper 8
          * minuten na een bevestigde sensorstart) — BOVENOP de kalibratie-
          * byte-gate hierboven (ronde 69) kwam een TWEEDE, onafhankelijke
          * gate: een fallback-opwarmtijd die alleen actief was zonder een
          * bruikbare, door de transmitter zelf opgegeven `warmupSeconds`.
          *
-         * 04/09/2026 (editor, RONDE 166, op verzoek: "Zou je de app zo
-         * kunnen aanpassen dat hij bij de g6 altijd minimaal 30 minuten
-         * gebruikt maar als er wel waarden binnen komen dat die dan gewoon
-         * getoond worden ondanks dat er ook een warming up signaal wordt
-         * mee gegeven") — deze gate vervangen door twee simpelere, los van
+         * 04/09/2026 (editor, RONDE 166, op verzoek) — de app moet bij de G6
+         * altijd minimaal 30 minuten aanhouden, maar als er wel waarden
+         * binnenkomen moeten die gewoon getoond worden, ondanks dat er ook
+         * een warming-up-signaal wordt meegegeven — deze gate vervangen door twee simpelere, los van
          * Anubis/Original-classificatie werkende regels (zie
          * DexcomG6CalibrationState.kt's uitgebreide kdoc bij
          * [MINIMUM_WARMUP_SECONDS_ALWAYS] voor de volledige achtergrond +
@@ -1468,9 +1468,10 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
             _connectionState.value = ConnectionState.Connected(gatt.device.address, gatt.device.name)
             if (glucoseUsable) {
                 val glucoseMgdl = rx.glucoseMgdl.toDouble()
+                val trendMgdlPerMin = DexcomG6Protocol.trendByteToMgdlPerMin(rx.trendRaw)
                 val reading = GlucoseReading(
                     glucoseMgdl = glucoseMgdl,
-                    trendMgdlPerMin = DexcomG6Protocol.trendByteToMgdlPerMin(rx.trendRaw),
+                    trendMgdlPerMin = trendMgdlPerMin,
                     timestampMs = nowMs,
                     sensorStartedAtMs = sensorStartedAtMs,
                     sensorType = SensorType.DEXCOM_G6
@@ -1480,9 +1481,17 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
                 } else {
                     ""
                 }
+                // 08/09/2026 (editor, RONDE 171) — trendRaw/trendMgdlPerMin
+                // toegevoegd na een live-melding van onverklaarbare
+                // predictieve-alarm-fouten die uiteindelijk terug te voeren
+                // waren op deze ONgevalideerde ruwe trendbyte (zie
+                // AlarmEvaluator.kt's Ronde 171-kdoc voor de volledige
+                // analyse/fix) — zonder dit stond de ruwe waarde nergens
+                // gelogd, dus was er geen manier om een volgende
+                // vergelijkbare uitschieter direct te bevestigen.
                 DiagnosticFileLogger.log(
                     "DexcomG6: glucose=$glucoseMgdl seq=${rx.sequence} display_only=${rx.glucoseIsDisplayOnly} " +
-                        "state=$calibrationState$plausibleSuffix"
+                        "state=$calibrationState trendRaw=${rx.trendRaw} trendMgdlPerMin=$trendMgdlPerMin$plausibleSuffix"
                 )
                 scope.launch { _readings.emit(reading) }
             } else if (stateAllowsReading && withinMinimumWarmup) {
@@ -1640,9 +1649,9 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
     }
 
     /**
-     * 11/08/2026 (editor, RONDE 90 — na live-melding: "Bij de dexcom staat
-     * er error terwijl er geen error is, dit wil ik ook vervangen door de
-     * laatste Bg waarde") — vóór deze ronde zette deze functie bij ELKE
+     * 11/08/2026 (editor, RONDE 90 — na live-melding dat bij de Dexcom een
+     * error stond terwijl er geen error was, met het verzoek dat ook hier te
+     * vervangen door de laatste Bg-waarde) — vóór deze ronde zette deze functie bij ELKE
      * STATE_DISCONNECTED (dus ook de heel normale, verwachte disconnect
      * na elke geslaagde ~5-minuten-meting) meteen `ConnectionState.Error`,
      * ongeacht hoe kort geleden de laatste meting was. `BleConnectionService

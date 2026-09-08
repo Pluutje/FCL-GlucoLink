@@ -53,9 +53,9 @@ import kotlinx.coroutines.withTimeoutOrNull
  * FCLGlucoLink — Dexcom G7/ONE+-driver (RONDE 112)
  * ============================================================================
  *
- * 17/08/2026 (editor, RONDE 112, op verzoek: "wil ik graag verder met de
- * verdere implementatie van de dexcom g7 [...] code zover in orde brengen
- * dat zodra ik er eentje krijg ik gelijk kan beginnen met testen") — mirror
+ * 17/08/2026 (editor, RONDE 112, op verzoek om verder te gaan met de
+ * implementatie van de Dexcom G7, zodat de code zo ver in orde is dat er
+ * gelijk getest kan worden zodra er een G7-sensor beschikbaar is) — mirror
  * van DexcomG6Driver.kt's scan/verbind/backoff/BondLossRecovery-skelet (zie
  * dat bestand voor de herkomst van dat deel), maar met een volledig ANDER
  * koppel-/authenticatieprotocol erbovenop: G6 gebruikt een vaste, uit de
@@ -611,10 +611,10 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
             override fun onScanFailed(errorCode: Int) {
                 DiagnosticFileLogger.log("DexcomG7: scan failed code=$errorCode")
                 connectScanCallback = null
-                // 28/08/2026 (editor, RONDE 149, na een diagnostieklog die de
-                // gebruiker meestuurde naast een bugreport — "hij geeft nu 10
-                // minuten later wel een nieuwe connectietijd door maar er komt
-                // geen data mee" leidde naar deze vondst, niet naar de sensor
+                // 28/08/2026 (editor, RONDE 149, na een meegestuurde
+                // diagnostieklog bij een bugreport dat er 10 minuten later
+                // wel een nieuwe connectietijd doorgegeven werd, maar zonder
+                // data — dat leidde naar deze vondst, niet naar de sensor
                 // zelf) — het logbestand toonde herhaalde "scan failed
                 // code=2"-regels (Android's `SCAN_FAILED_APPLICATION_
                 // REGISTRATION_FAILED`, ~elke 5-10s gedurende een aaneen-
@@ -1284,9 +1284,9 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
         }
 
         private suspend fun requestGlucose(gatt: BluetoothGatt, controlChar: BluetoothGattCharacteristic) {
-            // 28/08/2026 (editor, RONDE 150, op verzoek — "geeft hij dan ook
-            // de data als batterij en firmware version terug zoals xdrip
-            // ook netjes doet") — batterij/firmware VÓÓR het glucoseverzoek
+            // 28/08/2026 (editor, RONDE 150, op verzoek om ook batterij- en
+            // firmwareversie-data terug te geven, zoals xDrip dat ook netjes
+            // doet) — batterij/firmware VÓÓR het glucoseverzoek
             // opgevraagd, precies dezelfde volgorde als DexcomG6Driver.kt's
             // runControlSequence() (mirror van xDrip+'s eigen
             // checkVersionAndBattery()-vóór-doGetData()-volgorde). Bewust NA
@@ -1583,13 +1583,11 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
             val glucoseUsable = (calibrationState.usableGlucose() || calibrationState.insufficientCalibration()) &&
                 !rx.glucoseIsDisplayOnly
 
-            // 29/08/2026 (editor, RONDE 158, op verzoek — "Deze sensor geeft
-            // een error het zou goed zijn als die bij sensor status getoond
-            // wordt" + "ik dacht dat er wel een Bg waarde uit het Bg slot in
-            // de sensor wordt doorgegeven het zou fijn zijn die ook op het
-            // status overzicht te tonen [...] maar als het een foutieve
-            // waarde is niet door te zetten naar het hoofdscherm en ook niet
-            // naar AAPS") — zie AppSettings.kt's kdoc bij
+            // 29/08/2026 (editor, RONDE 158, op verzoek om een sensor-error
+            // ook bij de sensorstatus te tonen, en om de Bg-waarde uit het
+            // Bg-slot van de sensor ook op het statusoverzicht te tonen —
+            // maar een foutieve waarde niet door te zetten naar het
+            // hoofdscherm en ook niet naar AAPS) — zie AppSettings.kt's kdoc bij
             // setDexcomG7SensorStatus/setDexcomG7LastRawGlucose: BEWUST een
             // aparte opslag, los van [_readings.emit] hieronder — dit
             // schrijft ELKE ontvangen meting weg (geaccepteerd of genegeerd),
@@ -1720,9 +1718,9 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
     }
 
     /**
-     * 29/08/2026 (editor, RONDE 157, KRITIEKE FIX — live-melding: "je hebt
-     * begrepen dat hij [de firmware-uitvraagcache] bij iedere nieuwe sensor
-     * herstart zou resetten" — klopte tot deze ronde alleen voor een
+     * 29/08/2026 (editor, RONDE 157, KRITIEKE FIX — na de constatering dat de
+     * eerdere aanname dat de firmware-uitvraagcache bij iedere nieuwe sensor
+     * zou resetten, niet klopte) — klopte tot deze ronde alleen voor een
      * HANDMATIGE nieuwe koppeling via DexcomG7SetupScreen.kt (die
      * `AppSettings.clearDexcomG7BatteryAndFirmwareInfo()` aanroept, zie die
      * kdoc, Ronde 152). Een automatische herkoppeling ná een spontaan

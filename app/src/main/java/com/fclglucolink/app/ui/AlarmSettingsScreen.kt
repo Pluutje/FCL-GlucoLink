@@ -54,12 +54,11 @@ import kotlinx.coroutines.launch
  * FCLGlucoLink — alarminstellingen (RONDE 106, Fase 2 stap 1)
  * ============================================================================
  *
- * 13/08/2026 (editor, RONDE 106, op verzoek: "1 overal knop om in 1 keer
- * alle alarmen aan/uit te zetten [...] indien die is ingeschakeld dat dan
- * de afzonderlijke alarmen kunnen worden ingesteld maar ook ieder
- * afzonderlijk aan en uit kunnen waarbij de laatst ingestelde waarde wel
- * persistent over een restart dan wel app update blijven") — precies dat
- * model: [masterEnabled] bovenaan (de "overal knop"), daaronder een kaart
+ * 13/08/2026 (editor, RONDE 106, op verzoek voor één hoofdschakelaar om
+ * alle alarmen tegelijk aan/uit te zetten, met daaronder per alarm een
+ * eigen aan/uit-schakelaar en instellingen, waarbij de laatst ingestelde
+ * waarde persistent blijft over herstarts en app-updates) — precies dat
+ * model: [masterEnabled] bovenaan (de hoofdschakelaar), daaronder een kaart
  * per alarmtype (zie alarm/AlarmType.kt) met een eigen aan/uit-schakelaar
  * plus, als die aan staat, de detailinstellingen (drempel/voorlooptijd/
  * geluid/trilling). ELKE schakelaar/instelling hieronder is gewoon een
@@ -70,18 +69,17 @@ import kotlinx.coroutines.launch
  * UI-gate: zolang [masterEnabled] uit staat, zijn alle per-type
  * schakelaars/instellingen hieronder zichtbaar maar NIET aanraakbaar
  * (`enabled = false` op elke Switch/IconButton/SegmentedButton/TextButton)
- * — precies het gevraagde "indien die is ingeschakeld dat dan de
- * afzonderlijke alarmen kunnen worden ingesteld". De onderliggende waarden
+ * — de per-alarm instellingen zijn pas bewerkbaar zodra de hoofdschakelaar
+ * aan staat. De onderliggende waarden
  * blijven gewoon staan (dus zichtbaar, alleen grijs) zodat de gebruiker in
  * één oogopslag ziet wat er geconfigureerd staat, ook met de
  * hoofdschakelaar uit.
  *
- * 13/08/2026 (editor, RONDE 106b, op verzoek: "ik wil echter per
- * alarmsoort een eigen geluid kunnen kiezen uit de geluiden op de
- * telefoon (zoals je ook een ringtone voor de telefoon kunt kiezen) dan
- * moet er per alarm gekozen kunnen worden of het alarm direct klinkt of
- * dat het langzaam opbouwt [...] de predict low en predictive high
- * moeten echter wel afzonderlijk ingesteld kunnen worden") — twee
+ * 13/08/2026 (editor, RONDE 106b, op verzoek voor een eigen geluid per
+ * alarmsoort uit de telefoon's eigen geluidenlijst (net als een ringtone-
+ * keuze), met per alarm de keuze tussen direct klinken of langzaam
+ * opbouwen, en afzonderlijke instellingen voor predictive low en
+ * predictive high) — twee
  * wijzigingen t.o.v. RONDE 106: (1) het toenmalige, ene "Predictive"-type is
  * gesplitst in [AlarmType.PREDICTIVE_LOW]/[AlarmType.PREDICTIVE_HIGH], elk met een
  * eigen kaart/instellingen, exact zoals de andere vijf types; (2) het oude
@@ -251,10 +249,9 @@ private fun AlarmTypeDetailSettings(
                     onChange = { newMgdl -> scope.launch { settings.setAlarmThresholdMgdl(type, newMgdl) } }
                 )
             }
-            // 13/08/2026 (editor, RONDE 108, op verzoek: "Kun je de
-            // predictive alarms nog zo zetten dat daar een Bg waarde wordt
-            // ingevoerd ipv de koppeling aan low en high dat geeft meer
-            // vrijheid") — nu ZOWEL een eigen streefwaarde (net als de
+            // 13/08/2026 (editor, RONDE 108, op verzoek om de predictive
+            // alarms een eigen Bg-streefwaarde te geven i.p.v. een koppeling
+            // aan low/high, voor meer vrijheid) — nu ZOWEL een eigen streefwaarde (net als de
             // drempel-alarmen hierboven) ALS de voorlooptijd, i.p.v. alleen
             // de voorlooptijd met een impliciete koppeling aan Low/High.
             AlarmCategory.PREDICTIVE_LOW, AlarmCategory.PREDICTIVE_HIGH -> {
@@ -311,10 +308,9 @@ private fun AlarmTypeDetailSettings(
             }
         }
 
-        // 13/08/2026 (editor, RONDE 107b, op verzoek: "ik wil per alarm
-        // kunnen kiezen tussen alarm of vibrate of both [...] de vibrator
-        // knop die nu overal onderaan staat vervangen door alarm - vibrate
-        // - both knop") — vervangt de vorige losse "Vibration"-schakelaar.
+        // 13/08/2026 (editor, RONDE 107b, op verzoek om per alarm te kunnen
+        // kiezen tussen alarm/vibrate/both i.p.v. de losse vibrator-knop
+        // onderaan) — vervangt de vorige losse "Vibration"-schakelaar.
         val alertMode by settings.alarmAlertMode(type).collectAsState(initial = AlarmAlertMode.BOTH)
         Text("Alert", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
@@ -333,10 +329,9 @@ private fun AlarmTypeDetailSettings(
 }
 
 /**
- * 13/08/2026 (editor, RONDE 106b, op verzoek: "ik wil echter per
- * alarmsoort een eigen geluid kunnen kiezen uit de geluiden op de
- * telefoon (zoals je ook een ringtone voor de telefoon kunt kiezen)") —
- * Android's EIGEN ringtone-kiezer (RingtoneManager.ACTION_RINGTONE_PICKER
+ * 13/08/2026 (editor, RONDE 106b, op verzoek voor een eigen geluid per
+ * alarmsoort uit de telefoon's eigen geluidenlijst, net als een ringtone-
+ * keuze) — Android's EIGEN ringtone-kiezer (RingtoneManager.ACTION_RINGTONE_PICKER
  * — hetzelfde systeemscherm als bij het kiezen van een beltoon/
  * meldingsgeluid), type TYPE_ALARM (logisch alvast te kiezen, ook al
  * speelt dit geluid pas in een latere ronde daadwerkelijk af via

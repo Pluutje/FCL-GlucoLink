@@ -5,8 +5,8 @@ package com.fclglucolink.app.sensor.dexcomg6
  * FCLGlucoLink — Dexcom G6 sensor-/kalibratiestatus (uit de transmitter zelf)
  * ============================================================================
  *
- * 09/08/2026 (editor, RONDE 66, op verzoek — "kijk nog eens na [...] welke
- * gegevens xdrip uit de transmitter haalde") — geport van xDrip+'s
+ * 09/08/2026 (editor, RONDE 66, op verzoek om na te gaan welke gegevens
+ * xDrip uit de transmitter haalde) — geport van xDrip+'s
  * `g5model/CalibrationState.java` (volledige tabel, letterlijk overgenomen
  * incl. de numerieke codes). Dit is het byte dat elk glucose-antwoord al
  * meestuurt (`DexcomG6Protocol.GlucoseRx.stateRaw`, gelezen in
@@ -130,10 +130,10 @@ enum class DexcomG6CalibrationState(val value: Int) {
 }
 
 /**
- * 09/08/2026 (editor, RONDE 74, op verzoek — "als die [warmupSeconds] niet
- * uit de transmitter komt dan moet hij bij een anubis gewoon 30 minuten
- * pakken en anders 1 uur [...] de waarden mogen pas getoond worden resp. 30
- * en 60 minuten nadat de sensor is gestart") — dit type-onderscheid bestond
+ * 09/08/2026 (editor, RONDE 74, op verzoek) — als `warmupSeconds` niet uit
+ * de transmitter komt, moet voor een Anubis-transmitter 30 minuten
+ * aangehouden worden en anders 1 uur, waarbij waarden pas getoond worden
+ * respectievelijk 30 en 60 minuten nadat de sensor gestart is — dit type-onderscheid bestond
  * al als losse, inline `when`-blokken in zowel DexcomG6StatusScreen.kt
  * (voor het "Type"-label) als potentieel elders — hier ÉÉN centrale,
  * herbruikbare plek voor zowel de Anubis/Original-classificatie (zelfde
@@ -203,10 +203,10 @@ fun dexcomG6FallbackWarmupSeconds(typicalSensorDays: Int?): Int? =
  * "plausibele waarde tijdens WarmingUp toch tonen"
  * ============================================================================
  *
- * Op verzoek, na een gesprek over hoe lang een G6 daadwerkelijk opwarmt: "Zou
- * je de app zo kunnen aanpassen dat hij bij de g6 altijd minimaal 30 minuten
- * gebruikt maar als er wel waarden binnen komen dat die dan gewoon getoond
- * worden ondanks dat er ook een warming up signaal wordt mee gegeven."
+ * Op verzoek, na een gesprek over hoe lang een G6 daadwerkelijk opwarmt: de
+ * app moet bij de G6 altijd minimaal 30 minuten aanhouden, maar als er wel
+ * waarden binnenkomen moeten die gewoon getoond worden, ondanks dat er ook
+ * een warming-up-signaal wordt meegegeven.
  *
  * Twee losse wijzigingen t.o.v. de oude Ronde 74-gate
  * ([DexcomG6TransmitterType.fallbackWarmupSeconds], 30 min voor Anubis / 60

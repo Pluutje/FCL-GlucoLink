@@ -63,8 +63,7 @@ import kotlin.math.exp
  *  1. GlucoseReadingStore — lokale opslag voor het status-/grafiekscherm.
  *  2. XDripBroadcaster — de daadwerkelijke koppeling naar AAPS.
  *
- * 10/08/2026 (editor, RONDE 79 — 2-sensoren-architectuur, op verzoek: "ik wil
- * nu verder met de 2 sensoren architectuur") — TOT vandaag hield deze klasse
+ * 10/08/2026 (editor, RONDE 79 — 2-sensoren-architectuur) — TOT vandaag hield deze klasse
  * precies ÉÉN actieve driver/connectie bij (activeDriver/connectionJob/
  * activeSensorType/activeDeviceAddress/smoother/lastConnectionState/
  * latestReadingNotificationText waren allemaal losse velden van de service
@@ -74,8 +73,8 @@ import kotlin.math.exp
  * Air in Slot B (of straks 2x dezelfde G6-transmitter tijdens een sensor-
  * wissel-overlap) daadwerkelijk GELIJKTIJDIG kunnen draaien zonder elkaar in
  * de weg te zitten. Welke van de twee (indien enige) naar AAPS zendt is een
- * aparte, wisselbare keuze (AppSettings.aapsActiveSlot, nullable — "ze
- * moeten ook beiden uit kunnen") die HIER wordt gecontroleerd vlak vóór de
+ * aparte, wisselbare keuze (AppSettings.aapsActiveSlot, nullable — beide
+ * slots moeten ook tegelijk uit kunnen staan) die HIER wordt gecontroleerd vlak vóór de
  * broadcast, niet gekoppeld aan de slot-identiteit zelf. Zie AppSettings.kt's
  * kdoc bij de dual-slot-herschrijving voor de volledige achtergrond.
  *
@@ -85,13 +84,13 @@ import kotlin.math.exp
  * en gelden nu identiek PER SLOT (elke SlotRuntime doorloopt exact dezelfde
  * logica, onafhankelijk van de andere).
  *
- * 30/07/2026 (editor, na feedback: "moet 15 dagen onbeheerd door kunnen
- * draaien") — gevonden bug: als Android dit proces een keer stopt
+ * 30/07/2026 (editor, na feedback dat de app 15 dagen onbeheerd door moet
+ * kunnen draaien) — gevonden bug: als Android dit proces een keer stopt
  * (geheugendruk, of op sommige toestellen agressief batterijbeheer ondanks
  * de foreground-service-status — zie README) en START_STICKY 'm daarna
  * herstart, komt hier een VERSE SimulatorDriver terecht die keurig weer
  * naar commando's luistert, maar er komt er geen meer: het vorige
- * "genereer willekeurige/afgesproken waarden"-commando was een eenmalig
+ * genereer-willekeurige/afgesproken-waarden-commando was een eenmalig
  * signaal vanuit het setup-scherm, niet iets dat vanzelf herhaalt. Resultaat
  * was precies het gerapporteerde symptoom: de app "leeft" nog (tijd-tekst
  * loopt door), maar er komt geen nieuwe data meer bij AAPS binnen.
@@ -110,8 +109,8 @@ import kotlin.math.exp
  * moet deze bridge ook per-slot gemaakt worden, net als ConnectionStatusBridge
  * vandaag al is geworden.
  *
- * 30/07/2026 (editor, kritieke bugfix na feedback: "3x dezelfde Bg-waarde
- * per update") — `onStartCommand()` wordt door Android bij ELKE aanroep van
+ * 30/07/2026 (editor, kritieke bugfix na feedback over 3x dezelfde
+ * Bg-waarde per update) — `onStartCommand()` wordt door Android bij ELKE aanroep van
  * `startService()`/`startForegroundService()` opnieuw uitgevoerd, ook als de
  * service al draait (MainActivity's herstart-check en het simulator-setup-
  * scherm roepen dat allebei aan). De vorige versie maakte dan gewoon een
@@ -126,8 +125,8 @@ import kotlin.math.exp
  * volledig afbreken vóór een nieuwe wordt opgezet — op elk moment is er dus
  * hoogstens één actieve driver (nu: hoogstens één actieve driver PER SLOT).
  *
- * 30/07/2026 (editor, na feedback: "lijkt of hij een nieuwe sensor start
- * bij het wisselen tussen AAPS en FCLGlucoLink") — bovenstaande fix loste de
+ * 30/07/2026 (editor, na feedback dat het leek of er een nieuwe sensor
+ * start bij het wisselen tussen AAPS en FCLGlucoLink) — bovenstaande fix loste de
  * TRIPLE-emissie op, maar de onderliggende oorzaak (onStartCommand() draait
  * ELKE keer de volledige teardown+heropbouw) bleef bestaan: Android mag een
  * backgrounded Activity op elk moment weggooien en later opnieuw aanmaken
@@ -144,8 +143,8 @@ import kotlin.math.exp
  * onnodige BLE-herverbinding). De starttijd zelf staat sowieso niet meer in
  * het driver-object maar in AppSettings — zie getOrInitSensorStartedAtMs().
  *
- * 30/07/2026 (editor, na feedback: "update onregelmatig i.p.v. iedere 5
- * minuten met scherm dicht") — de simulator-replay/random-walk-lussen in
+ * 30/07/2026 (editor, na feedback dat de update onregelmatig kwam i.p.v.
+ * iedere 5 minuten met het scherm dicht) — de simulator-replay/random-walk-lussen in
  * SimulatorDriver.kt draaien op `delay(intervalMs)` binnen een gewone
  * coroutine. Zo'n `delay()` is een monotone timer, geen alarm: als de CPU
  * van het toestel in slaap valt (scherm lang uit, Doze/App Standby, of een
@@ -164,8 +163,8 @@ import kotlin.math.exp
  * CPU expliciet wakker, ook met het scherm uit, zodat `delay()`-timers wél
  * op hun geplande moment afgingen.
  *
- * 11/08/2026 (editor, RONDE 89 — op verzoek, na live-melding: "beduidend
- * sneller leeg lopen van de batterij... hoog batterijverbruik") — die
+ * 11/08/2026 (editor, RONDE 89 — na live-melding van beduidend sneller leeg
+ * lopende batterij / hoog batterijverbruik) — die
  * permanente wakelock (`acquire(20 dagen)`, nooit tussentijds losgelaten)
  * is vervangen door [ActiveWorkWakeLock] (zie dat bestand's kdoc voor de
  * volledige analyse): sinds Ronde 36 (04/08/2026) loopt de daadwerkelijke
@@ -292,8 +291,25 @@ class BleConnectionService : Service() {
             while (isActive) {
                 runCatching {
                     when (val result = UpdateChecker.checkForUpdate(this@BleConnectionService)) {
-                        is UpdateChecker.UpdateCheckResult.UpdateAvailable ->
+                        is UpdateChecker.UpdateCheckResult.UpdateAvailable -> {
+                            // 08/09/2026 (editor, RONDE 171, op verzoek voor
+                            // een notificatie zodra er een update beschikbaar
+                            // is) — tot nu toe schreef deze
+                            // tak alleen naar AppSettings, zonder ooit iets op
+                            // het scherm/in de meldingenbalk te tonen — een
+                            // gebruiker kwam een nieuwe versie dus alleen tegen
+                            // als die toevallig zelf het About-scherm opende.
+                            // Eerst de OUDE bekende versionCode lezen, VOORDAT
+                            // 'm overschreven wordt, zodat alleen een ECHT
+                            // NIEUWE versie een melding geeft — niet elke 12
+                            // uur opnieuw voor dezelfde, al eerder gemelde
+                            // update.
+                            val previouslyKnownVersionCode = settings.availableUpdateVersionCode.first()
                             settings.setAvailableUpdate(result.versionCode, result.fileId, result.fileName)
+                            if (result.versionCode > previouslyKnownVersionCode) {
+                                notifyUpdateAvailable(result.fileName)
+                            }
+                        }
                         is UpdateChecker.UpdateCheckResult.UpToDate ->
                             settings.clearAvailableUpdate()
                         // NotConfigured/Error: bewust NIETS wijzigen aan de
@@ -438,12 +454,11 @@ class BleConnectionService : Service() {
             // nu per slot), niet uit het driver-object zelf — zie
             // getOrInitSensorStartedAtMs()'s kdoc.
             //
-            // 02/08/2026 (editor, controlevraag van de gebruiker: "bij
-            // een normale sensor wissel heeft de nieuwe sensor amper
-            // historische data ... hij zou dan alleen de data uit het
-            // geheugen moeten wissen vanaf het tijdstip van de eerste
-            // nieuwe sensor waarde, zodat de historie wel zichtbaar
-            // blijft") — dit `connectionJob`-blok (en dus deze
+            // 02/08/2026 (editor, controlevraag: bij een normale sensor
+            // wissel heeft de nieuwe sensor amper historische data, dus zou
+            // alleen de data uit het geheugen gewist moeten worden vanaf het
+            // tijdstip van de eerste nieuwe sensor waarde, zodat de historie
+            // wel zichtbaar blijft) — dit `connectionJob`-blok (en dus deze
             // `readings.collect`) start alleen opnieuw bij een
             // daadwerkelijk NIEUWE sensor-/apparaatkeuze VOOR DEZE SLOT
             // (zie de early-return hierboven bij eenzelfde
@@ -489,11 +504,11 @@ class BleConnectionService : Service() {
                             // hebben weggeveegd — zie GlucoseReadingStore.kt's
                             // kdoc bij trimFrom() voor de volledige analyse.
                             readingStore.trimFrom(stableReading.timestampMs, slot)
-                            // 09/08/2026 (editor, RONDE 64, op verzoek: "een
-                            // sensor wissel icoontje op de grafiek [...] wat
-                            // dan bv binnen het zelfde sensor type minder
-                            // opvallend van kleur is en bij een sensortype
-                            // wissel een wat opvallende kleur heeft") — zelfde
+                            // 09/08/2026 (editor, RONDE 64) — een
+                            // sensor wissel icoontje op de grafiek, dat
+                            // binnen hetzelfde sensortype minder opvallend
+                            // van kleur is en bij een sensortype-
+                            // wissel opvallender — zelfde
                             // moment als trimFrom() hierboven (eerste meting
                             // van een nieuwe sensor-sessie). consumePending
                             // CrossTypeSwitch() geeft true terug precies
@@ -519,15 +534,14 @@ class BleConnectionService : Service() {
                             )
                             settings.setSensorSessionStartedForDeviceAddress(slot, deviceAddress)
                         }
-                        // 05/08/2026 (editor, RONDE 43, op verzoek: "bij
-                        // iedere sensor wissel moet de kalibratie bij de
-                        // vorige sensor behorende gegevens uiteraard wel
-                        // gewist worden")
+                        // 05/08/2026 (editor, RONDE 43, op verzoek) — bij
+                        // iedere sensorwissel moeten de kalibratiegegevens
+                        // van de vorige sensor gewist worden.
                         //
                         // 06/08/2026 (editor, RONDE 46, BUGFIX na
-                        // live-melding: "de kalibratie data is nu niet
-                        // persistent over een app update ... of een
-                        // telefoon herstart") — alleen legen als het
+                        // live-melding dat de kalibratiedata niet persistent
+                        // was over een app-update of een telefoonherstart)
+                        // — alleen legen als het
                         // device-adres AFWIJKT van waarvoor de laatste keer
                         // al geleegd is (persistent bijgehouden PER SLOT,
                         // overleeft dus zelf ook een herstart) — dat adres
@@ -592,9 +606,9 @@ class BleConnectionService : Service() {
                     //
                     // 06/08/2026 (editor, RONDE 49) — smoothing volgt HIERNA,
                     // niet ervoor: zie smoothing/KalmanSmoother.kt's kdoc
-                    // en het overleg dat daaraan voorafging (bevestigd
-                    // door de gebruiker: "Doe inderdaad maar eerst de
-                    // calibratie en dan de smoothing") — het filter ziet
+                    // en het overleg dat daaraan voorafging, waarin bevestigd
+                    // werd dat eerst de kalibratie en dan pas de smoothing
+                    // moet gebeuren — het filter ziet
                     // dus steeds de al-gekalibreerde waarde, nooit de
                     // ruwe sensorwaarde, precies zoals AAPS's eigen UKF
                     // (`calibratedOrValue`) dat ook doet.
@@ -606,10 +620,10 @@ class BleConnectionService : Service() {
                     //
                     // 10/08/2026 (editor, RONDE 79) — vervangt de oude,
                     // globale `settings.isBroadcastEnabled()`-schakelaar:
-                    // op uitdrukkelijk verzoek ("beide slots moeten kunnen
-                    // zenden naar aaps waarbij er uiteraard maar max 1
-                    // actief kan zijn, maar ze moeten ook beiden uit
-                    // kunnen") is er nu een nullable AAPS_ACTIVE_SLOT —
+                    // beide slots moeten kunnen zenden naar AAPS, waarbij er
+                    // uiteraard maar max 1 tegelijk actief kan zijn, maar ze
+                    // moeten ook allebei uit kunnen staan — daarom is er nu
+                    // een nullable AAPS_ACTIVE_SLOT —
                     // deze slot zendt alleen als hij daadwerkelijk de
                     // gekozen actieve slot is; `null` (of de ANDERE slot)
                     // betekent gewoon niet zenden, zonder dat dat de lokale
@@ -617,6 +631,16 @@ class BleConnectionService : Service() {
                     // 28/08/2026 (editor, RONDE 153, CRITIEKE FIX) — [slot]
                     // nu meegegeven, zie GlucoseReadingStore.kt's kdoc bij
                     // record()/GlucoseReadingEntity.kt's kdoc bij `slot`.
+                    // 08/09/2026 (editor, RONDE 173) — zie XDripBroadcaster.kt's
+                    // kdoc bij buildBundle(): de broadcast-richting moet
+                    // voortaan hetzelfde GEMETEN verschil gebruiken als het
+                    // thuisscherm, niet de ruwe trendbyte. Daarvoor is de
+                    // meting VAN VÓÓR deze nieuwe (dus de huidige
+                    // `latestReading` op het moment vlak vóór `record()`
+                    // hieronder) nodig — bewust vóór `record()` opgevraagd,
+                    // anders zou de net-opgeslagen `smoothedReading` zichzelf
+                    // als "vorige" meting terugkrijgen.
+                    val previousReadingForBroadcast = readingStore.latestReading(slot = slot).first()
                     readingStore.record(smoothedReading, slot)
                     if (settings.getAapsActiveSlotOnce() == slot) {
                         // 20/08/2026 (editor, RONDE 115) — zie
@@ -624,7 +648,12 @@ class BleConnectionService : Service() {
                         // dezelfde AAPS-v3+v4-vertrouwde code voor elke
                         // sensor, UIT -> de bestaande per-sensor omschrijving.
                         val universalSourceCode = settings.isXdripUniversalSourceCodeEnabledOnce()
-                        XDripBroadcaster.broadcast(this@BleConnectionService, smoothedReading, universalSourceCode)
+                        XDripBroadcaster.broadcast(
+                            this@BleConnectionService,
+                            smoothedReading,
+                            universalSourceCode,
+                            previousReadingForBroadcast
+                        )
                     }
                     // 06/08/2026 (editor, RONDE 53) — zie
                     // refreshNotification()'s kdoc verderop: laat de
@@ -752,9 +781,9 @@ class BleConnectionService : Service() {
      * applySmoothingIfEnabled()-stap ongewijzigd, zodat StatusScreen.kt's
      * pipeline-regel raw/gekalibreerd/gefilterd alle drie tegelijk kan tonen.
      *
-     * 22/08/2026 (editor, RONDE 122, CRITICAL FIX — na live-melding: "de
-     * calibratie curve van de vorige sensor nog steeds actief was nadat
-     * deze was gestart") — [sinceMs] komt nu van AppSettings.
+     * 22/08/2026 (editor, RONDE 122, CRITICAL FIX — na live-melding dat de
+     * kalibratiecurve van de vorige sensor nog steeds actief was nadat de
+     * nieuwe sensor gestart was) — [sinceMs] komt nu van AppSettings.
      * effectiveSensorSessionStartedAtMs() i.p.v. de generieke, NOOIT-per-
      * fysieke-sensor-herziene getOrInitSensorStartedAtMs() — zie die
      * functie's kdoc voor de volledige root-cause-analyse. Zonder deze fix
@@ -862,10 +891,10 @@ class BleConnectionService : Service() {
     }
 
     /**
-     * 24/08/2026 (editor, RONDE 125, op verzoek: "een breakout filter wat
-     * eigenlijk precies omgekeerd werkt tov de breakin" — na CareSens
-     * Air-meldingen dat sensoren de laatste dagen van hun looptijd weer
-     * instabiel worden) — spiegelbeeld van [computeBreakInDecayFactor]
+     * 24/08/2026 (editor, RONDE 125, op verzoek voor een breakout-filter dat
+     * eigenlijk precies omgekeerd werkt t.o.v. de breakin-filter — na
+     * CareSens Air-meldingen dat sensoren de laatste dagen van hun looptijd
+     * weer instabiel worden) — spiegelbeeld van [computeBreakInDecayFactor]
      * hierboven: in plaats van uren SINDS de start telt deze functie uren
      * TOT een geschat EINDE van de sensor-looptijd, met dezelfde
      * exponentiële opbouw (τ = duur/5) maar dan aflopend naar het einde toe
@@ -888,7 +917,7 @@ class BleConnectionService : Service() {
      *   daarvan [AppSettings.dexcomG6ExpectedLifespanDays], een per-slot,
      *   door de gebruiker zelf ingestelde verwachting (default 14 dagen).
      * - Overige sensortypes (G7/ONE+, simulator): bewust nog buiten scope
-     *   dit ronde (expliciete keuze in het gesprek: "CareSens Air + G6"),
+     *   dit ronde (deze ronde expliciet beperkt tot CareSens Air + G6),
      *   geeft 0.0 terug (geen uitloop-demping) tot dat later uitgebreid
      *   wordt.
      *
@@ -926,9 +955,9 @@ class BleConnectionService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     /**
-     * 06/08/2026 (editor, RONDE 53, na live-melding: "op screenshot [...]
-     * staat, blauw omcirkeld, nu verbinden het is beter als daar de laatste
-     * Bg waarde wordt vermeld") — de notificatietekst toonde voorheen
+     * 06/08/2026 (editor, RONDE 53, na live-melding met een screenshot dat
+     * het beter zou zijn als de notificatie de laatste Bg-waarde vermeldt
+     * in plaats van "nu verbinden") — de notificatietekst toonde voorheen
      * ALTIJD de kale verbindingsstatus ([describe]), ook lang nadat de
      * sensor allang verbonden was en gewoon metingen binnenkwamen — voor
      * een langdurig draaiende achtergrondservice is dat minder nuttig dan
@@ -992,7 +1021,48 @@ class BleConnectionService : Service() {
                 description = "Status of the active CGM sensor connection(s)"
             }
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+            // 08/09/2026 (editor, RONDE 171) — apart, hogere-belangrijkheid
+            // kanaal voor de nieuwe update-melding hieronder: bewust NIET
+            // hetzelfde IMPORTANCE_LOW-kanaal als de permanente BLE-status
+            // hierboven (die is expres stil/onopvallend) — een "er staat een
+            // nieuwe versie klaar"-melding mag wél normaal in de
+            // meldingenbalk verschijnen, en moet (in tegenstelling tot de
+            // permanente statusmelding) ook gewoon wegveegbaar zijn.
+            val updateChannel = NotificationChannel(
+                UPDATE_CHANNEL_ID,
+                "App updates",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "Lets you know when a newer FCLGlucoLink version is ready to install"
+            }
+            getSystemService(NotificationManager::class.java).createNotificationChannel(updateChannel)
         }
+    }
+
+    /**
+     * 08/09/2026 (editor, RONDE 171) — zie de kdoc bij de periodieke
+     * update-check-lus in onCreate(): alleen aangeroepen wanneer die lus
+     * een ECHT nieuwe (nog niet eerder gemelde) versionCode vindt. Simpele,
+     * wegveegbare melding (`setAutoCancel(true)`, GEEN `setOngoing(true)`)
+     * die de app opent — zelfde open-de-app-patroon als [buildNotification]
+     * hierboven; een gerichte deep-link rechtstreeks naar het About-scherm
+     * bestaat nog niet, dus opent dit gewoon de app (van waaruit About via
+     * het bestaande menu bereikbaar is).
+     */
+    private fun notifyUpdateAvailable(fileName: String) {
+        val openAppIntent = PendingIntent.getActivity(
+            this, 0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(this, UPDATE_CHANNEL_ID)
+            .setContentTitle("FCLGlucoLink update available")
+            .setContentText("$fileName is ready — open the app to install.")
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setContentIntent(openAppIntent)
+            .setAutoCancel(true)
+            .build()
+        getSystemService(NotificationManager::class.java).notify(UPDATE_NOTIFICATION_ID, notification)
     }
 
     private fun buildNotification(text: String): Notification {
@@ -1018,6 +1088,11 @@ class BleConnectionService : Service() {
     companion object {
         private const val CHANNEL_ID = "fclglucolink_ble_status"
         private const val NOTIFICATION_ID = 1
+        // 08/09/2026 (editor, RONDE 171) — zie createNotificationChannel()/
+        // notifyUpdateAvailable()'s kdoc. Aparte ID zodat deze melding nooit
+        // de permanente BLE-statusmelding (NOTIFICATION_ID=1) overschrijft.
+        private const val UPDATE_CHANNEL_ID = "fclglucolink_updates"
+        private const val UPDATE_NOTIFICATION_ID = 2
 
         // 04/09/2026 (editor, RONDE 165) — zie de update-check-lus in
         // onCreate() hierboven: 12 uur, niet vaker — dit is een "is er een

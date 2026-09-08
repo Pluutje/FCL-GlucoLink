@@ -69,9 +69,9 @@ class FclGlucoLinkApp : Application() {
     }
 
     /**
-     * 27/08/2026 (editor, RONDE 126, op verzoek — "bouw dat maar", na een
-     * analyse van Rick's drie logbestanden die geen enkel spoor van zijn
-     * gemelde crash bevatten) — een gewone crash killt het proces voordat
+     * 27/08/2026 (editor, RONDE 126, na een analyse van diagnostische
+     * logbestanden van een gebruiker die geen enkel spoor van een gemelde
+     * crash bevatten) — een gewone crash killt het proces voordat
      * het bestaande, `enabled`-afhankelijke logpad iets had kunnen
      * wegschrijven; het enige zichtbare spoor was een gat in de tijdlijn.
      * Deze globale [Thread.UncaughtExceptionHandler] vangt de crash af

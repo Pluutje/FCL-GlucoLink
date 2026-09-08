@@ -21,8 +21,8 @@ import kotlinx.coroutines.flow.first
  * in CareSensAirDriver.kt/DexcomG6Driver.kt/AapsSlotSchedule.kt — geen
  * enkele wijziging daar, geen enkel risico daarop.
  *
- * Bewust alleen het AAPS-actieve slot (settings.aapsActiveSlot) — eerder
- * al afgestemd: "het aaps actieve slot bewaakt de alarmen".
+ * Bewust alleen het AAPS-actieve slot (settings.aapsActiveSlot): dat slot
+ * bewaakt de alarmen.
  *
  * Elke tik: (1) als alarmen uit staan, of er geen AAPS-actieve slot/sensor
  * is, stop een eventueel nog klinkend alarm (de gebruiker zette ondertussen
@@ -72,7 +72,18 @@ class AlarmMonitor(private val context: Context) {
         // dat via de `slot?.let {...}` hierboven ook geweest, en had de
         // guard op regel 50 deze functie al laten terugkeren.
         val latestReading = readingStore.latestReading(slot = slot!!).first()
-        val firing = AlarmEvaluator.evaluate(configs, latestReading, nowMs)
+
+        // 08/09/2026 (editor, RONDE 172) — zie AlarmEvaluator.kt's klasse-
+        // kdoc: de vorige meting (los van de losse latestReading-flow
+        // hierboven, die bewust ONGEFILTERD op leeftijd blijft — nodig voor
+        // STALE_DATA, zie Ronde 153's kdoc daar) dient puur als corroboratie
+        // op de ruwe trendbyte voor de predictieve alarmen. 1 uur is ruim
+        // genoeg venster (AlarmEvaluator's eigen 2-15 min-grens doet de
+        // echte filtering) en blijft een goedkope query.
+        val previousReading = readingStore.recentReadings(hours = 1, slot = slot).first()
+            .filter { it.timestampMs < (latestReading?.timestampMs ?: Long.MAX_VALUE) }
+            .maxByOrNull { it.timestampMs }
+        val firing = AlarmEvaluator.evaluate(configs, latestReading, nowMs, previousReading)
 
         val sounding = AlarmRuntimeState.currentlySoundingType
         if (sounding != null) {

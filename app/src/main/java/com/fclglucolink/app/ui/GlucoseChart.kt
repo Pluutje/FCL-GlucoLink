@@ -33,9 +33,9 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * 13/08/2026 (editor, RONDE 104 — Fase 1 van 2, op verzoek: "een mg/dl vs
- * mmol/l knop [...] in de ui zou da weer gegeven Bg waarden dan moeten
- * kunnen veranderen") — vóór deze ronde plotte dit hele bestand rechtstreeks
+ * 13/08/2026 (editor, RONDE 104 — Fase 1 van 2, op verzoek voor een mg/dL-
+ * vs-mmol/L-knop die alle getoonde Bg-waarden in de UI omschakelt) — vóór
+ * deze ronde plotte dit hele bestand rechtstreeks
  * in mmol/L (elke `Entry()` deed `.mgdlToMmol()`, de as-grenzen/bandgrenzen
  * waren letterlijke mmol-getallen: 2f/12f as, 4f/10f/12,5f/15f banden). Dat
  * zou een eenheid-toggle dwingen om ALLE schaal-/pan-/zoom-/granulariteits-
@@ -158,8 +158,8 @@ private fun yAxisValueFormatter(unit: GlucoseUnit): ValueFormatter = object : Va
  * vertrouwen (dat had evengoed 20 of 50 kunnen kiezen) — een
  * OnChartGestureListener herberekent die stapgrootte na elke zoom/schuifbeweging.
  *
- * 30/07/2026 (editor, na feedback #4: "wil tot zeker 24u, liever 48u terug
- * kunnen swipen") — de "4 uur"-beschrijving hierboven bij feedback #2 was
+ * 30/07/2026 (editor, na feedback #4 om tot zeker 24u, liever 48u, terug te
+ * kunnen swipen) — de "4 uur"-beschrijving hierboven bij feedback #2 was
  * daarna een HARDE grens geworden: axisMinimum/axisMaximum ZIJN het venster,
  * dus verder terugswipen dan 4 uur kon toen letterlijk niet, wat dat ook was
  * in de dataset stond. Nu (samen met GlucoseReadingStore.kt en
@@ -172,9 +172,8 @@ private fun yAxisValueFormatter(unit: GlucoseUnit): ValueFormatter = object : Va
  * laatste meting; fitScreen() (dat het hele, nu 48u brede axisbereik in
  * beeld zou zetten) is daarom niet meer gebruikt.
  *
- * 06/08/2026 (editor, RONDE 44, op verzoek: "Op de Bg grafiek wil ik dat de
- * sensorwaarde ook in de grafiek als een grijze open cirkel zichtbaar
- * wordt") — zelfde idee als het kleine indicatortje op StatusScreen.kt's
+ * 06/08/2026 (editor, RONDE 44, op verzoek om de sensorwaarde ook in de
+ * Bg-grafiek als een grijze open cirkel zichtbaar te maken) — zelfde idee als het kleine indicatortje op StatusScreen.kt's
  * BgRingDisplay (ronde 43): de RUWE sensorwaarde (GlucoseReading.
  * rawSensorMgdl) blijft ook hier zichtbaar naast de gekalibreerde lijn,
  * bewust ondergeschikt (lichtgrijs, open/lege cirkel — geen lijn) en alleen
@@ -185,10 +184,9 @@ private fun yAxisValueFormatter(unit: GlucoseUnit): ValueFormatter = object : Va
  * TRANSPARENT) — MPAndroidChart heeft geen kant-en-klare "alleen een rand
  * tekenen"-modus voor punten.
  *
- * 09/08/2026 (editor, RONDE 64, op verzoek: "handig om er een sensor wissel
- * icoontje op de grafiek bij het wissel moment bij te plaatsen wat dan bv
- * binnen het zelfde sensor type minder opvallend van kleur is en bij een
- * sensortype wissel een wat opvallende kleur heeft") — [switchEvents]
+ * 09/08/2026 (editor, RONDE 64, op verzoek om op de grafiek een sensor-
+ * wisselicoontje te plaatsen bij het wisselmoment, minder opvallend binnen
+ * hetzelfde sensortype en opvallender bij een sensortypewissel) — [switchEvents]
  * (optioneel, standaard leeg zodat bestaande aanroepers niet breken) wordt
  * getekend als verticale streeplijnen via MPAndroidChart's X-as
  * `LimitLine`'s — dat is hier het "icoontje": een duidelijk herkenbare,
@@ -215,17 +213,16 @@ fun GlucoseChart(
     predictionEnabled: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    // 31/07/2026 (editor, ronde 15, na controlevraag: "wordt de Bg-lijn
-    // onder de 4 ook rood en boven de 10 ook geel?") — bleek nee: de lijn
+    // 31/07/2026 (editor, ronde 15, na de controlevraag of de Bg-lijn onder
+    // de 4 ook rood en boven de 10 ook geel wordt) — bleek nee: de lijn
     // (en de bolletjes erop) hadden altijd dezelfde vaste primary-kleur,
     // ongeacht de waarde. Nu drie kleuren, per meetpunt gekozen o.b.v. de
     // mmol-waarde — dezelfde grenzen (4/10 mmol) als de gevulde band
     // hieronder en als bgRangeColor() in StatusScreen.kt.
     //
-    // 09/08/2026 (editor, RONDE 75, op verzoek — "In de Bg grafiek wil ik de
-    // kleuren boven de 10 veranderen van 10 tot 12,5 moet hij geel worden
-    // van 12,5 tot 15 oranje en boven de 15 rood onder de 4 kan zo blijven")
-    // — het vroegere ÉÉN "boven bereik"-amber (10-oneindig) wordt nu drie
+    // 09/08/2026 (editor, RONDE 75, op verzoek om de kleuren boven de 10 aan
+    // te passen: 10-12,5 geel, 12,5-15 oranje, boven de 15 rood, onder de 4
+    // ongewijzigd) — het vroegere ÉÉN "boven bereik"-amber (10-oneindig) wordt nu drie
     // opeenvolgende bandjes: geel (10-12,5), oranje (12,5-15), rood (>15).
     // Rood hergebruikt bewust dezelfde kleur als de bestaande onder-bereik-
     // kleur (`belowRangeColorArgb`) — zowel een te lage als een te hoge
@@ -246,8 +243,8 @@ fun GlucoseChart(
     // legacy fillAlpha-rendering-pad).
     val bandColorArgb = MaterialTheme.colorScheme.primary.toArgb()
     // 06/08/2026 (editor, RONDE 44/45) — lichtgrijs, net als de open-cirkel-
-    // indicator op StatusScreen.kt's ring, maar op verzoek ("iets minder
-    // opvallende kleur") nu met een lagere alpha (~55%) i.p.v. volledig
+    // indicator op StatusScreen.kt's ring, maar op verzoek voor een iets
+    // minder opvallende kleur nu met een lagere alpha (~55%) i.p.v. volledig
     // dekkend — argb() i.p.v. parseColor() omdat parseColor() geen
     // alpha-component in een 6-cijferige hex-string accepteert.
     val rawIndicatorColorArgb = android.graphics.Color.argb(140, 170, 170, 170)
@@ -284,8 +281,8 @@ fun GlucoseChart(
                 setScaleEnabled(true)
                 setScaleYEnabled(false)
                 setScaleXEnabled(true)
-                // 30/07/2026 (editor, na feedback: "bij aanraken verschijnt
-                // een kruisdraad, dit maakt swipen/zoomen lastig") —
+                // 30/07/2026 (editor, na feedback dat bij aanraken een
+                // kruisdraad verscheen die swipen/zoomen lastig maakte) —
                 // bandDataSet kreeg hieronder al setHighlightEnabled(false),
                 // maar de ECHTE zichtbare lijn (dataSet) niet: die had dus
                 // nog MPAndroidChart's standaard AAN staan, wat bij elke tap
@@ -300,10 +297,9 @@ fun GlucoseChart(
                 xAxis.position = XAxis.XAxisPosition.BOTTOM
                 xAxis.setDrawGridLines(true)
                 axisLeft.setDrawLimitLinesBehindData(true)
-                // 02/08/2026 (editor, op verzoek: "wil graag dat de y-as van
-                // de grafiek meeschaalt met de hoogste Bg ... minimum 2 tot
-                // 12 maar als de Bg boven de 11 komt dan tot 13 en boven de
-                // 12 tot 14") — deze twee waarden waren hier voorheen vast
+                // 02/08/2026 (editor, op verzoek om de y-as mee te laten
+                // schalen met de hoogste Bg: minimum 2 tot 12, maar boven de
+                // 11 tot 13 en boven de 12 tot 14) — deze twee waarden waren hier voorheen vast
                 // (2/12, nooit aangepast); dat is nu alleen nog de
                 // STARTWAARDE bij het aanmaken van de chart — het update-
                 // blok hieronder herberekent axisMaximum bij elke
@@ -408,8 +404,8 @@ fun GlucoseChart(
             // beeld brengt).
             val rightEdgeX = if (predictionPoints != null) latestX + PREDICTION_HORIZON_MINUTES else latestX
 
-            // 30/07/2026 (editor, na feedback: "wil tot zeker 24u, liever 48u
-            // terug kunnen swipen") — vorige opzet zette axisMinimum vast op
+            // 30/07/2026 (editor, na feedback om tot zeker 24u, liever 48u,
+            // terug te kunnen swipen) — vorige opzet zette axisMinimum vast op
             // "laatste meting min 4 uur", wat een HARDE grens was: verder
             // terug swipen dan dat kon gewoon niet, ook al stond er (sinds
             // GlucoseReadingStore nu 48u bewaart en StatusScreen.kt ook 48u
@@ -504,8 +500,9 @@ fun GlucoseChart(
                     val minutesSinceBase = (r.timestampMs - baseTimestampMs) / 60_000f
                     Entry(minutesSinceBase, r.rawSensorMgdl.toFloat())
                 }
-            // 06/08/2026 (editor, RONDE 45, na live-test — "geen massieve
-            // grijze stip maar alleen de open cirkel") — de vorige
+            // 06/08/2026 (editor, RONDE 45, na live-test met de melding dat
+            // er een massieve grijze stip stond i.p.v. alleen de open cirkel)
+            // — de vorige
             // circleHoleColor = TRANSPARENT (argb 0x00000000) loste dit niet
             // op: MPAndroidChart tekent het "gat" dan gewoon met een gewone
             // paint in die (onzichtbare) kleur BOVENOP de al getekende
@@ -607,8 +604,8 @@ fun GlucoseChart(
             // zetten van data, anders is mAxisRange nog 0).
             chart.setVisibleXRangeMinimum(15f)
 
-            // 31/07/2026 (editor, ronde 15, na feedback: "autozoom naar 4u
-            // werkt nog niet") — de vorige combinatie
+            // 31/07/2026 (editor, ronde 15, na feedback dat autozoom naar 4u
+            // nog niet werkte) — de vorige combinatie
             // (setVisibleXRangeMaximum(240f) + moveViewToX(latestX)) bleek
             // ALSNOG onbetrouwbaar. Vermoedelijke oorzaak:
             // setVisibleXRangeMaximum zet alleen een ONDERGRENS op de
@@ -650,14 +647,14 @@ fun GlucoseChart(
             // Stapgrootte voor het standaardvenster (4 uur -> 30 min, zie
             // kdoc); daarna houdt de gesture-listener in de factory 'm bij.
             applyXAxisGranularity(chart)
-            // 02/08/2026 (editor, na live-test — "als er in het zichtbare
-            // deel geen waarden boven de 10 staan blijft hij toch op 14
-            // staan") — de eerdere versie berekende de Y-as-bovengrens uit
-            // de VOLLEDIG GELADEN 48u-dataset, niet uit wat daadwerkelijk in
-            // het huidige zoom/pan-venster te zien is; expliciet gecorrigeerd
-            // door de gebruiker: "meeschaalt met de hoogste Bg in het
-            // weergave venster" bleek letterlijk het ZICHTBARE venster te
-            // betekenen. recomputeYAxisMax() (zie kdoc daar) leest nu
+            // 02/08/2026 (editor, na live-test die liet zien dat de Y-as op
+            // 14 bleef staan ook als er in het zichtbare deel geen waarden
+            // boven de 10 stonden) — de eerdere versie berekende de Y-as-
+            // bovengrens uit de VOLLEDIG GELADEN 48u-dataset, niet uit wat
+            // daadwerkelijk in het huidige zoom/pan-venster te zien is; het
+            // gevraagde "meeschaalt met de hoogste Bg in het weergavevenster"
+            // bleek letterlijk het ZICHTBARE venster te betekenen.
+            // recomputeYAxisMax() (zie kdoc daar) leest nu
             // chart.lowestVisibleX/highestVisibleX — precies dezelfde bron
             // als applyXAxisGranularity() hierboven al gebruikt — en wordt,
             // net als die functie, ook na elke pan/zoom-gebaar opnieuw
@@ -669,9 +666,8 @@ fun GlucoseChart(
 }
 
 /**
- * 10/08/2026 (editor, RONDE 80, letterlijk verzoek — "Op het combi tabblad
- * wil ik ook graag een grafiek waarin de beide data sets worden getoond met
- * ieder een eigen kleur") — de "bewust GEEN samengevoegde grafiek in deze
+ * 10/08/2026 (editor, RONDE 80, op verzoek om op het combi-tabblad ook een
+ * grafiek te tonen met beide datasets in een eigen kleur) — de "bewust GEEN samengevoegde grafiek in deze
  * eerste versie"-kdoc die eerder bij CombiScreen.kt's CombiTabContent stond,
  * is hiermee ingelost. Bewust een LOSSE, eenvoudigere composable i.p.v.
  * [GlucoseChart] hierboven met een optionele tweede readings-lijst uit te
@@ -695,8 +691,8 @@ fun DualGlucoseChart(
     readingsB: List<GlucoseReading>,
     colorA: Color,
     colorB: Color,
-    // 11/08/2026 (editor, RONDE 90, op verzoek — "de ingevoerde vingerprik
-    // voor de calibraties ook zichtbaar te maken in de combi curve") —
+    // 11/08/2026 (editor, RONDE 90, op verzoek om de ingevoerde vingerprik-
+    // calibraties ook zichtbaar te maken in de combi-curve) —
     // (timestampMs, fingerstickMgdl)-paren, al voorgefilterd door de caller
     // (CombiScreen.kt: alleen AANGEVINKTE entries, per slot z'n eigen
     // sensor-starttijd) — deze functie doet zelf geen kalibratie-logica,
@@ -709,8 +705,7 @@ fun DualGlucoseChart(
     unit: GlucoseUnit = GlucoseUnit.MMOL,
     // 29/08/2026 (editor, RONDE 160) — zie GlucoseChart()'s zelfde parameter:
     // één globale instelling (geen per-slot toggle), hier toegepast op BEIDE
-    // curven tegelijk — precies wat gevraagd is ("Dan als extra aanvulling
-    // voor de beide slots").
+    // curven tegelijk — als aanvulling voor beide slots, zoals gevraagd.
     predictionEnabled: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -829,8 +824,8 @@ fun DualGlucoseChart(
             // eigen data afstemt) gewoon verscheen.
             //
             // 11/08/2026 (editor, RONDE 95 — BUGFIX na live-melding met
-            // screenshots: "de nieuwe punten worden links op de grafiek
-            // getoond (dus eigenlijk gisteren)") — Ronde 94's linker-asgrens-
+            // screenshots dat nieuwe punten links op de grafiek getoond
+            // werden (dus feitelijk bij gisteren leken te horen)) — Ronde 94's linker-asgrens-
             // verbreding (elke fingerstick liet de as, hoe oud ook, verder
             // naar links uitrekken) bleek een NIEUW, groter probleem te
             // veroorzaken. `CalibrationStore.entries()` filtert alleen op
@@ -971,9 +966,9 @@ fun DualGlucoseChart(
             if (entriesB.isNotEmpty()) {
                 dataSets += LineDataSet(entriesB, "slot-B").apply {
                     setColor(colorBArgb)
-                    // 11/08/2026 (editor, RONDE 90 — na live-melding: "als
-                    // de beide curves nagenoeg samen vallen [wil ik dat] ze
-                    // allebei beter zichtbaar worden") — MPAndroidChart's
+                    // 11/08/2026 (editor, RONDE 90 — na live-melding dat
+                    // beide curves beter zichtbaar moeten blijven wanneer ze
+                    // nagenoeg samenvallen) — MPAndroidChart's
                     // LineChart kan geen echte driehoekjes per punt tekenen
                     // (dat vereist ScatterDataSet/CombinedChart, zie de
                     // chatreactie voor de afweging); binnen LineChart zelf
@@ -1007,9 +1002,9 @@ fun DualGlucoseChart(
             // zodat ze niet met de sensorpunten verward worden.
             //
             // 11/08/2026 (editor, RONDE 92, BUGFIX na live-melding met
-            // screenshot — "de vingerprik waarden moeten niet met een lijn
-            // worden verbonden maar alleen als dot worden getoond") —
-            // `lineWidth = 0f` bleek NIET "geen lijn" te betekenen: Android's
+            // screenshot dat de vingerprikwaarden niet met een lijn verbonden
+            // mogen worden, maar alleen als losse dot getoond moeten worden)
+            // — `lineWidth = 0f` bleek NIET "geen lijn" te betekenen: Android's
             // `Paint.setStrokeWidth(0)` is speciaal-behandeld als "hairline"
             // (een altijd-1-pixel-brede lijn, ongeacht de ingestelde breedte)
             // i.p.v. onzichtbaar — vandaar de dunne lijn die tussen de
@@ -1141,11 +1136,10 @@ private fun applyXAxisGranularity(chart: LineChart) {
 }
 
 /**
- * 02/08/2026 (editor, op verzoek: "wil graag dat de y-as van de grafiek
- * meeschaalt met de hoogste Bg in het weergave venster. Dus minimum 2 tot 12
- * maar als de Bg boven de 11 komt dan tot 13 en boven de 12 tot 14 laten
- * lopen", later gecorrigeerd: "als er in het zichtbare deel geen waarden
- * boven de 10 staan blijft hij toch op 14 staan") — leest de "BG"-dataset
+ * 02/08/2026 (editor, op verzoek om de y-as mee te laten schalen met de
+ * hoogste Bg in het weergavevenster — minimum 2 tot 12, boven de 11 tot 13,
+ * boven de 12 tot 14 — later gecorrigeerd naar het daadwerkelijk zichtbare
+ * venster i.p.v. de volledig geladen dataset) — leest de "BG"-dataset
  * rechtstreeks van de chart (i.p.v. de `entries`-lijst uit het update-blok
  * hierboven mee te geven, wat niet kan vanuit de gesture-listener in de
  * factory — die heeft alleen de chart zelf) en filtert op
@@ -1156,8 +1150,8 @@ private fun applyXAxisGranularity(chart: LineChart) {
  * vlak op y=10) telt bewust niet mee — vandaar het opzoeken op label "BG"
  * i.p.v. gewoon de eerste dataset te pakken.
  *
- * 06/08/2026 (editor, RONDE 54, na live-melding: "de autoscaling van de y-as
- * ... komt nu niet hoger dan 14") — de vorige versie was een letterlijke
+ * 06/08/2026 (editor, RONDE 54, na live-melding dat de autoscaling van de
+ * y-as niet hoger kwam dan 14) — de vorige versie was een letterlijke
  * 3-stappen-ladder (12/13/14) die bij >12 mmol/L simpelweg DOODLIEP op 14 —
  * een BG van 14,0 (zoals in de melding) kwam dus exact op de bovenrand van
  * de as terecht (geen enkele marge meer), en alles boven de 14 werd gewoon
@@ -1171,9 +1165,9 @@ private fun applyXAxisGranularity(chart: LineChart) {
  * maar loopt er nu ook gewoon overheen door voor hogere waarden (14,0 ->
  * 15; 20,0 -> 21) i.p.v. daar plat te slaan.
  *
- * 10/08/2026 (editor, RONDE 82, na live-melding — "de grafiek op het combi
- * blad [schaalt] niet netjes mee met de hoogste Bg waarde zoals de
- * afzonderlijke grafieken dat wel doen") — [DualGlucoseChart] hierboven had
+ * 10/08/2026 (editor, RONDE 82, na live-melding dat de grafiek op het
+ * combi-tabblad niet netjes meeschaalde met de hoogste Bg-waarde zoals de
+ * afzonderlijke grafieken dat wel doen) — [DualGlucoseChart] hierboven had
  * deze herberekening nooit gekregen: die zette axisLeft.axisMinimum/
  * axisMaximum alleen éénmalig vast in de `factory`-blok (2f..12f) en riep
  * deze functie nergens aan, dus een BG boven de 12 mmol/L liep gewoon tegen

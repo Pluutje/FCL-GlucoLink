@@ -63,8 +63,8 @@ object DiagnosticFileLogger {
 
     /**
      * 29/08/2026 (editor, RONDE 156 — puur diagnostisch, GEEN gedrags-
-     * wijziging) — AANLEIDING: live-melding "blijft vervolgens bijna een
-     * kwartie op connecting staan" na het installeren van v169. De
+     * wijziging) — AANLEIDING: live-melding dat de app na het installeren
+     * van v169 bijna een kwartier op "connecting" bleef hangen. De
      * meegestuurde log (fclglucolink_2026-08-28 23.59.txt) toont tussen
      * 23:45:58 en 23:48:09 een korte, chaotische reeks mislukte
      * herverbindingen (waaronder een niet eerder geziene status=133),
@@ -72,10 +72,10 @@ object DiagnosticFileLogger {
      * terwijl de disconnect-handler in DexcomG7Driver.kt na ELKE disconnect
      * onvoorwaardelijk een nieuwe scanpoging inplant. Zo'n totale stilte
      * (i.p.v. herhaalde foutregels) past bij een eerder, soortgelijk
-     * bevestigd scenario (BleConnectionService.kt's Ronde 59-kdoc: "TWEE
-     * gelijktijdige BluetoothGatt-verbindingen naar hetzelfde toestel...
-     * transmitter raakte in de war, beide verbraken meteen weer") — het
-     * vermoeden is dat de update-herstart kortstondig TWEE APARTE
+     * bevestigd scenario (BleConnectionService.kt's Ronde 59-kdoc: twee
+     * gelijktijdige BluetoothGatt-verbindingen naar hetzelfde toestel
+     * brachten de transmitter in de war, waarna beide meteen weer
+     * verbraken) — het vermoeden is dat de update-herstart kortstondig TWEE APARTE
      * PROCESSEN met elk hun eigen BleConnectionService-instantie heeft
      * opgeleverd (elk met een eigen mutex/driver/sessiesleutel — de
      * bestaande startCommandMutex-bescherming werkt alleen BINNEN één
@@ -162,8 +162,8 @@ object DiagnosticFileLogger {
     }
 
     /**
-     * 27/08/2026 (editor, RONDE 126, na analyse van Rick's logs op verzoek
-     * van de gebruiker) — vóór deze ronde bevatte GEEN van de drie
+     * 27/08/2026 (editor, RONDE 126, na analyse van diagnostische logbestanden
+     * van een gebruiker) — vóór deze ronde bevatte GEEN van de drie
      * diagnose-logbestanden ooit een spoor van een crash: de app-crash zelf
      * killt het proces voordat de gewone, `enabled`-afhankelijke [log]/
      * [logError] iets hadden kunnen wegschrijven — het enige wat zichtbaar

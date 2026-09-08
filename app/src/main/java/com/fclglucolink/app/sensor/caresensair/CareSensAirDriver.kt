@@ -316,9 +316,9 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
     // maakte i.p.v. het verwachte vervolgverzoek. Gereset in disconnect().
     private var noticedNumberRecords: Boolean = false
 
-    // 02/08/2026 (editor, op verzoek: "wat wel hulpzaam is dat als er
-    // wel verbindings problemen zijn dat hij dan bij status weer geeft
-    // wat het probleem is: Bv 25 minuten geen verbinding") — apart van
+    // 02/08/2026 (editor, op verzoek) — bij verbindingsproblemen moet de
+    // status weergeven wat het probleem is, bv. "25 minuten geen
+    // verbinding" — apart van
     // AppSettings.careSensAirLastConnectedAtMs (persistent, voor de
     // "Last connected"-rij in de UI) houdt de driver dit ZELF ook
     // synchroon in het geheugen bij, puur om
@@ -328,8 +328,8 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
     // niet in dat synchrone pad. Reset bij elke nieuwe connect()-sessie.
     private var lastSuccessfulConnectionAtMs: Long? = null
 
-    // 10/08/2026 (editor, RONDE 86 — op verzoek, na live-log-melding: "sinds
-    // 22:40 komt de caresens om de 6 minuten" — zie
+    // 10/08/2026 (editor, RONDE 86 — op verzoek, na live-log-melding dat de
+    // CareSens sinds enig moment om de 6 minuten kwam i.p.v. 5 — zie
     // computeReconnectCooldownMs()'s kdoc voor de volledige analyse) — het
     // vaste ankerpunt van deze verbind-sessie's 5-minuten-raster, ÉÉN keer
     // gezet bij de EERSTE geslaagde meting (net als lastSuccessfulConnectionAtMs
@@ -341,8 +341,8 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
     // ontvangen (mogelijk al verschoven) meting door te rekenen.
     private var cadenceAnchorAtMs: Long? = null
 
-    // 02/08/2026 (editor, na live-test — "de start en einddatum tijd ...
-    // wordt nog niet gevuld") — het 0xC0/2-antwoord (dat elapsedSecs draagt,
+    // 02/08/2026 (editor, na live-test dat de start- en einddatum-tijd nog
+    // niet gevuld werd) — het 0xC0/2-antwoord (dat elapsedSecs draagt,
     // waar sensorStartedAtMs uit afgeleid wordt) komt alleen binnen als
     // REACTIE op een `buildSetAppInfoCommand()`-schrijfactie, en die schreef
     // de handshake tot nu toe ALLEEN bij "eerste keer ooit voor deze sensor"
@@ -536,10 +536,10 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
             // zelf niet suspend is) 'm synchroon kan raadplegen.
             AapsSlotSchedule.publishAapsActiveSlot(currentAapsSlot)
             val isPriority = currentAapsSlot == slot
-            // 12/08/2026 (editor, RONDE 100 — op verzoek: "het slot wat naar
-            // aaps zend ... altijd de voorkeur heeft en als dat tot gevolg
-            // heeft dat het andere slot zo nu en dan een meting mist dan is
-            // dat maar zo") — zie AapsSlotSchedule.kt's klasse-kdoc. Alleen
+            // 12/08/2026 (editor, RONDE 100 — op verzoek) — het slot dat naar
+            // AAPS zendt moet altijd voorrang krijgen, ook als dat tot gevolg
+            // heeft dat het andere slot af en toe een meting mist — zie
+            // AapsSlotSchedule.kt's klasse-kdoc. Alleen
             // de NIET-priority-slot wijkt hier ooit uit; de AAPS-slot vraagt
             // dit nooit op, dus wacht nooit op de andere slot. Bij maar 1
             // actieve slot heeft AapsSlotSchedule niets van de ander
@@ -579,8 +579,8 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
     }
 
     /**
-     * 04/08/2026 (editor, RONDE 36 — op verzoek, "wat doet juggluco dan
-     * anders" gevolgd door "implementeer dat") — vervangt de vroegere kale
+     * 04/08/2026 (editor, RONDE 36 — na de vraag wat Juggluco anders doet,
+     * gevolgd door het verzoek dat te implementeren) — vervangt de vroegere kale
      * `delay(cooldownMs)` hierboven. Zie PredictiveReconnectAlarm.kt's kdoc
      * voor de volledige achtergrond: een coroutine-`delay()` heeft geen
      * enkele garantie om op tijd af te gaan zodra Android's Doze-
@@ -607,11 +607,10 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
     }
 
     /**
-     * 03/08/2026 (editor, RONDE 31 — op verzoek van/voorstel door de
-     * gebruiker, na v78-logcat-analyse: "ik zit zelf te denken of we het 5
-     * minuten interval... niet kunnen gebruiken door bv 4 of 4,5 minuten na
-     * de laatste update pas weer een signaal te sturen en dat te herhalen
-     * tot er een nieuwe waarde binnenkomt") — vervangt de vlakke
+     * 03/08/2026 (editor, RONDE 31 — op voorstel, na v78-logcat-analyse, om
+     * niet het volle 5-minuten-interval te gebruiken maar bv. 4 of 4,5
+     * minuten na de laatste update pas weer een signaal te sturen en dat te
+     * herhalen tot er een nieuwe waarde binnenkomt) — vervangt de vlakke
      * `MIN_SCAN_COOLDOWN_MS` (60s) ná ELKE disconnect door een voorspelling:
      * als we weten wanneer de laatste geslaagde meting binnenkwam
      * (`lastSuccessfulConnectionAtMs`), plan de eerstvolgende scanpoging dan
@@ -621,11 +620,10 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
      * helemaal geen geslaagde meting was deze sessie) valt dit terug op de
      * gewone `MIN_SCAN_COOLDOWN_MS` — dat behoudt het bestaande "elke 60s
      * opnieuw proberen totdat de sensor daadwerkelijk reageert"-gedrag voor
-     * het laatste stukje, precies zoals de gebruiker zelf voorstelde
-     * ("...en dat te herhalen tot er een nieuwe waarde binnenkomt").
+     * het laatste stukje, precies zoals voorgesteld.
      *
-     * 10/08/2026 (editor, RONDE 86 — op verzoek, na live-log-melding: "sinds
-     * 22:40 komt de caresens om de 6 minuten") — de formule hieronder rekende
+     * 10/08/2026 (editor, RONDE 86 — op verzoek, na live-log-melding dat de
+     * CareSens sinds enig moment om de 6 minuten kwam) — de formule hieronder rekende
      * tot nu toe simpelweg door vanaf `lastReadingAtMs` ("volgende poging =
      * laatste meting + leadtime"). Dat is een KETTING zonder anker: als één
      * cyclus vertraagd binnenkomt (bijvoorbeeld door een scanbotsing met de
@@ -1057,10 +1055,10 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
                 return
             }
         }
-        // 02/08/2026 (editor, op verzoek: "als hij 1 maal connected is
-        // geweest dat hij dan connected moet blijven staan ... ook als er
-        // op dat moment niet direct een bluetooth verbinding in de lucht
-        // is") — CareSens Air verbindt kort, meldt eventueel geen nieuwe
+        // 02/08/2026 (editor, op verzoek) — zodra de status ooit connected
+        // is geweest, moet die connected blijven staan, ook als er op dat
+        // moment niet direct een bluetooth-verbinding actief
+        // is — CareSens Air verbindt kort, meldt eventueel geen nieuwe
         // data, en hangt zelf weer op — dat is NORMAAL gedrag (de sensor
         // levert toch maar elke ~5 minuten een nieuwe meting), geen
         // storing. Als de vorige status al Connected was, blijft die
@@ -1815,14 +1813,13 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
 
         // 02/08/2026 (editor, ronde 26 — na een SCHONE test, expliciet zonder
         // Recents-swipe, met v72's 90s-scanvenster EN v73's stopWithTask-fix,
-        // waarbij het probleem toch identiek bleef: "Ik heb nu de apps niet
-        // weg geswiped en nog steeds update hij niet. Alleen het scherm
-        // zwart laten worden") — de vorige 40s->90s-fix loste het NIET op
+        // waarbij het probleem toch identiek bleef zonder de apps weg te
+        // swipen, alleen met het scherm zwart) — de vorige 40s->90s-fix loste het NIET op
         // omdat de aanname erachter fout was: er is HELEMAAL GEEN "scan een
         // tijdje, geef dan op, wacht MIN_SCAN_COOLDOWN_MS, probeer opnieuw"-
         // cyclus in Juggluco's eigen, bewezen-werkende gedrag. Dat was zelf
         // nooit met zekerheid uit de decompile bevestigd (`SCAN_ATTEMPT_
-        // TIMEOUT_MS` was een AANNAME, gebaseerd op de gebruiker's eigen
+        // TIMEOUT_MS` was een AANNAME, gebaseerd op een eerdere
         // 60-90s-hypothese, niet op bytecode) — bij navraag bleek de
         // eigenlijke scan-planningslogica niet in `bk0` (SensorBluetooth)
         // zelf te zitten maar in een aparte, gedeelde `Runnable`-klasse `w2`
@@ -1911,11 +1908,11 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
         // uitkomt, i.p.v. 4,5 minuten lead + de volle duty-cycle-wachttijd
         // erbovenop te laten optellen tot >6 minuten.
         //
-        // 04/08/2026 (editor, RONDE 39 — op verzoek, "ik wil het liever zo
-        // consistent mogelijk dus graag nog een optimalisatie", na de
+        // 04/08/2026 (editor, RONDE 39 — op verzoek voor een verdere
+        // optimalisatie richting een zo consistent mogelijke cadans, na de
         // ronde-38-log-analyse van het afwisselende "+7s/+67s"-patroon in
         // xDrip+) — de 3,5-minuten-lead hierboven was in RONDE 32 bewust
-        // KORTER dan de gebruiker's oorspronkelijke 4,5-minuten-voorstel
+        // KORTER dan het oorspronkelijke 4,5-minuten-voorstel
         // gezet, specifiek om ruimte te laten voor de toen nog sterk
         // WISSELENDE "geregistreerd -> gevonden"-duty-cycle-wachttijd (28s
         // tot 93s+, zie de RONDE-32-paragraaf hierboven). Die aanname klopt
@@ -1980,8 +1977,8 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
         // exact 3 minuten vuurt structureel te vroeg af tijdens volkomen
         // normaal gedrag (zie het screenshot: "No connection for 4 minutes
         // (still trying)" tijdens een routinematige, korte herverbind-cyclus
-        // zonder enig écht probleem). Letterlijk gebruikersvoorstel: "het
-        // zou logischer zijn als die pas na bv 7 minuten komt" — 7 minuten
+        // zonder enig écht probleem). Op voorstel logischer om de waarschuwing
+        // pas na bv. 7 minuten te laten komen — 7 minuten
         // overgenomen, dat is ruim boven de langste waargenomen normale
         // succesvolle-meting-interval (7m5s in de logcat hierboven) maar nog
         // steeds kort genoeg om een écht probleem (sensor buiten bereik,

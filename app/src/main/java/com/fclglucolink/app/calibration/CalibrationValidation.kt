@@ -7,17 +7,14 @@ import kotlin.math.abs
  * FCLGlucoLink — invoer-validatie voor een nieuwe kalibratie-entry
  * ============================================================================
  *
- * 05/08/2026 (editor, RONDE 43 — op verzoek, "Ja zelfde vangnet [als AAPS],
- * waarbij de grens bij aaps nu geloof ik 0,3mmol/5min is, dat mag zeker naar
- * 0,35 en misschien naar 0,4 maar dan met een waarschuwing") — mirror van de
- * twee AAPS-preconditie-checks uit de aangeleverde
- * `LinearCalibrationPlugin.kt`/`SplineCalibrationPlugin.kt`
+ * 05/08/2026 (editor, RONDE 43) — hetzelfde vangnet als AAPS, maar met de
+ * grens iets ruimer gezet: mirror van de twee AAPS-preconditie-checks uit
+ * de aangeleverde `LinearCalibrationPlugin.kt`/`SplineCalibrationPlugin.kt`
  * (`checkPreconditionsAt`): (a) een sensormeting binnen [PAIR_LOOKBACK_MS]
  * om de nieuwe vingerprik mee te koppelen, en (b) de BG mag op dat moment
  * niet te snel veranderen. AAPS's eigen harde grens is
- * `DELTA_GATE_MGDL_PER_5MIN = 5.0` (≈0,2775 mmol/L per 5 min — dicht bij de
- * "geloof ik 0,3" van de gebruiker). Hier verruimd naar twee niveaus i.p.v.
- * één harde afkap:
+ * `DELTA_GATE_MGDL_PER_5MIN = 5.0` (≈0,2775 mmol/L per 5 min). Hier verruimd
+ * naar twee niveaus i.p.v. één harde afkap:
  *   - tot en met [WARN_THRESHOLD_MMOL_PER_5MIN] (0,35): stilzwijgend
  *     geaccepteerd, zoals altijd.
  *   - tussen [WARN_THRESHOLD_MMOL_PER_5MIN] en [REJECT_THRESHOLD_MMOL_PER_5MIN]

@@ -259,8 +259,8 @@ object DexcomG7Protocol {
     }
 
     /**
-     * 29/08/2026 (editor, RONDE 159, op verzoek — "Ik wil hier in principe
-     * alle info getoond kunnen hebben die de sensor zelf terug geeft") —
+     * 29/08/2026 (editor, RONDE 159, op verzoek om in principe alle info
+     * getoond te kunnen krijgen die de sensor zelf teruggeeft) —
      * letterlijke poort van xDrip+'s `TransmitterStatus.getBatteryLevel()`
      * (`g5model/TransmitterStatus.java`): een kleine, vaste 4-waarden-
      * mapping van [GlucoseRx.statusRaw]/[BatteryInfoRx.status]/
@@ -311,8 +311,8 @@ object DexcomG7Protocol {
 
     // ============================================================
     // Batterij-/firmwareversie (opcodes 0x22/0x23 batterij, 0x20/0x21
-    // firmware) — RONDE 150, op verzoek: "of hij dan ook de data als
-    // batterij en firmware version terug geeft zoals xdrip ook netjes doet".
+    // firmware) — RONDE 150, op verzoek om ook batterij- en firmwareversie-
+    // data terug te geven, zoals xDrip dat ook netjes doet.
     // ============================================================
 
     /**
@@ -484,9 +484,9 @@ object DexcomG7Protocol {
     }
 
     /**
-     * 29/08/2026 (editor, RONDE 157, KRITIEKE FIX — live-bevestiging door de
-     * gebruiker: "je conclusie dat de sensor hem niet terugkoppelt is
-     * onjuist want xdrip geeft hem wel aan") — [parseFirmwareVersion]
+     * 29/08/2026 (editor, RONDE 157, KRITIEKE FIX — live-bevestiging dat de
+     * eerdere conclusie dat de sensor dit niet terugkoppelt onjuist was, want
+     * xDrip geeft het wel aan) — [parseFirmwareVersion]
      * hierboven verwacht UITSLUITEND opcode 0x21 (xDrip+'s
      * `VersionRequestRxMessage`, het antwoord op vraag-variant 0/opcode
      * 0x20). Maar [FIRMWARE_REQUEST_VERSION_ORDER] in DexcomG7Driver.kt
@@ -516,8 +516,8 @@ object DexcomG7Protocol {
      * wordt.
      */
     /**
-     * 29/08/2026 (editor, RONDE 159, op verzoek — "Ik wil hier in principe
-     * alle info getoond kunnen hebben die de sensor zelf terug geeft") —
+     * 29/08/2026 (editor, RONDE 159, op verzoek om in principe alle info
+     * getoond te kunnen krijgen die de sensor zelf teruggeeft) —
      * vult nu ook de rest van xDrip+'s `VersionRequest1RxMessage`-velden,
      * i.p.v. alleen [FirmwareVersionRx.firmwareVersion] zoals Ronde 157 deed.
      * De twee antwoord-opcodes hebben ECHT verschillende lay-outs ná het

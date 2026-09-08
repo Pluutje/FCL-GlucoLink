@@ -5,62 +5,53 @@ package com.fclglucolink.app.alarm
  * FCLGlucoLink — alarmtypes (RONDE 106-108, Fase 2: instellingen-laag + motor)
  * ============================================================================
  *
- * 13/08/2026 (editor, RONDE 106, vervolg op de meedenk-ronde bij het mg/dl-
- * vs-mmol-verzoek — "aan het inbouwen van alarmen met daarbij ook een
- * (eenvoudig model) voorspellend alarm [...] de alarmen moeten gestopt en
- * gesnoozed kunnen worden en de grenzen en de geluiden of vibratie moet
- * instelbaar zijn per alarm soort verschillend") en op het concrete verzoek
- * van deze ronde ("1 overal knop om in 1 keer alle alarmen aan/uit te
- * zetten [...] de afzonderlijke alarmen kunnen worden ingesteld maar ook
- * ieder afzonderlijk aan en uit [...] persistent") — zeven alarmtypes:
+ * 13/08/2026 (editor, RONDE 106) — bouwt alarmen in, met een eenvoudig-model
+ * voorspellend alarm, stop/snooze, en per alarmsoort instelbare grenzen en
+ * geluid/vibratie, plus één hoofdschakelaar voor alle alarmen samen naast
+ * de mogelijkheid om elk alarm afzonderlijk aan/uit te zetten (persistent
+ * opgeslagen). Zeven alarmtypes:
  *
  * - URGENT_LOW / LOW: BG onder een drempel (twee aparte niveaus, zodat een
  *   "let op"-melding bij bv. 70 mg/dL anders kan klinken dan een "dit is
  *   nu gevaarlijk"-melding bij bv. 55 mg/dL).
  * - HIGH / URGENT_HIGH: zelfde idee, maar dan BG boven een drempel.
  * - PREDICTIVE_LOW / PREDICTIVE_HIGH: twee losse voorspellende alarmen
- *   (RONDE 106b, op verzoek: "de predict low en predictive high moeten
- *   echter wel afzonderlijk ingesteld kunnen worden" — was in RONDE 106
- *   nog één gezamenlijk PREDICTIVE-type dat beide richtingen bewaakte,
- *   maar dat liet geen eigen voorlooptijd/geluid per richting toe). Elk
- *   gebruikt een lineaire trendextrapolatie om te waarschuwen VOORDAT een
+ *   (RONDE 106b — afzonderlijk instelbaar; in RONDE 106 nog één
+ *   gezamenlijk PREDICTIVE-type dat beide richtingen bewaakte, maar dat
+ *   liet geen eigen voorlooptijd/geluid per richting toe). Elk gebruikt
+ *   een lineaire trendextrapolatie om te waarschuwen VOORDAT een
  *   ingestelde streefwaarde bereikt wordt, met een eigen instelbare
  *   voorlooptijd.
- *   RONDE 108 (op verzoek: "Kun je de predictive alarms nog zo zetten dat
- *   daar een Bg waarde wordt ingevoerd ipv de koppeling aan low en high
- *   dat geeft meer vrijheid") — heeft dus sinds deze ronde een EIGEN,
- *   onafhankelijke drempelwaarde ([defaultThresholdMgdl] hieronder), NIET
- *   meer gekoppeld aan de eigen drempels van de LOW/HIGH-alarmen (dat was
- *   de RONDE-106b-opzet). Zo kan bv. Predictive Low op 90 mg/dL gezet worden
- *   als vroege waarschuwing, terwijl het eigenlijke Low-alarm zelf pas bij
- *   70 afgaat — twee volledig onafhankelijke instellingen, precies de
- *   gevraagde extra vrijheid. Voor alle zes drempel-/voorspellende typen
+ *   RONDE 108 — heeft sinds deze ronde een EIGEN, onafhankelijke
+ *   drempelwaarde ([defaultThresholdMgdl] hieronder), NIET meer gekoppeld
+ *   aan de eigen drempels van de LOW/HIGH-alarmen (dat was de RONDE-106b-
+ *   opzet). Zo kan bv. Predictive Low op 90 mg/dL gezet worden als vroege
+ *   waarschuwing, terwijl het eigenlijke Low-alarm zelf pas bij 70 afgaat
+ *   — twee volledig onafhankelijke instellingen, extra vrijheid t.o.v. de
+ *   oude gekoppelde opzet. Voor alle zes drempel-/voorspellende typen
  *   geldt hetzelfde: [defaultThresholdMgdl] is puur een startwaarde, vrij
  *   aan te passen, zonder enige koppeling tussen de types onderling.
  * - STALE_DATA: geen alarm op de BG-waarde zelf, maar op het UITBLIJVEN
- *   van een verse meting — expliciet apart gevraagd ("een staledata alarm
- *   is inderdaad goed om te hebben").
+ *   van een verse meting.
  *
  * Elk type heeft z'n EIGEN aan/uit-stand, drempel/voorlooptijd (waar van
  * toepassing), geluid en trilinstelling — zie AppSettings.kt's "Alarmen"-
  * sectie voor de opslag (globaal, niet per-slot: het AAPS-actieve slot
- * bewaakt de alarmen zoals eerder bevestigd, maar de gevarengrenzen zelf
- * zijn een voorkeur van de gebruiker, geen eigenschap van een fysieke
- * sensor — zelfde redenering als displayUnit, zie ui/Units.kt).
+ * bewaakt de alarmen, maar de gevarengrenzen zelf zijn een voorkeur van de
+ * gebruiker, geen eigenschap van een fysieke sensor — zelfde redenering
+ * als displayUnit, zie ui/Units.kt).
  *
- * Geluid — RONDE 106b, op verzoek ("ik wil echter per alarmsoort een eigen
- * geluid kunnen kiezen uit de geluiden op de telefoon (zoals je ook een
- * ringtone voor de telefoon kunt kiezen) dan moet er per alarm gekozen
- * kunnen worden of het alarm direct klinkt of dat het langzaam opbouwt
- * (daarbij hoeft de opbouw tempo niet instelbaar te zijn)") — dit is nu
- * TWEE onafhankelijke instellingen per type i.p.v. het oude, gekoppelde
- * "Urgent"/"Gentle"-profiel uit RONDE 106:
+ * Geluid — RONDE 106b: per alarmsoort een eigen geluid kiezen uit de
+ * geluiden op de telefoon (zoals een ringtone), en per alarm kiezen of het
+ * direct klinkt of langzaam opbouwt (opbouwtempo zelf niet instelbaar).
+ * Dit is nu TWEE onafhankelijke instellingen per type i.p.v. het oude,
+ * gekoppelde "Urgent"/"Gentle"-profiel uit RONDE 106:
  * 1. Een GELUIDSBESTAND, gekozen via Android's eigen ringtone-kiezer
  *    (RingtoneManager.ACTION_RINGTONE_PICKER — precies zoals je een
  *    beltoon voor de telefoon kiest), opgeslagen als URI-string. `null` =
  *    geen keuze gemaakt, dan geldt het systeem-standaardalarmgeluid.
  * 2. [AlarmEscalation]: direct op volle sterkte, of langzaam opbouwend.
- *    Het opbouwtempo zelf is bewust NIET instelbaar (letterlijk verzoek).
+ *    Het opbouwtempo zelf is bewust NIET instelbaar.
  * Beide zijn nu voor ELK type onafhankelijk te kiezen — geen vaste
  * koppeling meer tussen "welk type" en "welk geluidsgedrag" zoals in
  * RONDE 106 (toen bepaalde het type zelf al of het Urgent of Gentle was).
@@ -172,12 +163,12 @@ enum class AlarmEscalation(val displayName: String) {
 }
 
 /**
- * 13/08/2026 (editor, RONDE 107b, op verzoek: "ik wil per alarm kunnen
- * kiezen tussen alarm of vibrate of both [...] de vibrator knop die nu
- * overal onderaan staat vervangen door alarm - vibrate - both knop") —
- * vervangt de losse `alarmVibrationEnabled`-schakelaar (Ronde 106/107, een
- * simpele aan/uit náást het altijd-aan-verondersteld geluid) door één
- * 3-standen-keuze per type: alleen geluid, alleen trilling, of beide. Zie
+ * 13/08/2026 (editor, RONDE 107b) — per alarm instelbaar tussen alarm,
+ * vibrate of both, ter vervanging van de losse vibratie-knop die voorheen
+ * onderaan elk alarm stond. Vervangt de losse `alarmVibrationEnabled`-
+ * schakelaar (Ronde 106/107, een simpele aan/uit náást het altijd-aan-
+ * verondersteld geluid) door één 3-standen-keuze per type: alleen geluid,
+ * alleen trilling, of beide. Zie
  * AlarmSoundPlayer.kt's `start()`: [SOUND] slaat het opzetten van de
  * Vibrator helemaal over, [VIBRATE] slaat MediaPlayer helemaal over — geen
  * van beide draait dus onnodig als de gebruiker 'm niet wil. Default

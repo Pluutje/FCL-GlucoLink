@@ -47,8 +47,8 @@ import kotlinx.coroutines.launch
  * FCLGlucoLink — het volledige-scherm-alarmscherm (RONDE 107)
  * ============================================================================
  *
- * 13/08/2026 (editor, RONDE 107, op verzoek: "de alarmen moeten gestopt en
- * gesnoozed kunnen worden") — geopend via AlarmController.kt's full-screen-
+ * 13/08/2026 (editor, RONDE 107) — laat alarmen stoppen en snoozen; geopend
+ * via AlarmController.kt's full-screen-
  * notificatie (`setFullScreenIntent`), niet als gewone in-app-navigatie —
  * een EIGEN Activity (niet een scherm binnen FclGlucoLinkNavHost) juist
  * omdat dit ook moet kunnen verschijnen als de app niet op de voorgrond

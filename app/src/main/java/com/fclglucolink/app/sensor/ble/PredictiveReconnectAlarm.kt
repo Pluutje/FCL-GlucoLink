@@ -14,8 +14,8 @@ import kotlinx.coroutines.CompletableDeferred
  * FCLGlucoLink — voorspellende herverbind-wekker (ronde 36)
  * ============================================================================
  *
- * 04/08/2026 (editor, ronde 36 — op verzoek, na de vraag "wat doet juggluco
- * dan anders") — decompile van Juggluco's `AirGattCallback.onConnectionStateChange()`
+ * 04/08/2026 (editor, ronde 36 — na de vraag wat Juggluco anders doet) —
+ * decompile van Juggluco's `AirGattCallback.onConnectionStateChange()`
  * (dex-variant, de bevestigde CareSens Air/Sibionics-klasse) liet twee paden
  * zien voor het inplannen van de volgende scan na een disconnect:
  *

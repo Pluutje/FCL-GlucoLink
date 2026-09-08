@@ -5,23 +5,19 @@ import kotlin.math.exp
 import kotlin.math.sqrt
 
 /**
- * RONDE 160 — Bg-voorspelling voor het komende uur, op verzoek ("is dat ik
- * graag een voorspelling van de Bg wil zien waar die het komende uur naar
- * toe kan gaan ... 2 lijnen duidelijk afwijkend van de echte Bg grafiek
- * vanaf het laatste punt door te tekenen waarbinnen de Bg het komende uur
- * naar alle waarschijnlijkheid gaat bewegen ... twee lijnen naar rechts
- * getekend die van uit de oorsprong dus divergeren", zie README voor het
- * volledige citaat). Sensor-agnostisch (werkt identiek voor elk
+ * RONDE 160 — Bg-voorspelling voor het komende uur: een band die vanaf het
+ * laatste meetpunt naar rechts divergeert en het waarschijnlijke
+ * bewegingsbereik van de Bg voor het komende uur toont (zie README voor de
+ * volledige aanleiding). Sensor-agnostisch (werkt identiek voor elk
  * SensorType/elke slot, wordt door zowel GlucoseChart als DualGlucoseChart
  * gebruikt) en bewust ONAFHANKELIJK van MPAndroidChart — puur wiskunde op
  * de bestaande [GlucoseReading]-lijst; de UI-laag (GlucoseChart.kt) zet de
  * uitkomst pas om in Entry's/LineDataSets.
  *
  * Aanpak (uitgelegd omdat hier geen kant-en-klare standaardformule voor
- * bestaat — de gebruiker liet de precieze methode expliciet aan mij over:
- * "De hoeveelheid historische data die nodig is laat ik aan jou over je
- * moet gewoon zo veel gebruiken om tot een redelijk betrouwbare
- * voorspelling te komen"):
+ * bestaat — de precieze methode, inclusief hoeveel historische data
+ * gebruikt wordt om tot een redelijk betrouwbare voorspelling te komen, is
+ * hier zelf bepaald):
  *
  * 1. Trend (richtingscoëfficiënt) via lineaire regressie (kleinste-
  *    kwadraten) over een recent historisch venster ([HISTORY_WINDOW_MINUTES]
@@ -33,12 +29,12 @@ import kotlin.math.sqrt
  *    doorgetrokken (die loopt door meetruis vrijwel nooit exact door het
  *    laatste échte punt — dat zou een zichtbare "sprong" geven op het
  *    overgangspunt). In plaats daarvan: de regressie-HELLING (mg/dL per
- *    minuut) toegepast VANAF de laatste echte meting — dat is letterlijk
- *    de gevraagde "vanaf het laatste punt door te tekenen".
+ *    minuut) toegepast VANAF de laatste echte meting, zodat de band
+ *    daadwerkelijk vanaf het laatste punt begint.
  *
- *    29/08/2026 (editor, RONDE 161, live-melding na het testen van v174:
- *    "op basis van de buigpunten en afvlakking moet dat ook beter kunnen")
- *    — de helling wordt niet meer de volle 60 minuten lang ONVERANDERD
+ *    29/08/2026 (editor, RONDE 161, live-melding na het testen van v174 dat
+ *    de lijn op basis van buigpunten en afvlakking beter kon) — de helling
+ *    wordt niet meer de volle 60 minuten lang ONVERANDERD
  *    doorgetrokken (dat zou een kortstondige, snelle stijging/daling
  *    onrealistisch een vol uur laten doorlopen, tot ver buiten wat een BG-
  *    curve in de praktijk doet — een stijging vlakt vrijwel altijd af).
@@ -48,20 +44,18 @@ import kotlin.math.sqrt
  *    kleine t (t << tau) gedraagt dit zich vrijwel identiek aan de rechte
  *    lijn van hiervoor (het buigpunt is nog niet bereikt); naarmate t tau
  *    nadert, vlakt de lijn zichtbaar af naar een horizontale asymptoot
- *    (`slope * tau`) — precies het gevraagde "buigpunt + afvlakking",
+ *    (`slope * tau`) — het gevraagde buigpunt-plus-afvlakking-gedrag,
  *    zonder dat er een tweede, apart geschat "hoeveel vlakt het af"-getal
  *    nodig is (tau doet beide tegelijk).
  * 3. De onder-/bovengrens groeien uit elkaar (divergeren) LINEAIR met de
  *    verstreken tijd. Op t=0 is de marge exact 0 — de band begint als één
- *    punt, precies op de laatste meting ("vanuit de oorsprong ...
- *    divergeren"), en waaiert daarna uit.
+ *    punt, precies op de laatste meting, en waaiert daarna uit.
  *
  *    29/08/2026 (editor, RONDE 161, live-melding met screenshots na het
- *    testen van v174: "de voorspellingen tonen 2 lijnen, maar die liggen nu
- *    zover uit elkaar dat het geen voorspelling meer is maar een 100%
- *    zekerheid [...] Zeker de eerste 15 minuten moet het veel dichter bij
- *    elkaar komen [...] een lineaire minimum en maximum voorspelling al veel
- *    beter met een kleinere marge") — dit was voorheen een groei evenredig
+ *    testen van v174 dat de twee lijnen te ver uit elkaar lagen — meer een
+ *    100%-zekerheidsband dan een voorspelling, zeker in de eerste 15
+ *    minuten, met het voorstel voor een lineaire minimum/maximum-voorspelling
+ *    met een kleinere marge) — dit was voorheen een groei evenredig
  *    met de WORTEL van de tijd (√t, de statistisch "juiste" vorm voor een
  *    random walk, zie de oorspronkelijke RONDE-160-redenering hieronder bij
  *    punt 4). Het probleem daarmee, zichtbaar in de meegestuurde
@@ -70,8 +64,8 @@ import kotlin.math.sqrt
  *    marge-groei tot een uur (√15 / √60 = 0,5) al "verbruikt", precies
  *    tegenovergesteld aan wat hier gevraagd is. Vervangen door een gewone
  *    lineaire groei (marge evenredig met t, dus op 15 min nog maar een kwart
- *    van de marge op 60 min) — eenvoudiger, en doet precies wat gevraagd is:
- *    "een lineaire minimum en maximum voorspelling". De statistische
+ *    van de marge op 60 min) — eenvoudiger, en precies de gevraagde lineaire
+ *    minimum/maximum-voorspelling. De statistische
  *    zuiverheid van √t is hier minder belangrijk dan dat de band aanvoelt
  *    als een voorspelling met toenemende onzekerheid, niet als een tweede
  *    paar harde randen die de curve meteen al lijkt te claimen.
@@ -84,9 +78,9 @@ import kotlin.math.sqrt
  *    toevallig heel gladde recente data. [MARGIN_SCALE] is (RONDE 161) fors
  *    verlaagd t.o.v. de oorspronkelijke waarde — zie de kdoc daar.
  *
- *    29/08/2026 (editor, RONDE 162 — op verzoek, na een backtest tegen een
- *    echte FCLvNext-log met bekende afloop: "voer ze allebei maar door",
- *    zie de kdoc bij [LONG_TERM_VOLATILITY_WEIGHT] voor de volledige
+ *    29/08/2026 (editor, RONDE 162 — na een backtest tegen een
+ *    echte FCLvNext-log met bekende afloop, beide voorgestelde aanpassingen
+ *    tegelijk doorgevoerd — zie de kdoc bij [LONG_TERM_VOLATILITY_WEIGHT] voor de volledige
  *    backtest-redenering) — de RONDE-161-marge bleek in die backtest een
  *    structureel te lage dekking te geven (~19% van de gecontroleerde
  *    toekomstpunten viel binnen de band): tijdens een rustige periode is de
@@ -110,8 +104,8 @@ data class GlucosePredictionPoint(
     val upperMgdl: Float
 )
 
-/** 1 uur vooruit — expliciet bevestigd door de gebruiker ("1 uur vooruit
- *  is voldoende veel verder is toch te onbetrouwbaar"). */
+/** 1 uur vooruit — voldoende horizon, verder vooruit wordt de voorspelling
+ *  te onbetrouwbaar om nog nuttig te zijn. */
 const val PREDICTION_HORIZON_MINUTES = 60f
 
 /** Stapgrootte tussen berekende punten — 5 minuten sluit aan bij de

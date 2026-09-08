@@ -89,9 +89,9 @@ class MainActivity : ComponentActivity() {
                         // uitzondering toe (vereist altijd een tik van de
                         // gebruiker op het systeemscherm).
                         //
-                        // 02/08/2026 (editor, na live-test — "als het scherm
-                        // op zwart gaat dat fclglucolink gaat lopen
-                        // vertragen") — was: prompt precies ÉÉN keer ooit,
+                        // 02/08/2026 (editor, na live-test dat FCLGlucoLink
+                        // ging vertragen zodra het scherm uitging) — was:
+                        // prompt precies ÉÉN keer ooit,
                         // daarna nooit meer gecontroleerd. Sommige
                         // toestelmerken (Samsung/Xiaomi/Huawei, zie
                         // BleConnectionService.kt) trekken een eerder

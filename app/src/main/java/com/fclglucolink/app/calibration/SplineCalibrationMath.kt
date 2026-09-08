@@ -10,17 +10,17 @@ import kotlin.math.sqrt
  * FCLGlucoLink — spline-kalibratie-wiskunde (ronde 43, 110)
  * ============================================================================
  *
- * 05/08/2026 (editor, RONDE 43) — LETTERLIJKE poort van de door de gebruiker
- * aangeleverde AAPS-broncode `SplineCalibrationMath.kt` (monotone cubic
- * Hermite-spline met laag/hoog-segmentsplitsing). AAPS's `CAL`-model
- * vervangen door de lokale `CalibrationEntry`, verder ongewijzigd inclusief
- * alle constantes en de veiligheidsvloer-blend bij extrapolatie.
+ * 05/08/2026 (editor, RONDE 43) — LETTERLIJKE poort van de aangeleverde
+ * AAPS-broncode `SplineCalibrationMath.kt` (monotone cubic Hermite-spline
+ * met laag/hoog-segmentsplitsing). AAPS's `CAL`-model vervangen door de
+ * lokale `CalibrationEntry`, verder ongewijzigd inclusief alle constantes
+ * en de veiligheidsvloer-blend bij extrapolatie.
  *
- * 16/08/2026 (editor, RONDE 110, op verzoek: "de spline calibratie curve
- * heeft bij sommige combinaties de neiging om rond de 5 tot 7 mmol een rare
- * buiging te krijgen. hij zou eigenlijk een lineair onderstuk en bovenstuk
- * moeten krijgen wat met 1 vloeiend verloop in elkaar overgaat") — de
- * originele opzet hierboven IS conceptueel al precies dit (lineair onder
+ * 16/08/2026 (editor, RONDE 110, na een melding dat de spline-kalibratie-
+ * curve bij sommige combinaties rond de 5-7 mmol een rare buiging kreeg,
+ * terwijl het onder- en bovenstuk eigenlijk lineair zouden moeten zijn met
+ * één vloeiende overgang ertussen) — de originele opzet hierboven IS
+ * conceptueel al precies dit (lineair onder
  * [cx_low], lineair boven [cx_high], één Hermite-stuk ertussen), maar
  * [cx_low]/[cx_high] waren tot deze ronde de RUWE, datazwevende gewogen
  * centroids van elk segment — als een gebruiker's lage en hoge

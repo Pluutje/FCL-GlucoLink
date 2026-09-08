@@ -22,8 +22,8 @@ interface GlucoseReadingDao {
     // als type-gefilterde varianten voor de per-slot-tabs.
     //
     // 28/08/2026 (editor, RONDE 153, VERWIJDERD — CRITIEKE FIX na live-
-    // melding: twee gelijktijdig gekoppelde CareSens Air-sensoren "lijken
-    // weer samen te vloeien") — deze `sensorType`-gefilterde queries
+    // melding dat twee gelijktijdig gekoppelde CareSens Air-sensoren weer
+    // door elkaar liepen) — deze `sensorType`-gefilterde queries
     // (`recentReadingsForSensorType`/`latestReadingForSensorType`) waren de
     // eigenlijke OORZAAK van die bug: `sensorType` alleen is GEEN
     // betrouwbare slot-discriminator zodra beide slots hetzelfde sensortype
@@ -46,26 +46,19 @@ interface GlucoseReadingDao {
     @Query("DELETE FROM glucose_readings WHERE timestampMs < :beforeMs")
     suspend fun deleteOlderThan(beforeMs: Long)
 
-    /** 02/08/2026 (editor, na live-test — "de oude waarden van de virtuele
-     *  sensor die daarvoor draaide" bleven zichtbaar in de grafiek, door
-     *  elkaar met de echte CareSens Air-historie) — metingen worden nergens
-     *  naar sensor-type getagd opgeslagen, dus bij het wisselen van sensor
-     *  (bv. simulator -> echte sensor) bleven oude metingen van de vorige
-     *  sensor gewoon staan en werden ze samen met de nieuwe, echte historie
-     *  getoond.
+    /** 02/08/2026 (editor, na live-test) — oude metingen van een vorige
+     *  sensor (bv. simulator) bleven zichtbaar door elkaar met de nieuwe,
+     *  echte historie, omdat metingen nergens naar sensor-type getagd
+     *  opgeslagen werden.
      *
-     *  02/08/2026 (editor, controlevraag van de gebruiker: "bij een normale
-     *  sensor wissel heeft de nieuwe sensor amper historische data ... hij
-     *  zou dan alleen de data uit het geheugen moeten wissen vanaf het
-     *  tijdstip van de eerste nieuwe sensor waarde, zodat de historie wel
-     *  zichtbaar blijft") — een eerdere versie van deze fix wiste bij ELKE
-     *  sensorwissel meteen de VOLLEDIGE tabel (zie git-geschiedenis/README:
-     *  `deleteAll()`), wat ook bij een gewone vervanging van dezelfde
-     *  sensor (bv. oude CareSens Air -> nieuwe CareSens Air) de nog geldige
-     *  recente historie van de oude sensor wegveegde en een lege grafiek
-     *  gaf tot de nieuwe sensor zijn eerste meting aanleverde. Terecht
-     *  bezwaar: correct in plaats daarvan is pas wissen VANAF het moment
-     *  van de eerste nieuwe meting (aangeroepen door
+     *  02/08/2026 (editor, na controlevraag) — een eerdere versie van deze
+     *  fix wiste bij ELKE sensorwissel meteen de VOLLEDIGE tabel (zie
+     *  git-geschiedenis/README: `deleteAll()`), wat ook bij een gewone
+     *  vervanging van dezelfde sensor (bv. oude CareSens Air -> nieuwe
+     *  CareSens Air) de nog geldige recente historie van de oude sensor
+     *  wegveegde en een lege grafiek gaf tot de nieuwe sensor zijn eerste
+     *  meting aanleverde. Correct in plaats daarvan is pas wissen VANAF het
+     *  moment van de eerste nieuwe meting (aangeroepen door
      *  BleConnectionService.kt zodra de eerste meting van een nieuw
      *  gestarte driver-sessie binnenkomt) — dat behoudt de oude,
      *  chronologisch eerdere historie (naadloze aansluiting in de

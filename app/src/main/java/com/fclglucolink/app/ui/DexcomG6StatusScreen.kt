@@ -58,17 +58,17 @@ import kotlin.math.roundToInt
  * FCLGlucoLink — Dexcom G6-specifiek status-/beheerscherm
  * ============================================================================
  *
- * 09/08/2026 (editor, RONDE 64, op verzoek — "Ieder sensor type krijgt dan
- * zijn eigen specifiek status/koppen/wissel scherm [...] bij de dexcom g6
- * dus ook om een andere transmitter te koppelen") — vervangt het G6-deel van
+ * 09/08/2026 (editor, RONDE 64, op verzoek om elk sensortype zijn eigen
+ * status-/koppel-/wisselscherm te geven, inclusief bij de G6 de optie om
+ * een andere transmitter te koppelen) — vervangt het G6-deel van
  * het vroegere, gedeelde SensorManagementScreen.kt (nu vervallen — zie
  * FclGlucoLinkNavHost.kt's kdoc voor het volledige herstructureringsverhaal).
  * Twee acties die bewust HIER staan en nergens anders:
  *  - "Switch transmitter" — een ANDERE fysieke transmitter koppelen (nieuwe
  *    ID intypen, zie DexcomG6SetupScreen.kt). Dit concept bestaat NIET bij
  *    CareSens Air (zie CareSensAirStatusScreen.kt) — vandaar dat dit niet
- *    langer op een gedeeld scherm stond, precies de eerdere klacht ("bij de
- *    caresens is helemaal geen sprake van een losse transmitter").
+ *    langer op een gedeeld scherm stond, precies de eerdere constatering dat
+ *    CareSens Air geen losse transmitter kent.
  *  - "Start new sensor" — een NIEUWE FYSIEKE SENSOR op de AL gekoppelde
  *    transmitter starten (zie DexcomG6NewSensorScreen.kt) — een apart
  *    concept van "switch transmitter" hierboven.
@@ -95,9 +95,9 @@ fun DexcomG6StatusScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val settings = remember { AppSettings(context) }
-    // 09/08/2026 (editor, RONDE 70, op verzoek — "misschien is het handig
-    // om toch een stop sensor knop te maken die een stop signaal zend [...]
-    // dan de transmitter verwijderen 5 minuten wachten en weer opstarten")
+    // 09/08/2026 (editor, RONDE 70, op verzoek voor een aparte stop-sensor-
+    // knop die een stopsignaal stuurt, i.p.v. de transmitter te verwijderen,
+    // 5 minuten te wachten en opnieuw te starten)
     // — zie de kdoc bij het nieuwe DEXCOM_G6_PENDING_STOP_SENSOR_ONLY-
     // vlaggetje (AppSettings.kt) en het bijbehorende handling-blok in
     // DexcomG6Driver.kt's runControlSequence(): dit knop-alleen (géén nieuwe
@@ -136,9 +136,9 @@ fun DexcomG6StatusScreen(
     // deze parameter: onderscheidt "bezig met automatisch stoppen" van het
     // generieke "Sending sensor start…".
     val lastAutoStopAtMs by settings.dexcomG6LastAutoStopAtMs(slot).collectAsState(initial = null)
-    // 22/08/2026 (editor, RONDE 124, op verzoek — "als de starttijd niet
-    // terug komt uit de transmitter dan moeten we gewoon de starttijd [...]
-    // van het invoeren van de sensorcode gebruiken") — zie
+    // 22/08/2026 (editor, RONDE 124, op verzoek om bij het ontbreken van een
+    // starttijd uit de transmitter terug te vallen op de invoertijd van de
+    // sensorcode) — zie
     // AppSettings.setDexcomG6PendingNewSensorCode()'s kdoc: alleen gebruikt
     // als WEERGAVE-terugvaloptie hieronder bij startedText/endText, nooit
     // voor de warmup-aftelling/het inloopfilter (die blijven uitsluitend op
@@ -204,11 +204,10 @@ fun DexcomG6StatusScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 09/08/2026 (editor, RONDE 69, op verzoek — "de weergave is nu
-            // niet mooi [...] alle info netjes in een tabel [...] eerst de
-            // sensor info [...] en dan daaronder netjes uitgelijnd de
-            // transmitter info [...] niet op 1 regel maar netjes in
-            // tabelvorm") — VOLLEDIGE herschrijving t.o.v. ronde 64-68: was
+            // 09/08/2026 (editor, RONDE 69, op verzoek om de weergave netjes
+            // in tabelvorm te tonen — eerst de sensorinfo, daaronder netjes
+            // uitgelijnd de transmitterinfo, i.p.v. op losse regels) —
+            // VOLLEDIGE herschrijving t.o.v. ronde 64-68: was
             // de gedeelde SensorInfoBlock (StatusScreen.kt, ook door
             // CareSens Air gebruikt) + twee losse prose-Text-regels erna
             // ("Transmitter ID: ..." en de "Type: ... · Sensor life: ... ·
@@ -241,8 +240,8 @@ fun DexcomG6StatusScreen(
             // "Started" = settings.dexcomG6SessionStartConfirmedAtMs (ronde
             // 65's kdoc) — TOT ronde 121 alleen gezet als de app zelf een
             // bevestigde SessionStart ontving. 22/08/2026 (editor, RONDE
-            // 121, op verzoek — "of uit de transmitter ook het start
-            // tijdstip valt af te leiden") — DexcomG6Driver.kt's
+            // 121, op verzoek om ook het starttijdstip uit de transmitter
+            // zelf af te leiden) — DexcomG6Driver.kt's
             // runControlSequence() vult dit veld nu OOK via een
             // onafhankelijke TransmitterTime-aanvraag (opcode 0x24/0x25) als
             // dit veld nog leeg is, ONGEACHT of onze eigen SessionStart ooit
@@ -263,9 +262,35 @@ fun DexcomG6StatusScreen(
             // (of enige andere aanvraag) achterhaald worden — alleen de
             // TIJD, niet de CODE.
             //
-            // 22/08/2026 (editor, RONDE 124, op verzoek — "als de starttijd
-            // niet terug komt uit de transmitter dan moeten we gewoon de
-            // starttijd [...] van het invoeren van de sensorcode gebruiken")
+            // 08/09/2026 (editor, RONDE 173, op verzoek na live-melding dat
+            // de sensorcode van de oude sensor nog getoond werd terwijl er
+            // al een nieuwe code ingevoerd was, wat tijdens het starten voor
+            // twijfel zorgde of de juiste code wel ingevoerd was) — tot
+            // nu toe stond hier ALTIJD [lastConfirmedSensorCode], ook terwijl
+            // een NIEUWE code al klaarstaat maar nog niet bevestigd is (zie
+            // [pendingSensorStartCode], exact hetzelfde veld dat de
+            // "Started"-rij hierboven al als terugval gebruikt) — de gebruiker
+            // zag dus de code van de VORIGE sensor terwijl de zojuist
+            // ingevoerde nieuwe code nergens te controleren was. [pendingCode]
+            // hieronder geeft nu voorrang aan die nieuwe, nog-onbevestigde
+            // code (zelfde "(unconfirmed)"-label als "Started" gebruikt),
+            // valt pas terug op [lastConfirmedSensorCode] zodra er geen
+            // pending code meer is (bevestigd, of er is nooit een nieuwe
+            // ingevoerd) — zie DexcomG6Driver.kt's kdoc bij de
+            // sessionStart-succesafhandeling: pendingCode wordt daar pas
+            // gewist NADAT lastConfirmedSensorCode al gezet is, dus dit
+            // schakelt naadloos over zonder ooit een lege "—" ertussen te
+            // tonen.
+            val pendingCode = pendingSensorStartCode
+            val codeText = if (pendingCode != null) {
+                "$pendingCode (unconfirmed)"
+            } else {
+                lastConfirmedSensorCode ?: "—"
+            }
+            //
+            // 22/08/2026 (editor, RONDE 124, op verzoek om bij het ontbreken
+            // van een starttijd uit de transmitter terug te vallen op de
+            // invoertijd van de sensorcode)
             // — [effectiveStartedAtMs]: ontbreekt een ECHTE (transmitter-
             // bevestigde) starttijd, maar staat er nog een nieuwe-sensor-
             // code klaar te wachten, val dan terug op het moment waarop die
@@ -295,7 +320,7 @@ fun DexcomG6StatusScreen(
                 rows = listOf(
                     "Started" to startedText,
                     "End (est.)" to endText,
-                    "Code" to (lastConfirmedSensorCode ?: "—")
+                    "Code" to codeText
                 )
             )
 
@@ -328,9 +353,9 @@ fun DexcomG6StatusScreen(
             // ook in de UI als "nog niet bekend", i.p.v. een verwarrende
             // "0m" te tonen tijdens het venster vóór de volgende requery.
             //
-            // 09/08/2026 (editor, RONDE 74, op verzoek — "als die [warmupSeconds]
-            // niet uit de transmitter komt dan moet hij bij een anubis gewoon
-            // 30 minuten pakken en anders 1 uur") — wanneer de transmitter zelf
+            // 09/08/2026 (editor, RONDE 74, op verzoek om bij het ontbreken
+            // van een echte warmupSeconds-waarde bij Anubis 30 minuten aan te
+            // houden en anders 1 uur) — wanneer de transmitter zelf
             // geen bruikbare waarde geeft, valt dit terug op de gebruiker-
             // gekozen schatting (dexcomG6FallbackWarmupSeconds(), zie die kdoc
             // voor de achtergrond) i.p.v. altijd "—" te tonen — duidelijk
@@ -367,19 +392,17 @@ fun DexcomG6StatusScreen(
                 )
             )
 
-            // 24/08/2026 (editor, RONDE 125, op verzoek: "Als de sensor
-            // echter een g6 met Anubis is dan zou er een extra veld getoond
-            // moeten worden waarin de verwachte looptijd [...] die dan bij
-            // de start datum op moeten tellen om de fictieve eind tijd te
-            // bepalen") — alleen zichtbaar wanneer deze slot's transmitter
+            // 24/08/2026 (editor, RONDE 125, op verzoek om bij een G6 met
+            // Anubis een extra veld te tonen voor de verwachte looptijd, op
+            // te tellen bij de startdatum om een fictieve einddatum te
+            // bepalen) — alleen zichtbaar wanneer deze slot's transmitter
             // als Anubis herkend is (voor Original is het transmitter-eigen
             // "Sensor life" hierboven al betrouwbaar, dus geen extra invoer
             // nodig). Gebruikt door BleConnectionService.kt's
             // computeBreakOutDecayFactor() om de fictieve einddatum voor de
             // uitloop-demping te bepalen — zie AppSettings.
-            // dexcomG6ExpectedLifespanDays()'s kdoc. Range 7-30 dagen: de
-            // gebruiker noemde zelf 14 (eigen praktijk) en 20+ (andere
-            // gebruikers) als voorbeelden.
+            // dexcomG6ExpectedLifespanDays()'s kdoc. Range 7-30 dagen: 14
+            // dagen als gangbare praktijkwaarde, 20+ voor langere looptijden.
             if (transmitterType == DexcomG6TransmitterType.ANUBIS) {
                 Text(
                     "Expected sensor lifespan",
@@ -429,8 +452,8 @@ fun DexcomG6StatusScreen(
             // gebruiker die zeker wil weten dat de sensor daadwerkelijk
             // gestopt is vóórdat ze de transmitter fysiek loskoppelen.
             //
-            // 22/08/2026 (editor, RONDE 121, op verzoek — "of de stop knop
-            // niet gewoon minder opvallend kan") — sinds deze ronde stopt
+            // 22/08/2026 (editor, RONDE 121, op verzoek om de stop-knop
+            // minder opvallend te maken) — sinds deze ronde stopt
             // "Start new sensor" zelf al automatisch een nog lopende sessie
             // (zie DexcomG6Driver.kt's runControlSequence()-kdoc), dus deze
             // losstaande knop is alleen nog nodig voor het uitzonderlijke
@@ -470,8 +493,9 @@ fun DexcomG6StatusScreen(
     // voorspellende herverbind-cooldown laten wachten voor iets waar de
     // gebruiker expliciet NU op zit te wachten.
     //
-    // 09/08/2026 (editor, RONDE 72, na live-test — "bij drukken op stop
-    // sensor geeft hij direct in beeld 'sending sensor start'") — root
+    // 09/08/2026 (editor, RONDE 72, na live-test die liet zien dat het
+    // indrukken van "Stop sensor" direct weer "Sending sensor start" in
+    // beeld bracht) — root
     // cause: `dexcomG6StatusText()` toont "Sending sensor start…" met de
     // HOOGSTE prioriteit zodra `pendingSensorStartCode` non-null is —
     // ONGEACHT wat "Stop sensor" zelf doet. Als er (zoals hier) nog een
@@ -535,12 +559,11 @@ fun DexcomG6StatusScreen(
  * herstructurering: StatusScreen hoeft niet te weten WELKE velden voor G6
  * relevant zijn, dat weet alleen dit bestand.
  *
- * 09/08/2026 (editor, RONDE 65, op verzoek — "die spanning is niet
- * interessant en no connection wil ik ook niet zien. Wat hij moet tonen is
- * 'last connected: '. Wat ik van xdrip gewend ben is dat hij [...] toont bij
- * status 'sending sensor start' [...] tot hij de volgende connectie heeft
- * gehad en dan staat er sensor started en de resterende warmup time word
- * zichtbaar") — VOLLEDIGE herschrijving t.o.v. ronde 64's versie, die nog
+ * 09/08/2026 (editor, RONDE 65, op verzoek om de batterijspanning en "no
+ * connection" niet meer te tonen, en in plaats daarvan "last connected"
+ * te tonen, net als xDrip: "sending sensor start" tot de volgende
+ * connectie, waarna "sensor started" met de resterende warmup-tijd
+ * zichtbaar wordt) — VOLLEDIGE herschrijving t.o.v. ronde 64's versie, die nog
  * rechtstreeks ConnectionState.Error's ruwe boodschap doorgaf (dat leverde
  * "No connection for 0m." op, zie DexcomG6Driver.
  * updateConnectionStatusAfterDisconnect()'s kdoc — gezet na ELKE disconnect,
@@ -567,9 +590,9 @@ fun DexcomG6StatusScreen(
  *     rechtstreekse ConnectionState.Error-tekst — die staat hier bewust
  *     nergens meer in.
  *
- * 09/08/2026 (editor, RONDE 66, op verzoek — "je geeft aan dat hij een
- * warmup van 2h heeft [...] voor een anubis transmitter [...] klopt dat
- * niet") — VOLLEDIGE herschrijving van de opwarmlogica t.o.v. ronde 65: was
+ * 09/08/2026 (editor, RONDE 66, op verzoek na de constatering dat de
+ * getoonde warmup van 2h niet klopt voor een Anubis-transmitter) —
+ * VOLLEDIGE herschrijving van de opwarmlogica t.o.v. ronde 65: was
  * een vaste `G6_WARMUP_DURATION_MS = 2h`-aanname die voor een gemodificeerde
  * transmitter (bijv. Anubis, ~50 min warmup) domweg fout is. Nu: het
  * transmitter-gerapporteerde CalibrationState-byte bepaalt OF er opgewarmd
@@ -586,28 +609,27 @@ fun dexcomG6StatusText(
     lastCalibrationStateRaw: Int?,
     warmupSeconds: Int?,
     nowMs: Long,
-    // 09/08/2026 (editor, RONDE 71, na live-test — "Sending sensor start"
-    // bleef 10+ minuten onveranderd staan zonder enige aanwijzing dat er
-    // iets mis was) — zie DexcomG6Driver.kt's runControlSequence()/
+    // 09/08/2026 (editor, RONDE 71, na live-test waarbij "Sending sensor
+    // start" 10+ minuten onveranderd bleef staan zonder enige aanwijzing
+    // dat er iets mis was) — zie DexcomG6Driver.kt's runControlSequence()/
     // Keys.DEXCOM_G6_SESSION_START_FAIL_COUNT's kdoc: nu een herkenbare
     // hertry-loop mét zichtbare mislukkingen, i.p.v. een eeuwig identieke
     // "Sending sensor start…" die niet laat zien dat er al meerdere keren
     // geprobeerd én mislukt is. Default 0 houdt bestaande aanroepen
     // (StatusScreen.kt) werkend zonder de param verplicht door te geven.
     sessionStartFailCount: Int = 0,
-    // 09/08/2026 (editor, RONDE 74, op verzoek — "Wat ik wel wil hebben bij
-    // de opstart info bij de status zodat ik weet hoelang ik nog moet
-    // wachten voor ik data krijg [...] als die [warmupSeconds] niet uit de
-    // transmitter komt dan moet hij [...] gewoon 30/60 minuten pakken") —
+    // 09/08/2026 (editor, RONDE 74, op verzoek om bij de opstartinfo te
+    // tonen hoelang er nog gewacht moet worden op data, met een fallback van
+    // 30/60 minuten als de transmitter geen warmupSeconds teruggeeft) —
     // nodig om, wanneer de transmitter zelf geen `warmupSeconds` teruggeeft,
     // de gebruiker-gekozen fallback-opwarmtijd te kunnen berekenen (zie
     // dexcomG6FallbackWarmupSeconds() in DexcomG6CalibrationState.kt).
     // Default `null` houdt bestaande aanroepen werkend (dan simpelweg geen
     // fallback-schatting mogelijk, exact het oude gedrag).
     typicalSensorDays: Int? = null,
-    // 22/08/2026 (editor, RONDE 120, op verzoek — "kun je kijken wat er fout
-    // gaat en dan bij de status in ieder ook wat meer info tonen [...] het
-    // is nu een beetje een blackbox") — drie nieuwe, optionele parameters
+    // 22/08/2026 (editor, RONDE 120, op verzoek om uit te zoeken wat er
+    // misgaat en bij de status meer info te tonen, in plaats van de tot dan
+    // toe vrij ondoorzichtige weergave) — drie nieuwe, optionele parameters
     // (default `null` houdt StatusScreen.kt's/CareSensAirStatusScreen.kt's
     // bestaande aanroepen werkend):
     //  - [lastSessionStartInfoCode]: de RAUWE infoCode van de laatst
@@ -620,9 +642,9 @@ fun dexcomG6StatusText(
     //    glucosewaarde (StatusScreen.kt's GlucoseReadingStore, sensortype
     //    DEXCOM_G6) — als die NA de laatste startpoging binnenkwam, loopt de
     //    transmitter kennelijk gewoon door met metingen ondanks de
-    //    vastgelopen "Sensor start"-poging (precies de live-melding "er komt
-    //    data binnen terwijl hij nog sending sensor start toont") — dat is
-    //    geen tegenstrijdigheid in de app, maar een kenmerk van deze
+    //    vastgelopen "Sensor start"-poging (precies de live-melding dat er
+    //    data binnenkwam terwijl de status nog "sending sensor start"
+    //    toonde) — dat is geen tegenstrijdigheid in de app, maar een kenmerk van deze
     //    transmitter die z'n eigen sessie kennelijk niet (volledig) opgeeft
     //    ondanks de stop/start-commando's; expliciet benoemen i.p.v. de
     //    gebruiker te laten gissen.
@@ -649,8 +671,8 @@ fun dexcomG6StatusText(
     // mmol/L-sprong ~8 min na start), terwijl de gebruiker nog steeds wil
     // weten hoelang de veiligheidsmarge nog loopt.
     //
-    // 04/09/2026 (editor, RONDE 166, op verzoek: "altijd minimaal 30
-    // minuten") — was hier `effectiveWarmupSeconds` (de transmitter's eigen
+    // 04/09/2026 (editor, RONDE 166, op verzoek om altijd minimaal 30
+    // minuten aan te houden) — was hier `effectiveWarmupSeconds` (de transmitter's eigen
     // warmupSeconds, of anders een Anubis/Original-afhankelijke 30/60-min-
     // schatting via dexcomG6FallbackWarmupSeconds()). Die aftelling klopte
     // niet meer met DexcomG6Driver.kt's eigen gate (handleGlucoseResult()),
@@ -749,10 +771,9 @@ fun dexcomG6StatusText(
 }
 
 /**
- * 09/08/2026 (editor, RONDE 69, op verzoek — "de weergave is nu niet mooi
- * [...] netjes in een tabel [...] type (en dan alleen Anubis of Original
- * vermelden en geen volzin) [...] maar niet op 1 regel maar netjes in
- * tabelvorm") — vervangt ronde 67's `dexcomG6TransmitterCapabilityText()`
+ * 09/08/2026 (editor, RONDE 69, op verzoek om de weergave netjes in
+ * tabelvorm te tonen — het type als kort label (Anubis/Original) i.p.v.
+ * een volzin, niet op 1 regel) — vervangt ronde 67's `dexcomG6TransmitterCapabilityText()`
  * (één samengestelde prose-regel). Simpele, herbruikbare label/waarde-tabel
  * — zelfde Card-stijl als de generieke `SensorInfoBlock` (StatusScreen.kt),
  * maar dit bestand bouwt 'm zelf op i.p.v. dat gedeelde component te

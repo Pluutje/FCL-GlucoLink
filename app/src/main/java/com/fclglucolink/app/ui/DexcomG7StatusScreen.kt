@@ -40,10 +40,9 @@ import java.util.Locale
  * FCLGlucoLink — Dexcom G7/ONE+-specifiek status-/beheerscherm
  * ============================================================================
  *
- * 27/08/2026 (editor, RONDE 129, op verzoek — "Wat we in ieder geval alvast
- * kunnen doen is een status scherm maken vergelijkbaar met de g6 maar dan
- * niet met losse transmitter en losse sensor" plus een meegestuurde
- * screenshot van xDrip+'s "Systeem status"-scherm als bron voor welke
+ * 27/08/2026 (editor, RONDE 129, op verzoek voor een statusscherm
+ * vergelijkbaar met de G6, maar zonder losse transmitter en losse sensor,
+ * met een meegestuurde screenshot van xDrip+'s "Systeem status"-scherm als bron voor welke
  * velden zinvol zijn) — vóór deze ronde had G7 GEEN eigen statusscherm:
  * `FclGlucoLinkNavHost.kt`'s `statusRouteFor()` viel voor G7 terug op de
  * generieke `PairingScreen` (een device-ZOEKSCHERM), wat bij een tik op
@@ -56,13 +55,12 @@ import java.util.Locale
  * onderscheid tussen "transmitter" en "sensor" — het is één wegwerpbaar
  * geheel, expliciet zo gevraagd.
  *
- * 27/08/2026 (editor, RONDE 130, op verzoek na een live-test van v142 —
- * "Wat niet goed is is dat hij tranmitter heet op het status scherm, dat
- * moet sensor worden [...] op het status scherm staat trouwens saved ipv de
- * code zelf dit is niet handig [...] dan is er nergens een knop om hem weer
- * in te voeren [...] Ook de disconnect knop werkt maar vervolgens kun je
- * niet weer connecten [...] het lijkt me handiger dat er een streepje staat
- * tot hij ingevuld is dan dat hij niet zichtbaar is") — vijf gerichte
+ * 27/08/2026 (editor, RONDE 130, op verzoek na een live-test van v142 met
+ * vijf punten: het label "Transmitter" moest "Sensor" worden, de "Pairing
+ * code"-rij toonde "Saved" i.p.v. de echte code zonder een manier om die
+ * opnieuw in te voeren, de disconnect-knop liet geen weg terug naar
+ * reconnecten zien, en een streepje-placeholder werd geprefereerd boven een
+ * onzichtbare rij) — vijf gerichte
  * wijzigingen t.o.v. Ronde 129:
  * 1. "Transmitter" -> "Sensor" (titel van de tweede kaart).
  * 2. De "Pairing code"-rij toont nu de WERKELIJKE code (of "—"), niet meer
@@ -87,17 +85,16 @@ import java.util.Locale
  *    lopen — de knop navigeert meteen weg van dit scherm.
  * 5. Extra rijen (Sensor Status, Brain State, Firmware Version, Battery
  *    Last queried, Transmitter Days, Voltage A, Voltage B) toegevoegd als
- *    "—"-placeholders, EXPLICIET op verzoek ("het lijkt me handiger dat er
- *    een streepje staat tot hij ingevuld is dan dat hij niet zichtbaar
- *    is") — dit vervangt Ronde 129's bewuste keuze om deze rijen helemaal
+ *    "—"-placeholders, EXPLICIET op verzoek (een streepje-placeholder werd
+ *    geprefereerd boven een onzichtbare rij) — dit vervangt Ronde 129's bewuste keuze om deze rijen helemaal
  *    weg te laten. Onze eigen `DexcomG7Driver.kt` doet nog GEEN batterij-/
  *    firmware-/brain-state-uitvraag (zie die klasse se kdoc, "NIET GEPORT");
  *    zodra dat ooit toegevoegd wordt, hoeven alleen de databronnen van deze
  *    rijen aangepast te worden (nu allemaal hardcoded "—"), niet de rij-
  *    structuur zelf.
  *
- * 28/08/2026 (editor, RONDE 150, op verzoek — "geeft hij dan ook de data
- * als batterij en firmware version terug zoals xdrip ook netjes doet") —
+ * 28/08/2026 (editor, RONDE 150, op verzoek om ook batterij- en firmware-
+ * data terug te geven, net als xDrip netjes doet) —
  * punt 5 hierboven gedeeltelijk ingelost: "Firmware version", "Battery
  * last queried", "Voltage A" en "Voltage B" komen nu uit
  * AppSettings.dexcomG7BatteryInfo(slot)/dexcomG7FirmwareInfo(slot), gevuld
@@ -179,8 +176,8 @@ fun DexcomG7StatusScreen(
     } ?: "—"
     val lastBgIsRejected = lastRawGlucose?.accepted == false
 
-    // 29/08/2026 (editor, RONDE 159, op verzoek — "Ik wil hier in principe
-    // alle info getoond kunnen hebben die de sensor zelf terug geeft") —
+    // 29/08/2026 (editor, RONDE 159, op verzoek om hier in principe alle
+    // info te tonen die de sensor zelf teruggeeft) —
     // "—" overal waar het veld niet in het ontvangen antwoord aanwezig was
     // (-1/""), zelfde conventie als de rest van dit scherm.
     val transmitterStatusText = lastRawGlucose?.transmitterStatusText?.takeIf { it.isNotBlank() } ?: "—"

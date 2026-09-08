@@ -19,25 +19,21 @@ import kotlinx.coroutines.flow.StateFlow
  */
 enum class SensorType(val displayName: String, val implemented: Boolean) {
     CARESENS_AIR("CareSens Air", implemented = true),
-    // 17/08/2026 (editor, RONDE 112, op verzoek: "code zover in orde brengen
-    // dat zodra ik er eentje krijg ik gelijk kan beginnen met testen") —
-    // `implemented = true` vóór de eerste live-test tegen een echte sensor,
-    // exact zoals bij DEXCOM_G6 destijds (zie dat commentaar hieronder en
-    // DexcomG6Driver.kt's eigen kdoc: "nog niet tegen een echte G6-
-    // transmitter geverifieerd — verwacht bijstellen na de eerste live-
-    // test"). Zie sensor/dexcomg7/DexcomG7Driver.kt voor de volledige
-    // implementatie en wat daar bewust nog niet in zit.
+    // 17/08/2026 (editor, RONDE 112) — `implemented = true` vóór de eerste
+    // live-test tegen een echte sensor, exact zoals bij DEXCOM_G6 destijds
+    // (zie dat commentaar hieronder en DexcomG6Driver.kt's eigen kdoc: nog
+    // niet tegen een echte G6-transmitter geverifieerd op dat moment,
+    // bijgesteld na de eerste live-test). Zie sensor/dexcomg7/
+    // DexcomG7Driver.kt voor de volledige implementatie en wat daar bewust
+    // nog niet in zit.
     DEXCOM_G7("Dexcom G7 / ONE+", implemented = true),
     ACCUCHEK_SMARTGUIDE("Accu-Chek SmartGuide", implemented = false),
-    // 08/08/2026 (editor, RONDE 55) — G6 stond hier tot vandaag bewust NIET
-    // in (zie git-geschiedenis: "Juggluco heeft er zelf ook geen
-    // ondersteuning voor, en editor's G6-voorraad faseert vanzelf uit").
-    // Dat is achterhaald: de gebruiker heeft BYODA (een gemodificeerde
-    // Dexcom-app, transmitter loopt door na 10 dagen) en de volledige
-    // xDrip+-broncode aangeleverd als referentie ("dat heb ik eigenlijk
-    // altijd gebruikt en was gewoon 99,9% stabiel") en expliciet gevraagd
-    // om te bouwen. Zie sensor/dexcomg6/DexcomG6Driver.kt's kdoc voor de
-    // fase-1-scope.
+    // 08/08/2026 (editor, RONDE 55) — G6 stond hier tot vandaag bewust niet
+    // in, omdat Juggluco er zelf ook geen ondersteuning voor heeft. Dat is
+    // achterhaald: de gebruiker gebruikt BYODA (een gemodificeerde Dexcom-
+    // app, transmitter loopt door na 10 dagen) en leverde de volledige
+    // xDrip+-broncode aan als referentie, met de vraag dit te bouwen. Zie
+    // sensor/dexcomg6/DexcomG6Driver.kt's kdoc voor de fase-1-scope.
     DEXCOM_G6("Dexcom G6", implemented = true),
 
     // 30/07/2026 (editor) — GEEN echte sensor: laat je handmatig of via een
@@ -52,14 +48,13 @@ enum class SensorType(val displayName: String, val implemented: Boolean) {
 }
 
 /**
- * 10/08/2026 (editor, RONDE 79 — start van de 2-sensoren-architectuur, op
- * verzoek: "ik wil graag verder met de koppeling van 2 sensoren binnen de
- * app") — twee onafhankelijke, gelijktijdig verbonden sensor-"plekken".
- * Bewust generiek (A/B, geen "CARESENS_SLOT"/"G6_SLOT") zodat elke slot elk
+ * 10/08/2026 (editor, RONDE 79 — start van de 2-sensoren-architectuur) —
+ * twee onafhankelijke, gelijktijdig verbonden sensor-"plekken". Bewust
+ * generiek (A/B, geen "CARESENS_SLOT"/"G6_SLOT") zodat elke slot elk
  * [SensorType] kan bevatten, inclusief twee keer HETZELFDE type (bv. twee
- * G6-transmitters tegelijk tijdens een sensor-wissel-overlap, op
- * uitdrukkelijk verzoek: "gedurende de laatste dagen van de lopende G6
- * alvast een nieuwe kan starten die dan stabiel kan worden"). Slot A/B
+ * G6-transmitters tegelijk tijdens een sensor-wissel-overlap, zodat
+ * gedurende de laatste dagen van een lopende G6 al een nieuwe gestart kan
+ * worden die dan stabiel kan worden voordat de oude stopt). Slot A/B
  * hebben verder geen betekenisverschil — welke van de twee naar AAPS zendt
  * is een aparte, wisselbare keuze (zie AppSettings.aapsActiveSlot), niet aan
  * de slot zelf gekoppeld. [suffix] is de DataStore-sleutel-suffix

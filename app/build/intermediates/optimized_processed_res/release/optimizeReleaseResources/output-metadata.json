@@ -11,8 +11,8 @@
       "type": "SINGLE",
       "filters": [],
       "attributes": [],
-      "versionCode": 183,
-      "versionName": "0.9.84-whats-new-and-manual-refresh",
+      "versionCode": 186,
+      "versionName": "0.9.87-broadcast-trend-sync-and-g6-code-display-fix",
       "outputFile": "resources-release-optimize.ap_"
     }
   ],

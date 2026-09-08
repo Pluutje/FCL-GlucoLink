@@ -8,10 +8,9 @@ import androidx.room.PrimaryKey
  * FCLGlucoLink — sensor-wisselmoment (voor het icoontje op de BG-grafiek)
  * ============================================================================
  *
- * 09/08/2026 (editor, RONDE 64, op verzoek: "handig om er een sensor wissel
- * icoontje op de grafiek bij het wissel moment bij te plaatsen wat dan bv
- * binnen het zelfde sensor type minder opvallend van kleur is en bij een
- * sensortype wissel een wat opvallende kleur heeft") — één rij per moment
+ * 09/08/2026 (editor, RONDE 64) — een wisselmoment-icoontje op de BG-grafiek,
+ * subtiel van kleur bij een wissel binnen hetzelfde sensortype en opvallender
+ * bij een sensortype-wissel. Eén rij per moment
  * waarop de EERSTE meting van een nieuwe sensor-sessie binnenkwam (zelfde
  * moment als GlucoseReadingStore.trimFrom() al gebruikt, zie
  * BleConnectionService.kt's `firstReadingThisSession`-blok). [crossType]
@@ -33,8 +32,7 @@ import androidx.room.PrimaryKey
  * nu toe GEEN sensorType/slot-kolom, dus was er letterlijk niets om op te
  * filteren: elke marker was zichtbaar op ELK tabblad. Precies de bekende,
  * bewust-uitgestelde onvolkomenheid uit RONDE 79's kdoc bij
- * StatusScreen.kt's `switchEvents`-lezing ("bewust niet in deze ronde
- * opgelost") — nu wél. [sensorType] is nullable (net als
+ * StatusScreen.kt's `switchEvents`-lezing — nu wél opgelost. [sensorType] is nullable (net als
  * CalibrationEntryEntity.kt's gelijknamige veld, zelfde migratie-redenering:
  * `ALTER TABLE ... ADD COLUMN` i.p.v. destructive migration, bestaande rijen
  * van vóór deze update blijven simpelweg `null` en verschijnen daardoor

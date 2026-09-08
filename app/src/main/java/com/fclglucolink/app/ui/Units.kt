@@ -6,10 +6,10 @@ package com.fclglucolink.app.ui
  * werkt zelf altijd in mmol/L (zie alle FCLvNext-schermen/-logs) — dus de UI
  * rekent puur voor WEERGAVE om, nooit voor de broadcast zelf.
  *
- * 13/08/2026 (editor, RONDE 104 — Fase 1 van 2, op verzoek: "een mg/dl vs
- * mmol/l knop [...] intern hoeft er dan niks te veranderen maar in de ui
- * zou da weer gegeven Bg waarden dan moeten kunnen veranderen") — tot deze
- * ronde was de hele UI hardcoded mmol/L, verspreid over zo'n 6 losse
+ * 13/08/2026 (editor, RONDE 104 — Fase 1 van 2, op verzoek voor een mg/dL-
+ * vs-mmol/L-toggle die alleen de weergegeven BG-waarden beïnvloedt zonder
+ * dat er intern iets hoeft te veranderen) — tot deze ronde was de hele UI
+ * hardcoded mmol/L, verspreid over zo'n 6 losse
  * schermen (`formatMmol()` had geen mg/dL-tegenhanger, nergens werd een
  * voorkeur gelezen). [GlucoseUnit] + de onderstaande [formatForDisplay]/
  * [Double.parseFromDisplayUnit] zijn nu de ENE centrale plek die weet hoe een

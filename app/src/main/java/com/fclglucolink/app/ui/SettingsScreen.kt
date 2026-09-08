@@ -56,9 +56,9 @@ import kotlinx.coroutines.launch
  * op SensorManagementScreen.kt, geopend via de sensorkaart op het
  * statusscherm). Geopend via het ⋮-menu rechtsboven op het statusscherm.
  *
- * 06/08/2026 (editor, RONDE 53, op verzoek: "ik wil graag de 'about' knop
- * ergens anders [...] beter om het onder het laatste hoofdstuk te zetten
- * in de manual en dus niet meer bij de setting") — de link naar het
+ * 06/08/2026 (editor, RONDE 53, op verzoek om de "about"-knop elders te
+ * plaatsen, bij voorkeur onder het laatste hoofdstuk in de manual en niet
+ * meer bij de settings) — de link naar het
  * About-scherm die hier onderaan stond is verplaatst naar de laatste
  * pagina van de handleiding (ManualTopic.BEST_RESULTS, zie
  * ManualScreen.kt's kdoc) — dit scherm heeft dus geen `onOpenAbout`-
@@ -95,25 +95,24 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit) {
     // 18/08/2026 (editor, RONDE 114) — zie SmoothingStrength's kdoc in
     // KalmanSmoother.kt.
     val smoothingStrength by settings.smoothingStrength.collectAsState(initial = SmoothingStrength.MEDIUM)
-    // 17/08/2026 (editor, RONDE 111, op verzoek: "een (instelbare filtering
-    // mogelijk die de eerste 2 dagen iets heftiger filtert en dan langzaam
-    // afbouwt gedurende de loop tijd [...] dalingen zijn in mijn ogen dus
-    // minder van belang") — zie smoothing/KalmanSmoother.kt's kdoc (het
+    // 17/08/2026 (editor, RONDE 111, op verzoek voor een instelbare filtering
+    // die de eerste 2 dagen iets heftiger filtert en dan langzaam afbouwt
+    // gedurende de looptijd, met minder gewicht voor dalingen) — zie smoothing/KalmanSmoother.kt's kdoc (het
     // asymmetrische, alleen-bij-stijgingen "break-in filter") en
     // BleConnectionService.kt's computeBreakInDecayFactor() voor hoe deze
     // twee waarden uiteindelijk worden toegepast.
     val breakInFilterEnabled by settings.breakInFilterEnabled.collectAsState(initial = false)
     val breakInFilterDurationHours by settings.breakInFilterDurationHours.collectAsState(initial = 24.0)
-    // 24/08/2026 (editor, RONDE 125, op verzoek: "een breakout filter wat
-    // eigenlijk precies omgekeerd werkt tov de breakin" — na CareSens
+    // 24/08/2026 (editor, RONDE 125, op verzoek voor een breakout-filter dat
+    // precies omgekeerd werkt t.o.v. het break-in-filter — na CareSens
     // Air-meldingen dat sensoren de laatste dagen van hun looptijd weer
     // instabiel worden) — zie smoothing/KalmanSmoother.kt's klasse-kdoc
     // (RONDE-125-paragraaf) en BleConnectionService.kt's
     // computeBreakOutDecayFactor() voor het volledige mechanisme.
     val breakOutFilterEnabled by settings.breakOutFilterEnabled.collectAsState(initial = false)
     val breakOutFilterDurationHours by settings.breakOutFilterDurationHours.collectAsState(initial = 48.0)
-    // 18/08/2026 (editor, RONDE 113, op verzoek: "toon gefilterde data op
-    // hoofdscherm") — zie AppSettings.kt's kdoc bij Keys.
+    // 18/08/2026 (editor, RONDE 113, op verzoek om gefilterde data op het
+    // hoofdscherm te tonen) — zie AppSettings.kt's kdoc bij Keys.
     // SMOOTHING_SHOW_PIPELINE_ON_MAIN_SCREEN en StatusScreen.kt's
     // SlotStatusContent voor waar dit uiteindelijk gelezen wordt.
     val showFilteredPipelineOnMainScreen by settings.showFilteredPipelineOnMainScreen.collectAsState(initial = false)
@@ -132,8 +131,8 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit) {
             )
         }
     ) { padding ->
-        // 06/08/2026 (editor, RONDE 51, na live-melding: "de settings pagina
-        // scrollt niet waardoor de laatste regel niet leesbaar is") — deze
+        // 06/08/2026 (editor, RONDE 51, na live-melding dat de settingspagina
+        // niet scrolt waardoor de laatste regel niet leesbaar is) — deze
         // Column miste een `.verticalScroll(...)`, dus zodra de kaarten
         // samen hoger zijn dan het scherm (met de nieuwe Smoothing-kaart uit
         // ronde 49 erbij, plus de waarschuwingsregels uit ronde 50, was dat
@@ -159,9 +158,9 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit) {
                 ) {
                     Text("Connection", style = MaterialTheme.typography.titleMedium)
                     // 10/08/2026 (editor, RONDE 79 — 2-sensoren-architectuur,
-                    // op verzoek: "beide slots moeten kunnen zenden naar aaps
-                    // waarbij er uiteraard maar max 1 actief kan zijn, maar ze
-                    // moeten ook beiden uit kunnen") — vervangt de oude,
+                    // op verzoek dat beide slots naar AAPS moeten kunnen
+                    // zenden, met maximaal 1 actief tegelijk maar ook beide
+                    // uit) — vervangt de oude,
                     // enkelvoudige "Send BG to AAPS"-schakelaar door een
                     // 3-standen-kiezer: Slot A / Slot B / Off, nooit meer dan
                     // één tegelijk (SingleChoiceSegmentedButtonRow dwingt dat
@@ -202,12 +201,11 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit) {
 
                     HorizontalDivider()
 
-                    // 20/08/2026 (editor, RONDE 115, op verzoek: "een knop [...]
-                    // die bij ingeschakeld iedere sensor (ook de virtuele)
-                    // een universele code mee geeft die zowel in aaps 3 als
-                    // 4 werkt [...] en als hij is uitgeschakeld dan mag
-                    // gewoon de best kloppende omschrijving worden
-                    // meegestuurd") — zie XDripBroadcaster.kt's kdoc bij
+                    // 20/08/2026 (editor, RONDE 115, op verzoek voor een knop
+                    // die, indien ingeschakeld, elke sensor (ook virtuele)
+                    // een universele code meegeeft die zowel in AAPS 3 als 4
+                    // werkt, en anders gewoon de best passende omschrijving
+                    // meestuurt) — zie XDripBroadcaster.kt's kdoc bij
                     // sourceInfo() voor de volledige AAPS v3-vs-v4-analyse
                     // die tot "AAPS-Dexcom" als universele waarde leidde.
                     // Zelfde kopje/toelichting/switch-volgorde als de
@@ -240,10 +238,9 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit) {
                 }
             }
 
-            // 13/08/2026 (editor, RONDE 104, Fase 1, op verzoek: "een mg/dl vs
-            // mmol/l knop [...] intern hoeft er dan niks te veranderen maar in
-            // de ui zou da weer gegeven Bg waarden dan moeten kunnen
-            // veranderen") — zie ui/Units.kt's [GlucoseUnit]-kdoc voor de
+            // 13/08/2026 (editor, RONDE 104, Fase 1, op verzoek voor een
+            // mg/dL-vs-mmol/L-knop die alleen de UI-weergave van Bg-waarden
+            // omschakelt, zonder interne wijzigingen) — zie ui/Units.kt's [GlucoseUnit]-kdoc voor de
             // volledige achtergrond/scope van deze ronde.
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -278,11 +275,10 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit) {
                 }
             }
 
-            // 13/08/2026 (editor, RONDE 106, Fase 2 stap 1, op verzoek: "ik
-            // wil in ieder geval 1 overal knop om in 1 keer alle alarmen
-            // aan/uit te zetten [...] indien die is ingeschakeld dat dan de
-            // afzonderlijke alarmen kunnen worden ingesteld maar ook ieder
-            // afzonderlijk aan en uit kunnen") — bewust een KORT kaartje
+            // 13/08/2026 (editor, RONDE 106, Fase 2 stap 1, op verzoek voor
+            // één hoofdschakelaar om alle alarmen tegelijk aan/uit te
+            // zetten, met daaronder per alarm een eigen aan/uit-schakelaar
+            // en instellingen) — bewust een KORT kaartje
             // hier, alleen met een link naar het nieuwe, uitgebreide
             // AlarmSettingsScreen.kt — zelfde opzet als Calibration
             // hierboven (dat ook een eigen scherm heeft voor de details).
@@ -397,10 +393,10 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit) {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.secondary
                     )
-                    // 06/08/2026 (editor, RONDE 50, op verzoek: "duidelijk
-                    // vermeld [...] dat als de calibratie en/of smoothing is
-                    // ingeschakeld dat die dan in aaps moet worden
-                    // uitgeschakeld") — bewust in de errorkleur i.p.v. de
+                    // 06/08/2026 (editor, RONDE 50, op verzoek om duidelijk
+                    // te vermelden dat calibratie/smoothing in AAPS zelf
+                    // uitgeschakeld moet worden als deze functies hier aan
+                    // staan) — bewust in de errorkleur i.p.v. de
                     // gewone secondary-kleur hierboven, precies om dit
                     // regeltje visueel te laten opvallen tussen de rest van
                     // de (neutrale) uitleg. Dezelfde boodschap staat
@@ -428,10 +424,9 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit) {
                 }
             }
 
-            // 06/08/2026 (editor, RONDE 49, op verzoek: "de aan/uit knop
-            // daarvoor kan gewoon onder de drie puntjes komen") — de "aan/
-            // uit"-helft van de smoothing-functie, precies zoals de
-            // gebruiker vroeg: hier bij de rest van het ⋮-menu, in dezelfde
+            // 06/08/2026 (editor, RONDE 49, op verzoek om de aan/uit-knop
+            // gewoon onder het ⋮-menu te plaatsen) — de "aan/
+            // uit"-helft van de smoothing-functie, hier bij de rest van het ⋮-menu, in dezelfde
             // Card-stijl als de Calibration-schakelaar hierboven. Zet
             // AppSettings.smoothingEnabled; BleConnectionService past het
             // Kalman-filter alleen toe als dit aan staat (zie
@@ -478,10 +473,10 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit) {
                         )
                     }
 
-                    // 18/08/2026 (editor, RONDE 114, op verzoek: "wat we nu
-                    // nog niet hebben is een algemene filtering sterkte 3
-                    // keuze schakelaar. onder de enable smoothing die dan
-                    // indien enable uitgeschakeld ook grijs wordt") — zelfde
+                    // 18/08/2026 (editor, RONDE 114, op verzoek voor een
+                    // algemene 3-keuze filteringsterkte-schakelaar onder
+                    // "Enable smoothing", die meegrijst als smoothing
+                    // uitgeschakeld is) — zelfde
                     // SegmentedButton-opzet als AlarmSettingsScreen.kt's
                     // escalatie-/alert-keuzes. `enabled = smoothingEnabled`
                     // op elke SegmentedButton geeft Material3's automatische
@@ -495,12 +490,11 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit) {
                     // waardoor die tekst leek te horen bij "Filtering
                     // strength" i.p.v. bij "Break-in filter for new sensors"
                     // eronder — opgelost met een eigen toelichting + een
-                    // HorizontalDivider. 114c, op verzoek: "kan volgens mij
-                    // nog duidelijker als we de volgorde: Kopje (vet gedrukt),
-                    // uitleg en dan switch aanhouden [...] het komt ook door
-                    // de eerste woorden 'Filters noisy rise....' dat wekt de
-                    // indruk dat het ergens op slaat wat daarvoor al besproken
-                    // is" — de kern van het (herhaalde) probleem was dat
+                    // HorizontalDivider. 114c, op verzoek om de volgorde
+                    // kopje (vetgedrukt) -> uitleg -> switch consequent aan
+                    // te houden, omdat de openingswoorden van de uitleg
+                    // anders de indruk wekten bij het vorige blok te horen —
+                    // de kern van het (herhaalde) probleem was dat
                     // Break-in filter/Show-filtered-data hun toelichtende
                     // TEKST vóór hun eigen (vetgedrukte) kopje toonden i.p.v.
                     // erna, waardoor die tekst als vervolg op het VORIGE
@@ -544,10 +538,10 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit) {
 
                     HorizontalDivider()
 
-                    // 17/08/2026 (editor, RONDE 111, op verzoek: "Visueel bij
-                    // de settings zie ik het onder de knop 'enable smoothing'
-                    // in het zelfde kader en als smoothing uit staat beide
-                    // uitgegrijsd") — zelfde Card/Column als hierboven, dus
+                    // 17/08/2026 (editor, RONDE 111, op verzoek om dit
+                    // visueel onder "Enable smoothing" in hetzelfde kader te
+                    // plaatsen, en beide uit te grijzen als smoothing uit
+                    // staat) — zelfde Card/Column als hierboven, dus
                     // geen aparte Card. `enabled = smoothingEnabled` op de
                     // Switch geeft Material3's automatische uitgrijs-gedrag
                     // (zie AlarmSettingsScreen.kt's idioom); de labels/
@@ -612,11 +606,10 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit) {
 
                     HorizontalDivider()
 
-                    // 24/08/2026 (editor, RONDE 125, op verzoek: "een
-                    // breakout filter wat eigenlijk precies omgekeerd werkt
-                    // tov de breakin [...] boven op de basis (ongeacht welke
-                    // stand gekozen is) en even sterk als break in dus in
-                    // principe een omgekeerde kopie" — na CareSens Air-
+                    // 24/08/2026 (editor, RONDE 125, op verzoek voor een
+                    // breakout-filter dat precies omgekeerd werkt t.o.v. het
+                    // break-in-filter — bovenop de gekozen basisinstelling,
+                    // even sterk, in feite een omgekeerde kopie — na CareSens Air-
                     // meldingen dat sensoren de laatste dagen van hun
                     // looptijd weer instabiel worden) — zelfde
                     // kopje/toelichting/switch/duur-opzet als break-in
@@ -686,12 +679,10 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit) {
 
                     HorizontalDivider()
 
-                    // 18/08/2026 (editor, RONDE 113, op verzoek: "een extra
-                    // optie met 'toon gefilterde data op hoofdscherm' [...]
-                    // en het zichtbaar er van niet afhankelijk van het effect
-                    // te maken" + "Als iemand smoothing uitzet dan moet het
-                    // vinkje van het tonen ook gelijk grijs worden en moet
-                    // hij uiteraard niet getoond worden") — zelfde
+                    // 18/08/2026 (editor, RONDE 113, op verzoek voor een
+                    // extra optie "toon gefilterde data op hoofdscherm", die
+                    // meegrijst en uitgeschakeld wordt zodra smoothing uit
+                    // staat) — zelfde
                     // uitgrijs-idioom als de break-in-Switch hierboven:
                     // `enabled = smoothingEnabled` op de Switch zelf,
                     // handmatige alpha op het label ernaast. Bewust géén
@@ -728,14 +719,14 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit) {
                 }
             }
 
-            // 29/08/2026 (editor, RONDE 160, op verzoek: "een voorspelling
-            // van de Bg wil zien waar die het komende uur naar toe kan
-            // gaan [...] Aan/uit bij de settings is een goede aanvulling")
+            // 29/08/2026 (editor, RONDE 160, op verzoek voor een voorspelling
+            // van waar de Bg het komende uur naartoe kan gaan, met een
+            // aan/uit-schakelaar bij de settings als goede aanvulling)
             // — zelfde Card-/Switch-opzet als de Smoothing-schakelaar
             // hierboven. Geldt voor de grafiek op ELK per-slot-tabblad EN de
             // Combi-tab (zie GlucoseChart.kt/CombiScreen.kt) — één globale
-            // instelling, geen per-slot-keuze, want de gebruiker vroeg dit
-            // expliciet "voor de beide slots" tegelijk.
+            // instelling, geen per-slot-keuze, als aanvulling voor beide
+            // slots tegelijk.
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -771,9 +762,9 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit) {
                 }
             }
 
-            // 08/08/2026 (editor, RONDE 57, op verzoek: "is het ook mogelijk
-            // om in plaats van tik op opnieuw koppelen de app dat
-            // automatisch te laten doen") — geldt voor beide sensoren
+            // 08/08/2026 (editor, RONDE 57, op verzoek om, in plaats van
+            // handmatig opnieuw koppelen, de app dit automatisch te laten
+            // doen) — geldt voor beide sensoren
             // (CareSens Air + Dexcom G6), zie
             // sensor/ble/BondLossRecovery.kt's kdoc voor het volledige
             // verhaal, inclusief het OS-brede removeBond()-risico.
@@ -821,13 +812,12 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit) {
                 }
             }
 
-            // 29/08/2026 (editor, RONDE 164, op verzoek — "het kunnen kiezen
-            // van de virtuele sensor (en ook de andere) onder een expert
-            // modus te zetten. Bij de settings komt dan een knop 'expert
-            // modus' waarbij alle sensoren staan met een selectie vakje er
-            // achter die default op aan staan maar die je ook uit kunt
-            // zetten zodat als je in 1 van de slots kiest je alleen de
-            // ingestelde/geactiveerde sensoren ziet") — de "knop" is hier een
+            // 29/08/2026 (editor, RONDE 164, op verzoek om het kiezen van de
+            // virtuele sensor (en de andere) onder een expert-modus te
+            // zetten: een "expert modus"-knop bij de settings met alle
+            // sensoren en een selectievakje per stuk, standaard aan maar
+            // uitschakelbaar, zodat bij het kiezen per slot alleen de
+            // ingestelde/geactiveerde sensoren zichtbaar zijn) — de "knop" is hier een
             // in-/uitklap-schakelaar (i.p.v. een apart navigatiescherm, om
             // geen nieuwe route in FclGlucoLinkNavHost.kt nodig te hebben
             // voor iets dat verder gewoon bij de rest van de instellingen

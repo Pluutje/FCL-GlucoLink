@@ -90,8 +90,8 @@ import kotlin.math.roundToInt
  * FCLGlucoLink — kalibratiescherm (ronde 43)
  * ============================================================================
  *
- * 05/08/2026 (editor, RONDE 43 — op verzoek, "vergelijkbaar met het
- * screenshot" van AAPS's eigen spline-kalibratiescherm) — bewust GEEN
+ * 05/08/2026 (editor, RONDE 43 — op verzoek, vergelijkbaar met AAPS's eigen
+ * spline-kalibratiescherm) — bewust GEEN
  * ViewModel-laag (dit project gebruikt die nergens, zie SettingsScreen.kt/
  * SimulatorSetupScreen.kt: gewoon `remember`/`collectAsState`/`scope.launch`
  * rechtstreeks in de Composable) — en bewust ÉÉN scherm voor zowel lineair
@@ -168,8 +168,8 @@ fun CalibrationScreen(onBack: () -> Unit, slot: SensorSlot = SensorSlot.A) {
         sensorType?.let { calibrationStore.listEntries(it, sinceMs) } ?: flowOf(emptyList())
     }
     val listEntries by listEntriesFlow.collectAsState(initial = emptyList())
-    // 10/08/2026 (editor, RONDE 80, op verzoek na live-test — "die [offset]
-    // wordt dan gelijk bij zowel slot a als b gebruikt") — mode/offset zijn
+    // 10/08/2026 (editor, RONDE 80, op verzoek na live-test — de offset moet
+    // per slot gescheiden blijven i.p.v. gedeeld tussen slot A en B) — mode/offset zijn
     // nu per-slot (zie AppSettings.kt's kdoc), i.p.v. de oude globale
     // settings.calibrationMode/calibrationManualOffsetMmol properties.
     val mode by settings.calibrationMode(slot).collectAsState(initial = CalibrationMode.SPLINE)
@@ -186,14 +186,14 @@ fun CalibrationScreen(onBack: () -> Unit, slot: SensorSlot = SensorSlot.A) {
     // bewust NIET meeverandert. README Ronde 104/105 voor de volledige
     // scope-afweging.
     val displayUnit by settings.displayUnit.collectAsState(initial = GlucoseUnit.MMOL)
-    // 06/08/2026 (editor, RONDE 47, op verzoek: "als ik een calibratie
-    // toevoeg dat in het invul scherm alsvast de sensor waarde is
-    // ingevuld") — de actuele ruwe sensorwaarde, voor het invoerscherm
+    // 06/08/2026 (editor, RONDE 47, op verzoek om het invulscherm bij het
+    // toevoegen van een calibratie alvast met de actuele sensorwaarde voor
+    // te vullen) — de actuele ruwe sensorwaarde, voor het invoerscherm
     // hieronder. Zelfde `remember()`-reden als entriesFlow hierboven
     // (latestReading() is ook een functie-aanroep, geen property).
     //
-    // 10/08/2026 (editor, RONDE 80, BUGFIX na live-melding — "de delta was
-    // -0,3 en hij gaf aan 4,6") — was ONGEFILTERD (`readingStore.
+    // 10/08/2026 (editor, RONDE 80, BUGFIX na live-melding over een
+    // inconsistente delta/waarde-combinatie) — was ONGEFILTERD (`readingStore.
     // latestReading()`), dus de gecombineerde stream van BEIDE slots — zie
     // StatusScreen.kt's SlotStatusContent() kdoc voor de volledige uitleg
     // van dit type bug. Met Slot A (Dexcom, ~8,8 mmol/L) en Slot B
@@ -203,8 +203,8 @@ fun CalibrationScreen(onBack: () -> Unit, slot: SensorSlot = SensorSlot.A) {
     // hetzelfde mengsel — geen mg/dl-vs-mmol-eenheidsbug (CalibrationValidation.kt's
     // wiskunde is nagerekend en correct), gewoon twee sensoren door elkaar.
     //
-    // 10/08/2026 (editor, RONDE 81, tweede BUGFIX, live-melding — "als een
-    // slot op geen sensor wordt gezet" toonde dit scherm alsnog data) —
+    // 10/08/2026 (editor, RONDE 81, tweede BUGFIX, live-melding — als een
+    // slot op geen sensor stond ingesteld toonde dit scherm alsnog data) —
     // `sensorType = sensorType` loste de EERSTE fix hierboven op (twee
     // gekozen sensoren door elkaar), maar liet een tweede, verwante staart
     // over: als `sensorType` zelf `null` is (deze slot heeft nog GEEN sensor
@@ -262,10 +262,9 @@ fun CalibrationScreen(onBack: () -> Unit, slot: SensorSlot = SensorSlot.A) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                // 06/08/2026 (editor, RONDE 51, na live-melding: "de add
-                // calibration knop staat over de rij met vingerprik entries
-                // heen [...] die knop kan beter boven in achter de terug
-                // knop") — was een Scaffold-`floatingActionButton` (vast
+                // 06/08/2026 (editor, RONDE 51, na live-melding dat de add-
+                // calibration-knop over de rij met vingerprik-entries heen
+                // stond) — was een Scaffold-`floatingActionButton` (vast
                 // rechtsonder): de LazyColumn hieronder krijgt GEEN eigen
                 // padding om ruimte voor zo'n FAB vrij te houden, dus zodra
                 // de lijst lang genoeg was om de onderkant te raken, viel de
@@ -321,9 +320,9 @@ fun CalibrationScreen(onBack: () -> Unit, slot: SensorSlot = SensorSlot.A) {
                 ) { Text("Spline") }
             }
 
-            // 06/08/2026 (editor, RONDE 44, op verzoek: "de grafiek mag iets
-            // kleiner zodat de lijst met waarden eronder iets groter kan
-            // worden") — was 260.dp; nu 190.dp, samen met de nieuwe
+            // 06/08/2026 (editor, RONDE 44, op verzoek om de grafiek iets
+            // kleiner te maken zodat de lijst met waarden eronder iets groter
+            // kan worden) — was 260.dp; nu 190.dp, samen met de nieuwe
             // .weight(1f) hieronder op de LazyColumn (die er voorheen niet
             // was — zonder weight kreeg de lijst gewoon zoveel ruimte als
             // 'm content nodig had, niet de daadwerkelijk resterende ruimte,
@@ -358,9 +357,9 @@ fun CalibrationScreen(onBack: () -> Unit, slot: SensorSlot = SensorSlot.A) {
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 items(listEntries.reversed(), key = { it.id }) { entry ->
-                    // 06/08/2026 (editor, RONDE 44, op verzoek: "in de lijst
-                    // wil ik naast de stick en sensor waarde ook de
-                    // gekalibreerde waarde kunnen lezen") — dezelfde
+                    // 06/08/2026 (editor, RONDE 44, op verzoek om naast de
+                    // stick- en sensorwaarde ook de gekalibreerde waarde in
+                    // de lijst te tonen) — dezelfde
                     // curve-selectielogica als de grafiek hieronder
                     // (activeCalibratedMgdl(), gedeeld zodat de grafieklijn
                     // en deze kolom nooit uit elkaar kunnen lopen), toegepast
@@ -493,8 +492,8 @@ private fun StatusCard(
     linearFit: com.fclglucolink.app.calibration.CalibrationFit?,
     splineFit: SplineFit?,
     splineFailureReason: com.fclglucolink.app.calibration.SplineFailureReason?,
-    // 13/08/2026 (editor, RONDE 105, op verzoek: "de calibratie moet
-    // uiteraard ook de waarden op het scherm in mg/dl weergeven") — de
+    // 13/08/2026 (editor, RONDE 105, op verzoek om ook de kalibratiewaarden
+    // op het scherm in mg/dL weer te geven) — de
     // "knot at 6.0 mmol/L"-tekst is een vaste, niet-instelbare parameter van
     // SplineCalibrationMath.kt (het knikpunt van de spline-fit), maar de
     // MELDING zelf hoort net als al het andere op-het-scherm-getal de
@@ -663,10 +662,10 @@ private fun CalibrationEntryRow(
 }
 
 /**
- * 06/08/2026 (editor, RONDE 47, op verzoek: "ik wil als ik een calibratie
- * toevoeg dat in het invul scherm alsvast de sensor waarde is ingevuld en
- * dat ik met een plus min knop de waarde kan aanpassen naar de
- * vingerprikwaarde, dit om type fouten te voorkomen") — [initialMmol] (de
+ * 06/08/2026 (editor, RONDE 47, op verzoek om het invulscherm bij het
+ * toevoegen van een calibratie alvast met de sensorwaarde voor te vullen,
+ * met een plus/min-knop om die naar de vingerprikwaarde bij te stellen om
+ * typefouten te voorkomen) — [initialMmol] (de
  * actuele ruwe sensorwaarde, zie CalibrationScreen()'s FAB-onClick) staat
  * meteen in het veld, en de +/− knoppen tikken in stappen van 0,1 mmol/L
  * (dezelfde precisie als elders in de app, zie formatMmol()) naar de
@@ -678,8 +677,8 @@ private fun CalibrationEntryRow(
 @Composable
 private fun AddCalibrationDialog(
     initialMgdl: Double,
-    // 13/08/2026 (editor, RONDE 104, op verzoek: "de eenheidtoggle geldt ook
-    // voor alle invoervelden zoals vingerprik") — het veld toont/parseert nu
+    // 13/08/2026 (editor, RONDE 104, op verzoek om de eenheidtoggle ook te
+    // laten gelden voor invoervelden zoals vingerprik) — het veld toont/parseert nu
     // in de gekozen eenheid; intern werkt deze dialoog nog steeds in mg/dL
     // (net als de rest van de app na deze ronde), [onConfirm] levert dus nu
     // meteen mg/dL op i.p.v. het vroegere mmol/L + een aparte mmolToMgdl()-
@@ -787,12 +786,11 @@ private fun activeCalibratedMgdl(
  * waarden, geen tijd-as, dus geen van MPAndroidChart's tijd-as-voordelen
  * gelden hier).
  *
- * 06/08/2026 (editor, RONDE 44, op verzoek: "ik wil in de calibratie
- * grafiek ook de assen zien en raster lijnen [...] mogen de stippen in de
- * grafiek een verloop in kleur krijgen naar ouderdom, hoe ouder de waarde
- * hoe lager het gewicht in het mee tellen voor de calibratie [...] als ik
- * maar 1 dag calibreer en dan 14 dagen niet verloopt de grafiek uiteraard
- * niet omdat alles dan gelijkmatig ouder wordt") — drie toevoegingen:
+ * 06/08/2026 (editor, RONDE 44, op verzoek om in de kalibratiegrafiek ook
+ * assen en rasterlijnen te tonen, met stippen die qua kleur verlopen naar
+ * ouderdom (hoe ouder de waarde, hoe lager het gewicht in de kalibratie),
+ * zonder dat een enkele kalibratiesessie na verloop van tijd onderling uit
+ * elkaar gaat lopen doordat alles gelijkmatig ouder wordt) — drie toevoegingen:
  * (a) een dun kader + genummerde raster-/aslijnen (ronde mmol-stappen,
  * automatisch 1/2/4 afhankelijk van de spreiding) met tekstlabels via
  * nativeCanvas — de plot-inhoud (referentielijn/curve/punten) is nu
@@ -832,9 +830,9 @@ private fun CalibrationScatterChart(
     val axisTextColor = MaterialTheme.colorScheme.secondary
     val axisTextColorArgb = axisTextColor.toArgb()
     val frameColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
-    // 06/08/2026 (editor, RONDE 45, op verzoek: "alle meetellende punten
-    // dezelfde kleur krijgen [...] als ze ouder worden dan moeten ze
-    // langzaam vervagen (transparantie dus toenemen)") — was een lerp()
+    // 06/08/2026 (editor, RONDE 45, op verzoek om alle meetellende punten
+    // dezelfde kleur te geven en ze langzaam te laten vervagen naarmate ze
+    // ouder worden, i.p.v. te verkleuren) — was een lerp()
     // tussen twee losse Color-objecten (freshPointColor/oldPointColor);
     // functioneel bijna hetzelfde (beide waren dezelfde onSurface-kleur met
     // alleen een andere alpha, dus de lerp bleef al binnen dezelfde tint),

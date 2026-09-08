@@ -60,11 +60,9 @@ import kotlinx.coroutines.launch
  * in app/build.gradle.kts (sinds AGP 8 niet meer automatisch aan) — zie
  * daar.
  *
- * 04/09/2026 (editor, RONDE 165, op verzoek: "Ik kreeg het verzoek om te
- * onderzoeken of er in de app ook een mogelijkheid is om een melding te
- * krijgen als er een update beschikbaar is [...] Wat dan wel handig is als
- * de google drive link toch al in de app bekend is dat hij dan zelf op
- * verzoek kan updaten.") — nieuwe update-sectie onderaan: toont het laatst
+ * 04/09/2026 (editor, RONDE 165, op verzoek om een melding bij een
+ * beschikbare update, met automatisch updaten via de al bekende Google
+ * Drive-link) — nieuwe update-sectie onderaan: toont het laatst
  * bekende resultaat van de periodieke achtergrondcheck (zie
  * BleConnectionService.kt's kdoc + AppSettings.kt's
  * availableUpdateVersionCode e.a.), plus een "Check now" (handmatig,
@@ -74,11 +72,11 @@ import kotlinx.coroutines.launch
  * update/UpdateInstaller.kt's kdocs voor het volledige ontwerp
  * (bestandsnaam-gebaseerde detectie i.p.v. datum, nooit automatisch/stil).
  *
- * 05/09/2026 (editor, RONDE 170, op verzoek: "als er een update beschikbaar
- * is een 'whats new' knop [...] die zou dan per versie moeten tonen wat er
- * is veranderd [...] alles wat er is aangepast sinds de versie die
- * gebruikt is") — nieuwe "What's new"-knop, alleen zichtbaar naast "Update
- * now" (dus alleen als [updateAvailable]). Haalt bij het tikken
+ * 05/09/2026 (editor, RONDE 170, op verzoek om bij een beschikbare update
+ * ook een "What's new"-knop te tonen die per versie laat zien wat er is
+ * aangepast sinds de geïnstalleerde versie) — nieuwe "What's new"-knop,
+ * alleen zichtbaar naast "Update now" (dus alleen als [updateAvailable]).
+ * Haalt bij het tikken
  * WhatsNewChecker.kt's per-versie changelogs op (gefilterd op
  * `BuildConfig.VERSION_CODE`, dus altijd t.o.v. de HUIDIG geïnstalleerde
  * versie, nooit een apart bijgehouden "laatst geziene versie") en toont ze
