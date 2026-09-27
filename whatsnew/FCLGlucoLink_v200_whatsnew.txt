@@ -1,0 +1,1 @@
+Cleaned up the Dutch translation: fixed a recurring grammar slip, clarified a few confusing phrases, and split the longer Manual pages into shorter paragraphs for easier reading. No behavior changes.

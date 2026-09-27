@@ -1,0 +1,89 @@
+// FCLGlucoLink — Apps Script Web App voor het uploaden van diagnostische
+// logbestanden naar Google Drive, zelfde patroon als FCLvNext's
+// FCLvNext_CsvUpload_AppsScript.gs (JSON POST, shared secret, geen OAuth
+// aan de kant van de telefoon nodig — het script draait "Execute as: Me",
+// dus met JOUW eigen Drive-account/-quota).
+//
+// INSTALLATIE
+// 1. Ga naar https://script.google.com/ -> New project.
+// 2. Plak deze hele inhoud in Code.gs (verwijder de leeg-aangemaakte
+//    myFunction()-placeholder).
+// 3. Maak in je eigen Google Drive een NIEUWE map speciaal voor
+//    FCLGlucoLink-logs (los van de FCLvNext-CSV-map en los van de
+//    FCLGlucoLink-update-map) en kopieer het map-ID uit de share-link
+//    (het stuk na /folders/). Vul dat hieronder in bij UPLOAD_FOLDER_ID.
+// 4. Kies zelf een SHARED_SECRET (een willekeurige, niet te raden string —
+//    dit is geen echte authenticatie, puur een simpel wachtwoord zodat een
+//    geraden deploy-URL niet zomaar kan uploaden). Vul die hieronder in.
+// 5. Deploy -> New deployment -> Type: Web app.
+//    - Execute as: Me
+//    - Who has access: Anyone
+//    Kopieer de resulterende "/exec"-URL.
+// 6. Zet die URL en hetzelfde secret in FCLGlucoLink's eigen
+//    local.properties:
+//      fclLogUploadUrl=<de /exec-URL hierboven>
+//      fclLogUploadSecret=<hetzelfde secret als hieronder>
+//    (zie app/build.gradle.kts's kdoc bij DRIVE_LOG_UPLOAD_URL/SECRET).
+//
+// Bij een latere codewijziging aan dit script: Deploy -> Manage deployments
+// -> potloodje -> Version: New version -> Deploy (de /exec-URL blijft dan
+// hetzelfde, geen local.properties-wijziging nodig).
+
+var UPLOAD_FOLDER_ID = 'VUL_HIER_JE_NIEUWE_DRIVE_MAP_ID_IN';
+var SHARED_SECRET = 'VUL_HIER_ZELF_EEN_GEHEIM_IN';
+
+var DEVICE_ID_LENGTH = 6;
+
+function doPost(e) {
+  try {
+    var params = JSON.parse(e.postData.contents);
+
+    if (params.secret !== SHARED_SECRET) {
+      return jsonResponse({ ok: false, error: 'ongeldig secret' });
+    }
+    if (!params.logContent) {
+      return jsonResponse({ ok: false, error: 'geen logContent meegegeven' });
+    }
+
+    // Alleen letters/cijfers/_/- toestaan in het device-ID, voor een
+    // veilige bestandsnaam (geen pad-trucjes, geen rare tekens) — zelfde
+    // aanpak als FCLvNext's CSV-upload-script.
+    var fullDeviceId = String(params.deviceId || 'onbekend').replace(/[^a-zA-Z0-9_-]/g, '');
+    var shortId = fullDeviceId.substring(0, DEVICE_ID_LENGTH);
+
+    // Origineel logbestand heet al fclglucolink_yyyy-MM-dd.txt (één bestand
+    // per dag, zie DiagnosticFileLogger.kt) — die datum in de naam is al
+    // een prima unieke sleutel, dus GEEN eigen tijdstempel toevoegen zoals
+    // het CSV-script doet (dat had maar één "huidige toestand"-bestand per
+    // telefoon nodig; hier juist meerdere dag-logs naast elkaar bewaren).
+    // Alleen een veilige bestandsnaam afdwingen (geen pad-trucjes) en de
+    // deviceId ervoor zetten, zodat logs van meerdere telefoons in dezelfde
+    // map niet door elkaar lopen.
+    var originalName = String(params.fileName || 'log.txt').replace(/[^a-zA-Z0-9_.-]/g, '_');
+    var fileName = shortId + '_' + originalName;
+
+    var folder = DriveApp.getFolderById(UPLOAD_FOLDER_ID);
+
+    // Exact dezelfde bestandsnaam bestaat al (een eerdere upload van
+    // dezelfde dag, van dezelfde telefoon) -> vervangen i.p.v. laten
+    // opstapelen. Andere dagen (andere datum in de naam) blijven gewoon
+    // naast elkaar staan.
+    var existing = folder.getFilesByName(fileName);
+    while (existing.hasNext()) {
+      existing.next().setTrashed(true);
+    }
+
+    var blob = Utilities.newBlob(params.logContent, 'text/plain', fileName);
+    folder.createFile(blob);
+
+    return jsonResponse({ ok: true, fileName: fileName });
+  } catch (err) {
+    return jsonResponse({ ok: false, error: String(err) });
+  }
+}
+
+function jsonResponse(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}

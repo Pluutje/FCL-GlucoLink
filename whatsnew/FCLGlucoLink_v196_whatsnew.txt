@@ -1,0 +1,1 @@
+Made the Dexcom G7/ONE+ "Running" time more reliable: it no longer resets to 0 when you re-pair a sensor that's already been running, and it now also starts with a realistic value when you pair an already-running sensor to a different phone for the first time.

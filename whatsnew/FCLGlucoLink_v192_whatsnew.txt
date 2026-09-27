@@ -1,0 +1,3 @@
+Found and fixed the real cause of the long-running CareSens Air "frozen data" problem. Deeper diagnostics added in the last update revealed that it was never a stuck request — it was a crash. One specific sensor record reliably crashed the app's calibration step every time it was processed, and after the crash the app would simply retry the exact same record and crash again, forever.
+
+The app now recognizes when it is about to retry a record that crashed it last time, and skips that one record instead of crashing again. That single measurement is lost, but the app keeps going afterward instead of getting stuck in an endless crash loop.

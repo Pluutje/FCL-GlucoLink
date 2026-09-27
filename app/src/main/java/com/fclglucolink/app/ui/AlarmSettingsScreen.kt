@@ -1,0 +1,525 @@
+package com.fclglucolink.app.ui
+
+import android.app.Activity
+import android.content.Intent
+import android.media.RingtoneManager
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import com.fclglucolink.app.alarm.AlarmAlertMode
+import com.fclglucolink.app.alarm.AlarmCategory
+import com.fclglucolink.app.alarm.AlarmEscalation
+import com.fclglucolink.app.alarm.AlarmType
+import com.fclglucolink.app.data.AppSettings
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+
+/**
+ * ============================================================================
+ * FCLGlucoLink — alarminstellingen (RONDE 106, Fase 2 stap 1)
+ * ============================================================================
+ *
+ * 13/08/2026 (editor, RONDE 106, op verzoek voor één hoofdschakelaar om
+ * alle alarmen tegelijk aan/uit te zetten, met daaronder per alarm een
+ * eigen aan/uit-schakelaar en instellingen, waarbij de laatst ingestelde
+ * waarde persistent blijft over herstarts en app-updates) — precies dat
+ * model: [masterEnabled] bovenaan (de hoofdschakelaar), daaronder een kaart
+ * per alarmtype (zie alarm/AlarmType.kt) met een eigen aan/uit-schakelaar
+ * plus, als die aan staat, de detailinstellingen (drempel/voorlooptijd/
+ * geluid/trilling). ELKE schakelaar/instelling hieronder is gewoon een
+ * AppSettings-DataStore-veld (zie AppSettings.kt's "Alarmen"-sectie) — dus
+ * automatisch persistent over herstarts/updates, geen aparte opslaglogica
+ * hier nodig.
+ *
+ * UI-gate: zolang [masterEnabled] uit staat, zijn alle per-type
+ * schakelaars/instellingen hieronder zichtbaar maar NIET aanraakbaar
+ * (`enabled = false` op elke Switch/IconButton/SegmentedButton/TextButton)
+ * — de per-alarm instellingen zijn pas bewerkbaar zodra de hoofdschakelaar
+ * aan staat. De onderliggende waarden
+ * blijven gewoon staan (dus zichtbaar, alleen grijs) zodat de gebruiker in
+ * één oogopslag ziet wat er geconfigureerd staat, ook met de
+ * hoofdschakelaar uit.
+ *
+ * 13/08/2026 (editor, RONDE 106b, op verzoek voor een eigen geluid per
+ * alarmsoort uit de telefoon's eigen geluidenlijst (net als een ringtone-
+ * keuze), met per alarm de keuze tussen direct klinken of langzaam
+ * opbouwen, en afzonderlijke instellingen voor predictive low en
+ * predictive high) — twee
+ * wijzigingen t.o.v. RONDE 106: (1) het toenmalige, ene "Predictive"-type is
+ * gesplitst in [AlarmType.PREDICTIVE_LOW]/[AlarmType.PREDICTIVE_HIGH], elk met een
+ * eigen kaart/instellingen, exact zoals de andere vijf types; (2) het oude
+ * "Urgent"/"Gentle"-geluidsprofiel is vervangen door [SoundPickerRow]
+ * (Android's eigen ringtone-kiezer, RingtoneManager.ACTION_RINGTONE_PICKER
+ * — hetzelfde systeemscherm als bij het kiezen van een beltoon) plus een
+ * losse "When triggered"-keuze ([AlarmEscalation]: direct op volle sterkte,
+ * of langzaam opbouwend) — de twee zijn nu onafhankelijk instelbaar per
+ * type, in plaats van vast aan elkaar gekoppeld via één profiel.
+ *
+ * SCOPE: dit scherm bouwt/toont alleen de INSTELLINGEN. Er is bewust geen
+ * enkele koppeling naar een achtergrond-alarm-motor, geluid-afspelen, of
+ * een volledig-scherm-alarmweergave — die volgen in een latere ronde, zie
+ * de toelichting onderaan dit scherm (en README's Ronde 106/106b-secties).
+ *
+ * @OptIn(ExperimentalMaterial3Api::class) — zie kdoc bij PairingScreen.kt,
+ * puur vanwege TopAppBar.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AlarmSettingsScreen(onBack: () -> Unit) {
+    val context = LocalContext.current
+    val settings = remember { AppSettings(context) }
+    val scope = rememberCoroutineScope()
+    val masterEnabled by settings.alarmsMasterEnabled.collectAsState(initial = false)
+    val displayUnit by settings.displayUnit.collectAsState(initial = GlucoseUnit.MMOL)
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(tr("Alarms", "Alarmen")) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = tr("Back", "Terug"))
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(tr("Enable alarms", "Alarmen inschakelen"), style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            tr(
+                                "Master switch for every alarm below. Turning this off " +
+                                    "silences everything at once without losing any of " +
+                                    "your individual settings — turn it back on and " +
+                                    "they're exactly as you left them.",
+                                "Hoofdschakelaar voor alle alarmen hieronder. Dit " +
+                                    "uitzetten zet alles in één keer stil zonder je " +
+                                    "individuele instellingen te verliezen — zet 'm weer " +
+                                    "aan en ze staan precies zoals je ze achterliet."
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
+                    Switch(
+                        checked = masterEnabled,
+                        onCheckedChange = { enabled -> scope.launch { settings.setAlarmsMasterEnabled(enabled) } }
+                    )
+                }
+            }
+
+            Text(tr("Alarm types", "Alarmtypes"), style = MaterialTheme.typography.titleMedium)
+
+            AlarmType.entries.forEach { type ->
+                AlarmTypeCard(
+                    type = type,
+                    settings = settings,
+                    masterEnabled = masterEnabled,
+                    unit = displayUnit,
+                    scope = scope
+                )
+            }
+
+            Text(
+                tr(
+                    "Thresholds, sounds, and vibration are set here. When alarms " +
+                        "are on, FCLGlucoLink checks the AAPS-active slot in the " +
+                        "background and triggers a full-screen alert as soon as a " +
+                        "condition fires.",
+                    "Drempels, geluiden, en trilling stel je hier in. Als de " +
+                        "alarmen aan staan, controleert FCLGlucoLink het " +
+                        "AAPS-actieve slot op de achtergrond en start een " +
+                        "volledig-scherm-melding zodra een voorwaarde afgaat."
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.secondary
+            )
+        }
+    }
+}
+
+@Composable
+private fun AlarmTypeCard(
+    type: AlarmType,
+    settings: AppSettings,
+    masterEnabled: Boolean,
+    unit: GlucoseUnit,
+    scope: CoroutineScope
+) {
+    val enabled by settings.alarmEnabled(type).collectAsState(initial = false)
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    // 26/09/2026 (editor, RONDE 190, op verzoek — vertaling
+                    // van dit scherm) — [type.displayName] blijft bewust
+                    // ONVERTAALD: dezelfde alarmtype-namen (Urgent Low, Low,
+                    // High, Urgent High, Predictive Low, Predictive High,
+                    // Stale data) staan al zo, ook onvertaald, in
+                    // ManualScreen.kt's ALARMS-sectie — zie die kdoc voor
+                    // dezelfde afweging. Alleen de omschrijving eronder
+                    // krijgt een Nl-variant, via de lokale
+                    // [alarmDescriptionNl] hieronder (AlarmType.kt zelf
+                    // blijft ongewijzigd, dat bestand kent geen @Composable/
+                    // tr()-afhankelijkheid en dat willen we zo houden).
+                    Text(type.displayName, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        tr(type.description, alarmDescriptionNl(type)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                }
+                Switch(
+                    checked = enabled,
+                    enabled = masterEnabled,
+                    onCheckedChange = { value -> scope.launch { settings.setAlarmEnabled(type, value) } }
+                )
+            }
+
+            if (enabled) {
+                AlarmTypeDetailSettings(type = type, settings = settings, interactive = masterEnabled, unit = unit, scope = scope)
+            }
+        }
+    }
+}
+
+/** 26/09/2026 (editor, RONDE 190) — Nederlandse omschrijving per
+ *  [AlarmType], zie de kdoc bij [AlarmTypeCard] hierboven voor waarom dit
+ *  hier lokaal staat i.p.v. in alarm/AlarmType.kt zelf (dat bestand mag
+ *  geen afhankelijkheid van ui/Localization.kt's [tr] krijgen). Een plain
+ *  functie (geen `@Composable`) is voldoende: geeft alleen tekst terug,
+ *  roept zelf geen `tr()` aan. */
+private fun alarmDescriptionNl(type: AlarmType): String = when (type) {
+    AlarmType.URGENT_LOW -> "Directe, dringende melding wanneer de BG onder deze grens komt."
+    AlarmType.LOW -> "Melding wanneer de BG onder deze grens komt."
+    AlarmType.HIGH -> "Melding wanneer de BG boven deze grens komt."
+    AlarmType.URGENT_HIGH -> "Directe, dringende melding wanneer de BG boven deze grens komt."
+    AlarmType.PREDICTIVE_LOW, AlarmType.PREDICTIVE_HIGH ->
+        "Vroege waarschuwing voordat de BG naar verwachting je gekozen " +
+            "streefwaarde bereikt, gebaseerd op de recente trend."
+    AlarmType.STALE_DATA -> "Melding wanneer er dit lang geen nieuwe sensormeting is binnengekomen."
+}
+
+// 13/08/2026 (editor, live-melding — "This material API is experimental"
+// op de SingleChoiceSegmentedButtonRow/SegmentedButton hieronder) — de
+// @OptIn op AlarmSettingsScreen() hierboven dekt alleen DIE functie's eigen
+// body; deze private helper is een aparte functie en gebruikt zelf ook
+// experimentele Material3-API's (het geluidsprofiel-kiezertje), dus heeft
+// zijn eigen @OptIn nodig. Zelfde niet-schadelijke, stabiele-in-de-praktijk
+// opt-in als overal elders in dit project (zie kdoc bij PairingScreen.kt) —
+// CalibrationScreen.kt/SettingsScreen.kt ontliepen dit toevallig omdat hun
+// SegmentedButton-gebruik daar rechtstreeks in de al-geannoteerde
+// top-level Composable staat, niet in een eigen private sub-functie.
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AlarmTypeDetailSettings(
+    type: AlarmType,
+    settings: AppSettings,
+    interactive: Boolean,
+    unit: GlucoseUnit,
+    scope: CoroutineScope
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        when (type.category) {
+            AlarmCategory.THRESHOLD_LOW, AlarmCategory.THRESHOLD_HIGH -> {
+                val thresholdMgdl by settings.alarmThresholdMgdl(type).collectAsState(initial = type.defaultThresholdMgdl ?: 0.0)
+                ThresholdStepper(
+                    label = tr("Threshold", "Drempel"),
+                    valueMgdl = thresholdMgdl,
+                    unit = unit,
+                    interactive = interactive,
+                    onChange = { newMgdl -> scope.launch { settings.setAlarmThresholdMgdl(type, newMgdl) } }
+                )
+            }
+            // 13/08/2026 (editor, RONDE 108, op verzoek om de predictive
+            // alarms een eigen Bg-streefwaarde te geven i.p.v. een koppeling
+            // aan low/high, voor meer vrijheid) — nu ZOWEL een eigen streefwaarde (net als de
+            // drempel-alarmen hierboven) ALS de voorlooptijd, i.p.v. alleen
+            // de voorlooptijd met een impliciete koppeling aan Low/High.
+            AlarmCategory.PREDICTIVE_LOW, AlarmCategory.PREDICTIVE_HIGH -> {
+                val thresholdMgdl by settings.alarmThresholdMgdl(type).collectAsState(initial = type.defaultThresholdMgdl ?: 0.0)
+                ThresholdStepper(
+                    label = tr("Target", "Streefwaarde"),
+                    valueMgdl = thresholdMgdl,
+                    unit = unit,
+                    interactive = interactive,
+                    onChange = { newMgdl -> scope.launch { settings.setAlarmThresholdMgdl(type, newMgdl) } }
+                )
+                val leadTimeMinutes by settings.alarmLeadTimeMinutes(type).collectAsState(initial = type.defaultLeadTimeMinutes ?: 15)
+                MinutesStepper(
+                    label = tr("Warn this many minutes ahead", "Waarschuw dit aantal minuten van tevoren"),
+                    valueMinutes = leadTimeMinutes,
+                    interactive = interactive,
+                    step = 5,
+                    minValue = 5,
+                    onChange = { newMinutes -> scope.launch { settings.setAlarmLeadTimeMinutes(type, newMinutes) } }
+                )
+            }
+            AlarmCategory.STALE_DATA -> {
+                val staleMinutes by settings.alarmStaleMinutes(type).collectAsState(initial = type.defaultStaleMinutes ?: 20)
+                MinutesStepper(
+                    label = tr("Alert after no reading for", "Melding na geen meting gedurende"),
+                    valueMinutes = staleMinutes,
+                    interactive = interactive,
+                    step = 5,
+                    minValue = 5,
+                    onChange = { newMinutes -> scope.launch { settings.setAlarmStaleMinutes(type, newMinutes) } }
+                )
+            }
+        }
+
+        val soundUri by settings.alarmSoundUri(type).collectAsState(initial = null)
+        SoundPickerRow(
+            soundUri = soundUri,
+            interactive = interactive,
+            onSoundChosen = { newUri -> scope.launch { settings.setAlarmSoundUri(type, newUri) } }
+        )
+
+        val escalation by settings.alarmEscalation(type).collectAsState(initial = type.defaultEscalation)
+        Text(tr("When triggered", "Bij afgaan"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            AlarmEscalation.entries.forEachIndexed { index, option ->
+                SegmentedButton(
+                    selected = escalation == option,
+                    enabled = interactive,
+                    onClick = { scope.launch { settings.setAlarmEscalation(type, option) } },
+                    shape = SegmentedButtonDefaults.itemShape(index = index, count = AlarmEscalation.entries.size)
+                ) {
+                    Text(if (option == AlarmEscalation.IMMEDIATE) tr("Immediately", "Direct") else tr("Gradual", "Geleidelijk"))
+                }
+            }
+        }
+
+        // 13/08/2026 (editor, RONDE 107b, op verzoek om per alarm te kunnen
+        // kiezen tussen alarm/vibrate/both i.p.v. de losse vibrator-knop
+        // onderaan) — vervangt de vorige losse "Vibration"-schakelaar.
+        val alertMode by settings.alarmAlertMode(type).collectAsState(initial = AlarmAlertMode.BOTH)
+        Text(tr("Alert", "Melding"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            AlarmAlertMode.entries.forEachIndexed { index, option ->
+                SegmentedButton(
+                    selected = alertMode == option,
+                    enabled = interactive,
+                    onClick = { scope.launch { settings.setAlarmAlertMode(type, option) } },
+                    shape = SegmentedButtonDefaults.itemShape(index = index, count = AlarmAlertMode.entries.size)
+                ) {
+                    // 26/09/2026 (editor, RONDE 190) — [option.displayName]
+                    // (uit alarm/AlarmType.kt) blijft Engels; hier lokaal
+                    // vertaald i.p.v. het gedeelde AlarmType.kt te wijzigen,
+                    // zie de kdoc bij AlarmTypeCard() hierboven voor dezelfde
+                    // afweging.
+                    Text(
+                        when (option) {
+                            AlarmAlertMode.SOUND -> tr("Alarm", "Alarm")
+                            AlarmAlertMode.VIBRATE -> tr("Vibrate", "Trillen")
+                            AlarmAlertMode.BOTH -> tr("Both", "Beide")
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 13/08/2026 (editor, RONDE 106b, op verzoek voor een eigen geluid per
+ * alarmsoort uit de telefoon's eigen geluidenlijst, net als een ringtone-
+ * keuze) — Android's EIGEN ringtone-kiezer (RingtoneManager.ACTION_RINGTONE_PICKER
+ * — hetzelfde systeemscherm als bij het kiezen van een beltoon/
+ * meldingsgeluid), type TYPE_ALARM (logisch alvast te kiezen, ook al
+ * speelt dit geluid pas in een latere ronde daadwerkelijk af via
+ * STREAM_ALARM — zie het eerder afgestemde ontwerp). [soundUri] is `null`
+ * zolang de gebruiker nog geen keuze gemaakt heeft; de kiezer toont dan
+ * het systeem-standaardalarmgeluid als voorgeselecteerd
+ * (EXTRA_RINGTONE_EXISTING_URI), en de getoonde titel hieronder valt
+ * terug op datzelfde standaardgeluid via RingtoneManager.getRingtone().
+ * Geen extra permissie nodig — de kiezer is een systeem-Activity die
+ * Android zelf beheert, precies zoals bij een gewone beltoonkeuze.
+ */
+@Composable
+private fun SoundPickerRow(
+    soundUri: String?,
+    interactive: Boolean,
+    onSoundChosen: (String?) -> Unit
+) {
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            onSoundChosen(result.data?.getRingtoneUriCompat()?.toString())
+        }
+    }
+    val defaultSoundTitle = tr("Default", "Standaard")
+    val soundTitle = remember(soundUri, defaultSoundTitle) {
+        val uri = soundUri?.let { Uri.parse(it) } ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+        runCatching { RingtoneManager.getRingtone(context, uri)?.getTitle(context) }.getOrNull() ?: defaultSoundTitle
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column {
+            Text(tr("Sound", "Geluid"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+            Text(soundTitle, style = MaterialTheme.typography.bodyMedium)
+        }
+        TextButton(
+            enabled = interactive,
+            onClick = {
+                val existingUri = soundUri?.let { Uri.parse(it) } ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+                    putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
+                    putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                    putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+                    putExtra(RingtoneManager.EXTRA_RINGTONE_DEFAULT_URI, RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM))
+                    putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, existingUri)
+                }
+                launcher.launch(intent)
+            }
+        ) {
+            Text(tr("Choose", "Kies"))
+        }
+    }
+}
+
+/** `Intent.getParcelableExtra(String)` (enkel argument) is deprecated sinds
+ *  API 33 (Tiramisu) ten gunste van de type-veilige tweeargumentsvariant —
+ *  dit dekt beide paden zonder een deprecation-warning op minSdk 26. */
+@Suppress("DEPRECATION")
+private fun Intent.getRingtoneUriCompat(): Uri? =
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+        getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI, Uri::class.java)
+    } else {
+        getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+    }
+
+/** Zelfde +/- stapgrootte-afweging als AddCalibrationDialog's adjust()
+ *  (zie CalibrationScreen.kt): 2 mg/dL resp. 0,1 mmol/L omgerekend naar het
+ *  mg/dL-equivalent — ondergrens 40 mg/dL (onder de laagste zinvolle
+ *  alarmdrempel), bovengrens 400 mg/dL. */
+@Composable
+private fun ThresholdStepper(
+    label: String,
+    valueMgdl: Double,
+    unit: GlucoseUnit,
+    interactive: Boolean,
+    onChange: (Double) -> Unit
+) {
+    val stepMgdl = if (unit == GlucoseUnit.MGDL) 2.0 else 0.1.mmolToMgdl()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, style = MaterialTheme.typography.bodySmall)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(
+                enabled = interactive,
+                onClick = { onChange((valueMgdl - stepMgdl).coerceIn(40.0, 400.0)) }
+            ) {
+                Icon(Icons.Filled.Remove, contentDescription = tr("Decrease", "Verlagen"))
+            }
+            Text(valueMgdl.formatForDisplayWithUnit(unit), style = MaterialTheme.typography.bodyMedium)
+            IconButton(
+                enabled = interactive,
+                onClick = { onChange((valueMgdl + stepMgdl).coerceIn(40.0, 400.0)) }
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = tr("Increase", "Verhogen"))
+            }
+        }
+    }
+}
+
+@Composable
+private fun MinutesStepper(
+    label: String,
+    valueMinutes: Int,
+    interactive: Boolean,
+    step: Int,
+    minValue: Int,
+    onChange: (Int) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, style = MaterialTheme.typography.bodySmall)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(
+                enabled = interactive,
+                onClick = { onChange((valueMinutes - step).coerceAtLeast(minValue)) }
+            ) {
+                Icon(Icons.Filled.Remove, contentDescription = tr("Decrease", "Verlagen"))
+            }
+            Text("$valueMinutes min", style = MaterialTheme.typography.bodyMedium)
+            IconButton(
+                enabled = interactive,
+                onClick = { onChange(valueMinutes + step) }
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = tr("Increase", "Verhogen"))
+            }
+        }
+    }
+}

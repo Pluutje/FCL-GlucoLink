@@ -1,0 +1,1 @@
+Fixed a bug where a CareSens Air sensor could get permanently stuck: the Bluetooth connection kept reconnecting normally, but the returned glucose data silently froze on the same value for hours. The app now detects this stall (mirroring how Juggluco recovers from the same situation) and asks the sensor for slightly older data until it starts delivering fresh readings again.

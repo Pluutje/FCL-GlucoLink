@@ -1,0 +1,1 @@
+Fixed the "Update now" button sometimes being invisible on the About screen when your phone uses a larger system font size. Also translated the Alarms settings screen into Dutch, and corrected an outdated note there that used to say the alarm engine wasn't wired up yet.

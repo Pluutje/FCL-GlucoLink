@@ -1,0 +1,1 @@
+Fixed a follow-up case of the predictive High/Low alarms firing incorrectly: a raw sensor trend reading is now also checked against your actual recent readings, so a single glitchy trend value (e.g. right before a sensor error) can no longer trigger a false alarm on its own.
