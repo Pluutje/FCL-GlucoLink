@@ -12225,3 +12225,93 @@ Geen versiebump.
 paar plekken opgeschoond. Geen functionele wijziging.
 
 Op verzoek versiebump: versionCode 201→202.
+
+## Ronde 194 — G7: sessiesleutel-wipe na eigen createBond()-aanroep
+
+27/09/2026 (editor, op verzoek van de gebruiker, na analyse van twee
+nieuwe logbestanden) — G6 (de AAPS-zendende slot) bleek na Ronde 192
+volledig stabiel, maar G7 miste nog steeds af en toe een cyclus. De
+gemiste cycli bleken NIET random verspreid, maar geclusterd: op één dag
+bijvoorbeeld vier volledige G7-herkoppelingen binnen 75 minuten, in
+plaats van de verwachte ~1 per 5-6 uur.
+
+**Gevonden.** G7 hergebruikt normaal een bewaarde sessiesleutel en slaat
+het grootste deel van de handshake over. Wanneer die sleutel een keer
+vernieuwd moet worden, doet de driver een volledige handshake inclusief
+`createBond()` — en die aanroep laat de sensor zelf, al langer bekend
+(Ronde 132/133/138), het GATT-kanaal even afbreken. Om dat te overleven
+bewaart de driver (Ronde 148/184) de net afgeleide sleutel AL vóór die
+aanroep. Maar een andere listener (ook Ronde 184) wist diezelfde
+sleutel weer zodra hij een "niet gekoppeld → gekoppeld"-overgang ziet —
+met als redenering dat zo'n sleutel altijd van vóór een verse
+koppeling stamt en dus verouderd is. Die twee stukken code hielden geen
+rekening met elkaar: `createBond()` veroorzaakt zelf precies zo'n
+overgang, dus de listener wiste stelselmatig de sleutel die een paar
+regels eerder juist bewaard was — waardoor de volgende cyclus opnieuw
+een volledige, `createBond()`-gevoelige handshake moest doen. Vandaar de
+clustering.
+
+**Wijziging.** Nieuw veld `ownBondNegotiationStartedAtMs`, gezet vlak
+vóór de eigen `createBond()`-aanroep in `runPairingHandshake()`. De
+bond-state-listener slaat het wissen van de sessiesleutel over zolang
+dat tijdstip recent is (`OWN_BOND_NEGOTIATION_GUARD_MS` = 20s, ruim boven
+de ~250-300ms die de sensor er in de praktijk over doet om af te haken),
+omdat de bond-overgang dan vrijwel zeker het gevolg is van onze eigen
+aanroep en niet van een losstaande, externe herkoppeling. De
+batterij-/firmware-cache-reset en de looptijd-teller-herstart (Ronde
+157/183/185) blijven ongewijzigd — die zijn al zelfcorrigerend zodra een
+volgende firmware-uitvraag bevestigt dat het om dezelfde fysieke sensor
+gaat, en stonden niet aan de basis van dit probleem.
+
+De wachttijd van ~113s die G7 na een mislukte poging neemt voordat hij
+opnieuw scant, is bewust onaangeraakt gelaten: die is een aparte,
+doelbewuste bescherming tegen radio-botsing met de AAPS-prioriteitsslot
+(`AapsSlotSchedule.guardDelayMs()`), losstaand van dit probleem — die
+inkorten zou het risico op precies het soort botsing dat al in eerdere
+rondes gefixt is, weer kunnen terugbrengen.
+
+**Verificatie.** Haakjes-balans van `DexcomG7Driver.kt` gecontroleerd
+(221/221 accolades, 564/564 haakjes). Het daadwerkelijke effect (minder
+geclusterde G7-herkoppelingen) is, zoals bij elke BLE-timing-wijziging in
+dit project, pas met een volgend logbestand definitief te bevestigen.
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Driver.kt`.
+Nieuw: `whatsnew/FCLGlucoLink_v203_whatsnew.txt`.
+
+Op verzoek versiebump: versionCode 202→203, versionName
+"0.10.3-maintenance"→"0.10.4-g7-rebond-fix".
+
+## Ronde 195 — G7: diagnostiek voor sensor-gerapporteerde bond-status
+
+27/09/2026 (editor, op verzoek van de gebruiker, na een nieuw logbestand
+met een v203-run vanaf 17:10) — de verhoogde G7-uitval die de gebruiker
+meldde bleek al om 14:53 begonnen, ruim vóór de herstart naar v203 om
+17:10-17:13, en zette zich daarna in exact hetzelfde tempo voort (een
+volledige herkoppeling elke 20-30 minuten, i.p.v. de eerdere ~1 per 4-6
+uur) — dus onafhankelijk van Ronde 194's fix.
+
+**Correctie op Ronde 194.** Deze log bevat geen enkele "Bond state"-regel
+(de Android-koppelluisteraar die Ronde 194 aanpaste logt bij élke
+koppelovergang) — die listener is dus geen enkele keer afgegaan. Ronde
+194's fix is daarmee onschadelijk maar was zeer waarschijnlijk niet de
+werkelijke oorzaak van de eerder geconstateerde clustering. Wél
+zichtbaar: tussen twee volledige herkoppelingen in werd de bewaarde
+sessiesleutel steeds correct hergebruikt — dat deel functioneert.
+
+**Gevonden.** De trigger voor een volledige herkoppeling is niet
+Android's eigen koppelstatus, maar een vlag die de sensor zelf
+teruggeeft in zijn authenticatie-antwoord (`AuthStatusRx.bonded`: 0 =
+niet gekoppeld, 1 = gekoppeld, 3 = een apart "needsRefresh"-geval dat
+nergens los behandeld wordt). Welke van deze drie waarden hier precies
+optreedt, en of dat sinds 14:53 is veranderd, was tot nu toe niet uit de
+log af te leiden.
+
+**Wijziging.** Eén nieuwe diagnostische logregel direct na het parsen
+van het authenticatie-antwoord, die de ruwe `authenticated`/`bonded`-
+waarden logt. Puur informatief — geen gedragswijziging.
+
+**Verificatie.** Haakjes-balans van `DexcomG7Driver.kt` gecontroleerd
+(221/221 accolades, 565/565 haakjes).
+
+Gewijzigd: `sensor/dexcomg7/DexcomG7Driver.kt`.
+Geen versiebump.

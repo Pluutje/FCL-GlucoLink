@@ -1,0 +1,3 @@
+G7-fix: een sessiesleutel die net vernieuwd was, werd soms meteen weer ongeldig gemaakt door een andere interne check, waardoor G7 vaker dan nodig een volledige herkoppeling deed. Dat kon leiden tot een cluster van meerdere gemiste meetcycli kort na elkaar. Nu wordt die net-vernieuwde sleutel bewaard.
+
+Geen wijzigingen aan G6 of CareSens Air in deze versie.

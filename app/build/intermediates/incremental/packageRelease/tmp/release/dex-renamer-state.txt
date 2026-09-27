@@ -1,4 +1,4 @@
-#Sun Sep 27 13:18:37 CEST 2026
+#Sun Sep 27 18:09:05 CEST 2026
 base.0=D\:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-WerkVersie\\app\\build\\intermediates\\dex\\release\\mergeDexRelease\\classes.dex
 base.1=D\:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-WerkVersie\\app\\build\\intermediates\\dex\\release\\mergeDexRelease\\classes2.dex
 base.2=D\:\\_AAPS-AS\\___FCL_GlucoLink\\FCLGlucoLink-WerkVersie\\app\\build\\intermediates\\dex\\release\\mergeDexRelease\\classes3.dex

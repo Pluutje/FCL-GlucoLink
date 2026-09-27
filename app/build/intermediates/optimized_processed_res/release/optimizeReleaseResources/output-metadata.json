@@ -11,8 +11,8 @@
       "type": "SINGLE",
       "filters": [],
       "attributes": [],
-      "versionCode": 202,
-      "versionName": "0.10.3-maintenance",
+      "versionCode": 203,
+      "versionName": "0.10.4-g7-rebond-fix",
       "outputFile": "resources-release-optimize.ap_"
     }
   ],

@@ -54,8 +54,8 @@ android {
         applicationId = "com.fclglucolink.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 202
-        versionName = "0.10.3-maintenance"
+        versionCode = 203
+        versionName = "0.10.4-g7-rebond-fix"
 
         // 01/08/2026 (editor) — alleen arm64-v8a: libCALCULATION.so (in
         // app/src/main/jniLibs/arm64-v8a/) is alleen voor die ABI

@@ -213,6 +213,27 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
     private var savedSessionKey: ByteArray? = null
     private var savedSessionKeyDeviceAddress: String? = null
 
+    // 27/09/2026 (editor, RONDE 194, bugfix na logboekanalyse — geclusterde
+    // herhaalde volledige handshakes, tot 4 stuks binnen 75 minuten) — de
+    // bond-state-listener hieronder wist [savedSessionKey] zodra hij een
+    // overgang "niet gekoppeld -> gekoppeld" ziet, met als redenering dat
+    // zo'n sleutel altijd van VÓÓR een verse bond-onderhandeling stamt en
+    // dus verouderd is (RONDE 184). Maar [runPairingHandshake] bewaart de
+    // zojuist afgeleide sleutel AL vóór het eigen `createBond()`-aanroep
+    // hieronder — juist zodat die sleutel een afhaak-tijdens-bonden
+    // overleeft. Die twee stukken code (allebei RONDE 184) hielden geen
+    // rekening met elkaar: `createBond()` veroorzaakt zelf exact zo'n
+    // "niet gekoppeld -> gekoppeld"-overgang, dus de listener wiste de
+    // sleutel die net voor DEZE koppeling bewaard was, waardoor de
+    // volgende cyclus opnieuw een volledige (createBond()-gevoelige)
+    // handshake moest doen — en zo verder, in een cascade. Dit tijdstip
+    // wordt gezet vlak vóór de eigen `createBond()`-aanroep; de listener
+    // slaat de wis-actie over zolang dit recent is (zie
+    // [OWN_BOND_NEGOTIATION_GUARD_MS]), omdat de bond-overgang dan
+    // vrijwel zeker het gevolg is van onze eigen aanroep, niet van een
+    // externe herkoppeling.
+    private var ownBondNegotiationStartedAtMs: Long? = null
+
     // 25/09/2026 (editor, RONDE 185) — bruggetje tussen een verse bond-
     // onderhandeling (registerBondReceiver(), die de looptijd-teller
     // synchroon en "veilig" alvast reset, zie AppSettings.
@@ -343,6 +364,16 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
         // onConnectionStateChange, geen aparte foutafhandeling nodig.
         private const val PAIRING_STEP_TIMEOUT_MS = 15_000L
         private const val GLUCOSE_TIMEOUT_MS = 20_000L
+
+        // 27/09/2026 (editor, RONDE 194) — zie [ownBondNegotiationStartedAtMs]'s
+        // kdoc. Ruim boven Ronde 138's geobserveerde ~250-300ms tussen
+        // createBond() en de sensor's afhaak-reactie, zodat ook een tragere
+        // BLE-stack/toestel de eigen bond-overgang nog als "van onszelf"
+        // herkent — maar kort genoeg dat een échte, losstaande externe
+        // herkoppeling (gebruiker "vergeet"+herkoppelt handmatig in Android's
+        // Bluetooth-instellingen) niet per ongeluk als "van onszelf" wordt
+        // aangezien.
+        private const val OWN_BOND_NEGOTIATION_GUARD_MS = 20_000L
 
         // 28/08/2026 (editor, RONDE 150) — zelfde interval als
         // DexcomG6Driver.kt's BATTERY_QUERY_INTERVAL_MS (8 uur — batterij-
@@ -1382,6 +1413,21 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
             val status = DexcomG7Protocol.parseAuthStatus(statusBytes)
                 ?: return failHandshake(gatt, "statusantwoord onherkenbaar")
 
+            // 27/09/2026 (editor, RONDE 195, op verzoek — na een logboek dat
+            // liet zien dat volledige herkoppelingen sinds een bepaald moment
+            // veel frequenter nodig waren dan de gebruikelijke ~5-6 uur,
+            // zowel vóór als na een app-herstart, dus onafhankelijk van
+            // Ronde 194's fix) — de bestaande logregels laten alleen ZIEN
+            // DAT een volledige handshake nodig was, niet WAT de sensor
+            // precies terugmeldde in `AuthStatusRx.bonded` (0 = niet
+            // gekoppeld, 1 = gekoppeld, 3 = [needsRefresh], momenteel nergens
+            // apart afgehandeld). Dit is de sensor's EIGEN opgave, los van
+            // Android's koppelstatus (zie [ownBondNegotiationStartedAtMs]'s
+            // kdoc voor dat onderscheid) — dus de enige manier om te zien
+            // welke van de drie waarden hier steeds optreedt, en of dat
+            // patroon verandert, is 'm rechtstreeks loggen.
+            DiagnosticFileLogger.log("DexcomG7: AuthStatus authenticated=${status.authenticated} bonded=${status.bonded}")
+
             if (!status.isAuthenticated) {
                 _connectionState.value = ConnectionState.Error("Dexcom G7 authentication failed — check the pairing code.")
                 runCatching { gatt.disconnect() }
@@ -1513,6 +1559,15 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
                 // reden dan ook faalt (oudere Android-versie, hidden-API-
                 // restrictie, fabrikant-afwijking, etc.) — nooit een harde
                 // crash, hooguit terug naar het oude (TRANSPORT_AUTO-)gedrag.
+                //
+                // 27/09/2026 (editor, RONDE 194) — zie
+                // [ownBondNegotiationStartedAtMs]'s kdoc: gezet vlak vóór deze
+                // aanroep, zodat de bond-state-listener in
+                // [registerBondReceiver] straks weet dat een eventuele
+                // "niet gekoppeld -> gekoppeld"-overgang het gevolg is van
+                // DEZE aanroep, en dus de zojuist bewaarde [savedSessionKey]
+                // niet meteen weer weggooit.
+                ownBondNegotiationStartedAtMs = System.currentTimeMillis()
                 runCatching {
                     var usedReflectiveTransportLe = false
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -2170,9 +2225,34 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
                         // zowel in het geheugen als persistent, anders zou
                         // een volgende reconnect met deze verouderde sleutel
                         // proberen te hergebruiken.
-                        savedSessionKey = null
-                        savedSessionKeyDeviceAddress = null
-                        DiagnosticFileLogger.log("DexcomG7: verse bond-onderhandeling gedetecteerd — batterij-/firmware-uitvraagcache resetten (RONDE 157), looptijd-teller herstart (RONDE 183), sessiesleutel-cache resetten (RONDE 184)")
+                        //
+                        // 27/09/2026 (editor, RONDE 194, bugfix na
+                        // logboekanalyse — geclusterde herhaalde volledige
+                        // handshakes) — deze redenering klopt NIET wanneer
+                        // DEZE overgang het gevolg is van ons eigen
+                        // `createBond()`-aanroep in [runPairingHandshake]:
+                        // die functie bewaart de zojuist afgeleide sleutel
+                        // AL vóór die aanroep, juist om een afhaak-tijdens-
+                        // bonden te overleven. Zonder deze guard wiste dit
+                        // blok die sleutel meteen weer, waardoor de volgende
+                        // cyclus opnieuw een volledige (createBond()-
+                        // gevoelige) handshake moest doen — zie
+                        // [ownBondNegotiationStartedAtMs]'s kdoc voor de
+                        // volledige toedracht.
+                        val ownNegotiation = ownBondNegotiationStartedAtMs?.let {
+                            System.currentTimeMillis() - it < OWN_BOND_NEGOTIATION_GUARD_MS
+                        } ?: false
+                        if (!ownNegotiation) {
+                            savedSessionKey = null
+                            savedSessionKeyDeviceAddress = null
+                        }
+                        ownBondNegotiationStartedAtMs = null
+                        DiagnosticFileLogger.log(
+                            if (ownNegotiation)
+                                "DexcomG7: verse bond-onderhandeling gedetecteerd (van onze eigen createBond()-aanroep) — batterij-/firmware-uitvraagcache resetten (RONDE 157), looptijd-teller herstart (RONDE 183), sessiesleutel-cache BEHOUDEN (RONDE 194)"
+                            else
+                                "DexcomG7: verse bond-onderhandeling gedetecteerd (extern) — batterij-/firmware-uitvraagcache resetten (RONDE 157), looptijd-teller herstart (RONDE 183), sessiesleutel-cache resetten (RONDE 184)"
+                        )
                         scope.launch {
                             // 25/09/2026 (editor, RONDE 185) — het OUDE
                             // serienummer/looptijd-startmoment (van VÓÓR de
@@ -2187,7 +2267,9 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
                             pendingRunningTimeCorrectionOldStartedAtMs = settings.dexcomG7SessionStartedAtMs(slot).first()
                             settings.clearDexcomG7BatteryAndFirmwareInfo(slot)
                             settings.setDexcomG7SessionStartedAtMs(slot, System.currentTimeMillis())
-                            settings.setDexcomG7SavedSessionKey(slot, null, null)
+                            if (!ownNegotiation) {
+                                settings.setDexcomG7SavedSessionKey(slot, null, null)
+                            }
                         }
                     }
                     DiagnosticFileLogger.log("DexcomG7: bonded, resuming after-bond action")
