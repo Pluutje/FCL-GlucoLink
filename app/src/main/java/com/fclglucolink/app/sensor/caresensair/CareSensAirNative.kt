@@ -2,6 +2,7 @@ package com.fclglucolink.app.sensor.caresensair
 
 import android.content.Context
 import com.fclglucolink.app.logging.DiagnosticFileLogger
+import com.fclglucolink.app.sensor.SensorSlot
 import java.io.File
 
 /**
@@ -41,6 +42,7 @@ object CareSensAirNative {
     private external fun nativeExportState(handle: Long): ByteArray
     private external fun nativeImportState(handle: Long, blob: ByteArray): Boolean
     private external fun nativeGetLastSequence(handle: Long): Int
+    private external fun nativeSetClockOffset(handle: Long, offsetSecs: Long)
     private external fun nativeGetRequestSequence(handle: Long): Int
     private external fun nativeSaveSensorInfoChunk1(handle: Long, value: ByteArray): Boolean
     private external fun nativeSaveSensorInfoChunk2(handle: Long, value: ByteArray): Boolean
@@ -154,6 +156,11 @@ object CareSensAirNative {
 
     fun getLastSequence(handle: Long): Int = nativeGetLastSequence(handle)
 
+    /** 05/10/2026 (editor, RONDE 213) — klokverschil (telefoon minus sensor,
+     *  seconden) dat bij het meettijdstip van elk record wordt opgeteld; zie
+     *  caresensair_bridge.cpp's offset-toelichting. */
+    fun setClockOffset(handle: Long, offsetSecs: Long) = nativeSetClockOffset(handle, offsetSecs)
+
     /** Sequentienummer om daadwerkelijk in het volgende "196,1"-verzoek
      *  (zie [com.fclglucolink.app.sensor.caresensair.buildRequestDataCommand])
      *  te gebruiken — NIET altijd hetzelfde als [getLastSequence]. Mirror van
@@ -233,5 +240,145 @@ object CareSensAirNative {
         if (!file.exists()) return false
         val blob = runCatching { file.readBytes() }.getOrNull() ?: return false
         return nativeImportState(handle, blob)
+    }
+
+    /** 03/10/2026 (editor, RONDE 212) — zie CareSensAirDriver.kt's kdoc bij
+     *  [AppIdOutcome.DEVICE_MATCH_FAILED]-afhandeling: verwijdert de
+     *  opgeslagen kalibratiegeschiedenis voor DEZE sensor zodat een
+     *  volgende [restore] niets terugvindt en de app deze sensor weer als
+     *  "unused" (nog nooit eerder gezien) behandelt — nodig wanneer de
+     *  sensor zelf, bijvoorbeeld door tussentijds gebruik met een andere
+     *  app/telefoon, niet langer onze oude sessie herkent en onze
+     *  "doorgaan"-claim (unusedSensor=false) afwijst. Zonder deze opruiming
+     *  zou [restore] bij de volgende poging gewoon weer dezelfde, door de
+     *  sensor inmiddels afgewezen geschiedenis teruglezen, met een
+     *  oneindige afwijzingslus als gevolg. */
+    fun clearPersisted(context: Context, sensorSerial: String) {
+        runCatching { stateFile(context, sensorSerial).delete() }
+    }
+
+    // ========================================================================
+    // RONDE 209 — Kotlin-kant crash-loop-breaker
+    // ========================================================================
+    //
+    // 03/10/2026 (editor, RONDE 209, live-melding: "sinds ongeveer 1 à 2 uur
+    // crasht de app" — logbestand toonde 25+ opeenvolgende SIGSEGV-crashes,
+    // elke 1-7 minuten, over ruim een uur) — analyse van het meegestuurde
+    // logbestand bewees dat caresensair_bridge.cpp's eigen
+    // PendingFrameFingerprint-bescherming (Ronde 179/180, bedoeld om
+    // `air1_opcal4_algorithm()` nooit twee keer op hetzelfde vastgelopen
+    // record aan te roepen) in DEZE sessie geen ENKELE keer aansloeg: de
+    // rauwe BLE-bytes van het 0xC5-record (van offset 12 tot het einde —
+    // sequentienummer/tijd/temperatuur/glucose_array, precies de velden die
+    // [PendingFrameFingerprint] daar vergelijkt) waren byte-voor-byte
+    // IDENTIEK over de volle 70 minuten van het logbestand (vergeleken: de
+    // allereerste en de allerlaatste crash-regel), dus had de C++-skip bij
+    // de TWEEDE poging al moeten aanslaan — logregel "overgeslagen — dit
+    // exacte record veroorzaakte een eerdere crash" staat NERGENS in dat
+    // logbestand. De precieze reden dat die bestandsgebaseerde native
+    // bescherming hier niet aansloeg kon niet met zekerheid vastgesteld
+    // worden zonder de native code daadwerkelijk te kunnen uitvoeren/
+    // debuggen (geen compiler/executor in deze omgeving beschikbaar) — dit
+    // is overigens al de DERDE poging om precies deze crash-loop onder
+    // controle te krijgen (na Ronde 179 en 180, zie die kdoc's), dus een
+    // vierde poging die op exact dezelfde aanname (een nog subtielere
+    // fingerprint-bug) voortbouwt zou het risico lopen weer niet te werken.
+    //
+    // In plaats daarvan: een VOLLEDIG ONAFHANKELIJKE, Kotlin-kant
+    // beveiliging die niet afhankelijk is van WELK record precies
+    // vastloopt of WAAROM de native bescherming faalt — alleen van de kale
+    // vraag "is de vorige aanroep van de risicovolle rekenfunctie veilig
+    // teruggekeerd, of is het proces er middenin gecrasht?". Bewust GEEN
+    // DataStore/coroutines hier (die zijn asynchroon — een race tussen een
+    // nog niet voltooide schrijfactie en een crash die een fractie van een
+    // seconde later volgt zou dit hele mechanisme zinloos maken), maar kale
+    // synchrone `java.io.File`-aanroepen, direct op de BLE-callback-thread:
+    // [armCrashBreaker] zet een markeringsbestand neer VLAK VOOR de
+    // risicovolle aanroep, [disarmCrashBreaker] verwijdert het weer (en zet
+    // de teller terug op 0) VLAK NA een veilig teruggekeerde aanroep. Staat
+    // dat markeringsbestand er bij de ÉÉRSTVOLGENDE `connect()` nog steeds
+    // (het is nooit opgeruimd, dus de vorige aanroep is nooit veilig
+    // teruggekeerd — het proces moet er middenin gecrasht zijn), dan telt
+    // [registerCrashIfArmed] dat als een crash en hoogt de persistente
+    // teller op. Bij [CRASH_BREAKER_THRESHOLD] opeenvolgende crashes slaat
+    // de aanroepende driver de risicovolle rekenstap voortaan helemaal over
+    // voor deze slot (zie CareSensAirDriver.kt's `connect()`) — de
+    // BLE-verbinding zelf blijft gewoon werken (koppelen/heraansluiten
+    // blijft dus zichtbaar), alleen de stap die daadwerkelijk crashte wordt
+    // overgeslagen, met een duidelijke foutmelding i.p.v. een eindeloze
+    // crash-herstart-lus die (omdat dit ÉÉN app-proces is) ONDERTUSSEN OOK
+    // elke andere actieve sensor (G6/G7/SmartGuide) in de andere slot met
+    // zich meesleurt bij elke crash.
+    private const val CRASH_BREAKER_THRESHOLD = 3
+
+    private fun crashBreakerArmedFile(context: Context, slot: SensorSlot): File =
+        File(context.filesDir, "caresensair_crashbreaker_${slot.name}.armed")
+
+    private fun crashBreakerCountFile(context: Context, slot: SensorSlot): File =
+        File(context.filesDir, "caresensair_crashbreaker_${slot.name}.count")
+
+    /** Vlak VOOR de risicovolle `processGlucoseData()`-aanroep (zie
+     *  CareSensAirDriver.kt's `handleGlucoseDataNotification()`) — synchroon,
+     *  moet op schijf staan vóórdat de aanroep zelf begint.
+     *
+     *  03/10/2026 (editor, BUGFIX, zelfde avond als de oorspronkelijke
+     *  Ronde 209-introductie) — zie de uitgebreide kdoc bij
+     *  CareSensAirDriver.kt's `handleGlucoseDataNotification()` voor de
+     *  volledige live-caselog van de fout: de aanroeper mag [armCrashBreaker]/
+     *  [disarmCrashBreaker] ALLEEN rond een daadwerkelijk risicovolle 0xC5-
+     *  aanroep zetten (de enige tak die `air1_opcal4_algorithm()` ooit
+     *  aanroept) — NOOIT rond een onschadelijke 0xC4-aankondiging, want
+     *  [disarmCrashBreaker] wist ook de opgebouwde teller, en die 0xC4-
+     *  aankondiging komt bij ELKE nieuwe verbindingspoging ALTIJD eerder
+     *  binnen dan het eventueel vastgelopen 0xC5-record — met als gevolg dat
+     *  de teller zichzelf keer op keer terugzette naar 0 vóór de echte
+     *  crash ooit de kans kreeg hem op te hogen. Deze functies zelf zijn
+     *  ongewijzigd; de aanroeper bepaalt nu beter WANNEER ze gebruikt
+     *  worden. */
+    fun armCrashBreaker(context: Context, slot: SensorSlot) {
+        runCatching { crashBreakerArmedFile(context, slot).writeText("1") }
+    }
+
+    /** Vlak NA een veilig teruggekeerde, daadwerkelijk risicovolle
+     *  `processGlucoseData()`-aanroep — bewijst dat de rekenstap op dit
+     *  moment niet (meer) crasht, dus zowel de markering als de opgebouwde
+     *  crash-teller mogen weg. Zie [armCrashBreaker]'s bugfix-kdoc: NOOIT
+     *  aanroepen rond een onschadelijke 0xC4-aankondiging. */
+    fun disarmCrashBreaker(context: Context, slot: SensorSlot) {
+        runCatching { crashBreakerArmedFile(context, slot).delete() }
+        runCatching { crashBreakerCountFile(context, slot).delete() }
+    }
+
+    /**
+     * Bij het begin van elke nieuwe `connect()`-sessie aan te roepen, VÓÓR
+     * de eerste risicovolle aanroep van deze sessie — kijkt of het vorige
+     * proces zijn eigen markering ooit heeft kunnen opruimen. Verhoogt zelf
+     * de persistente teller als dat niet zo was, en geeft die nieuwe
+     * teller-waarde terug (0 = vorige aanroep was veilig/er was nog geen
+     * markering, dus geen crash gedetecteerd).
+     */
+    fun registerCrashIfArmed(context: Context, slot: SensorSlot): Int {
+        val armedFile = crashBreakerArmedFile(context, slot)
+        if (!armedFile.exists()) return 0
+        val countFile = crashBreakerCountFile(context, slot)
+        val previousCount = runCatching { countFile.readText().trim().toIntOrNull() }.getOrNull() ?: 0
+        val newCount = previousCount + 1
+        runCatching { countFile.writeText(newCount.toString()) }
+        runCatching { armedFile.delete() }
+        DiagnosticFileLogger.log(
+            "CareSensAirNative: crash-breaker — vorige rekenaanroep (slot $slot) kwam niet veilig " +
+                "terug, opeenvolgende-crashes-teller nu $newCount (drempel $CRASH_BREAKER_THRESHOLD)"
+        )
+        return newCount
+    }
+
+    /** true als deze slot de rekenstap voorlopig moet overslaan (zie
+     *  [registerCrashIfArmed]'s kdoc) — puur een uitlees-hulpfunctie, telt
+     *  zelf niets op. */
+    fun isCrashBreakerTripped(context: Context, slot: SensorSlot): Boolean {
+        val count = runCatching {
+            crashBreakerCountFile(context, slot).takeIf { it.exists() }?.readText()?.trim()?.toIntOrNull()
+        }.getOrNull() ?: 0
+        return count >= CRASH_BREAKER_THRESHOLD
     }
 }

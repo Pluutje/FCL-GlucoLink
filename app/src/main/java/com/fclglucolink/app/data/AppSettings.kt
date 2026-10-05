@@ -636,6 +636,131 @@ class AppSettings(private val context: Context) {
         context.dataStore.edit { prefs -> prefs.remove(slotString("device_address", slot)) }
     }
 
+    /**
+     * 01/10/2026 (editor, RONDE 197) — Accu-Chek SmartGuide-driver: het
+     * volgende sequence-nummer dat via RACP opgevraagd moet worden (zie
+     * AccuChekSmartGuideProtocol.buildRacpReportRecordsGreaterOrEqual() en
+     * AccuChekSmartGuideDriver.kt's kdoc) — zodat een hernieuwde verbinding
+     * niet steeds de VOLLEDIGE historie van de meter opnieuw opvraagt/
+     * verwerkt. Zelfde slot-sleutel-patroon als LEGACY_CARESENS_NEXT_SEQUENCE
+     * hierboven, maar als nieuwe, niet-legacy per-slot sleutel (geen
+     * migratiepad nodig: deze sleutel bestond vóór deze ronde nog niet).
+     * `null` (nog nooit gezet) betekent "vraag de volledige historie op"
+     * (sequence 0), zie de driver's eigen default-afhandeling.
+     */
+    suspend fun getAccuChekSmartGuideNextSequenceOnce(slot: SensorSlot): Int? =
+        context.dataStore.data.first()[slotInt("accuchek_smartguide_next_sequence", slot)]
+
+    suspend fun setAccuChekSmartGuideNextSequence(slot: SensorSlot, value: Int) {
+        context.dataStore.edit { prefs -> prefs[slotInt("accuchek_smartguide_next_sequence", slot)] = value }
+    }
+
+    /**
+     * 01/10/2026 (editor, RONDE 198 — CGM Service-herbouw) — alle "echt
+     * nuttige info" die AccuChekSmartGuideDriver.kt nu uit de echte CGM
+     * Service (0x181F) + Device Information Service haalt, zie
+     * AccuChekSmartGuideStatusScreen.kt. Zelfde patroon als
+     * DexcomG6BatteryInfo/DexcomG7's firmwareInfo/batteryInfo hierboven:
+     * losse getypeerde sleutels + één combinerende databundel-functie, één
+     * gezamenlijke `edit{}`-aanroep per driver-schrijfmoment.
+     */
+    data class AccuChekDeviceInfo(
+        val manufacturer: String?,
+        val model: String?,
+        val serial: String?,
+        val firmwareRevision: String?,
+        val hardwareRevision: String?
+    )
+
+    suspend fun setAccuChekDeviceInfo(slot: SensorSlot, info: AccuChekDeviceInfo) {
+        context.dataStore.edit { prefs ->
+            info.manufacturer?.let { prefs[slotString("accuchek_manufacturer", slot)] = it }
+            info.model?.let { prefs[slotString("accuchek_model", slot)] = it }
+            info.serial?.let { prefs[slotString("accuchek_serial", slot)] = it }
+            info.firmwareRevision?.let { prefs[slotString("accuchek_firmware", slot)] = it }
+            info.hardwareRevision?.let { prefs[slotString("accuchek_hardware", slot)] = it }
+        }
+    }
+
+    fun accuChekDeviceInfo(slot: SensorSlot): Flow<AccuChekDeviceInfo> = context.dataStore.data.map { prefs ->
+        AccuChekDeviceInfo(
+            manufacturer = prefs[slotString("accuchek_manufacturer", slot)],
+            model = prefs[slotString("accuchek_model", slot)],
+            serial = prefs[slotString("accuchek_serial", slot)],
+            firmwareRevision = prefs[slotString("accuchek_firmware", slot)],
+            hardwareRevision = prefs[slotString("accuchek_hardware", slot)]
+        )
+    }
+
+    /** CGM Status (0x2AA9), eenmalig per connect gelezen — zie
+     *  AccuChekSmartGuideProtocol.CgmStatus's kdoc. [rawStatusByte]/
+     *  [rawCalTempByte]/[rawWarningByte] zijn de 3 rauwe annunciation-bytes
+     *  (voor het statusscherm om zelf opnieuw te decoderen via
+     *  AccuChekSmartGuideProtocol.decodeStatusFlags — geen gedecodeerde
+     *  booleans los opgeslagen, dat zou 18 aparte sleutels betekenen voor
+     *  wat in 3 bytes past). */
+    suspend fun setAccuChekCgmStatus(slot: SensorSlot, statusByte: Int, calTempByte: Int, warningByte: Int, atMs: Long) {
+        context.dataStore.edit { prefs ->
+            prefs[slotInt("accuchek_status_byte", slot)] = statusByte
+            prefs[slotInt("accuchek_caltemp_byte", slot)] = calTempByte
+            prefs[slotInt("accuchek_warning_byte", slot)] = warningByte
+            prefs[slotLong("accuchek_status_at_ms", slot)] = atMs
+        }
+    }
+
+    data class AccuChekCgmStatusRaw(val statusByte: Int, val calTempByte: Int, val warningByte: Int, val atMs: Long)
+
+    fun accuChekCgmStatus(slot: SensorSlot): Flow<AccuChekCgmStatusRaw?> = context.dataStore.data.map { prefs ->
+        val s = prefs[slotInt("accuchek_status_byte", slot)]
+        val c = prefs[slotInt("accuchek_caltemp_byte", slot)]
+        val w = prefs[slotInt("accuchek_warning_byte", slot)]
+        val at = prefs[slotLong("accuchek_status_at_ms", slot)]
+        if (s == null || c == null || w == null || at == null) null else AccuChekCgmStatusRaw(s, c, w, at)
+    }
+
+    suspend fun setAccuChekSessionStartAtMs(slot: SensorSlot, value: Long) {
+        context.dataStore.edit { prefs -> prefs[slotLong("accuchek_session_start_at_ms", slot)] = value }
+    }
+
+    fun accuChekSessionStartAtMs(slot: SensorSlot): Flow<Long?> =
+        context.dataStore.data.map { prefs -> prefs[slotLong("accuchek_session_start_at_ms", slot)] }
+
+    suspend fun setAccuChekSessionRunTimeMinutes(slot: SensorSlot, minutes: Int) {
+        context.dataStore.edit { prefs -> prefs[slotInt("accuchek_session_run_time_minutes", slot)] = minutes }
+    }
+
+    fun accuChekSessionRunTimeMinutes(slot: SensorSlot): Flow<Int?> =
+        context.dataStore.data.map { prefs -> prefs[slotInt("accuchek_session_run_time_minutes", slot)] }
+
+    /** Bevestigd communicatie-interval (minuten) — ingevuld zodra de
+     *  CGM Specific Ops Control Point-indicatie een "Get"/"Set"-antwoord
+     *  teruggeeft, zie AccuChekSmartGuideDriver.kt's klasse-kdoc punt 5.
+     *  Het statusscherm toont dit om te bevestigen dat de 5-minuten-eis
+     *  daadwerkelijk actief is. */
+    suspend fun setAccuChekCommunicationIntervalConfirmedMinutes(slot: SensorSlot, minutes: Int) {
+        context.dataStore.edit { prefs -> prefs[slotInt("accuchek_comm_interval_confirmed_minutes", slot)] = minutes }
+    }
+
+    fun accuChekCommunicationIntervalConfirmedMinutes(slot: SensorSlot): Flow<Int?> =
+        context.dataStore.data.map { prefs -> prefs[slotInt("accuchek_comm_interval_confirmed_minutes", slot)] }
+
+    suspend fun setAccuChekLastConnectedAtMs(slot: SensorSlot, value: Long) {
+        context.dataStore.edit { prefs -> prefs[slotLong("accuchek_last_connected_at_ms", slot)] = value }
+    }
+
+    fun accuChekLastConnectedAtMs(slot: SensorSlot): Flow<Long?> =
+        context.dataStore.data.map { prefs -> prefs[slotLong("accuchek_last_connected_at_ms", slot)] }
+
+    /** Laatste meting se eigen CGM Quality-percentage (indien de sensor dat
+     *  veld meestuurt, zie AccuChekSmartGuideProtocol.CgmMeasurement.
+     *  qualityPercent) — puur informatief voor het statusscherm. */
+    suspend fun setAccuChekLastQualityPercent(slot: SensorSlot, value: Double) {
+        context.dataStore.edit { prefs -> prefs[slotDouble("accuchek_last_quality_percent", slot)] = value }
+    }
+
+    fun accuChekLastQualityPercent(slot: SensorSlot): Flow<Double?> =
+        context.dataStore.data.map { prefs -> prefs[slotDouble("accuchek_last_quality_percent", slot)] }
+
     suspend fun hasKnownDexcomG6TransmitterOnce(slot: SensorSlot): Boolean =
         getDexcomG6TransmitterIdOnce(slot) != null
 

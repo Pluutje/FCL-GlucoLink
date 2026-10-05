@@ -284,6 +284,35 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
     // koppelsessie geforceerd op false gehouden (gereset in disconnect()).
     private var appIdRejectedOnce: Boolean = false
 
+    // 03/10/2026 (editor, RONDE 212, live-melding: "Android koppelscherm
+    // wordt niet meer aangeroepen, hij blijft hangen" + 5x op rij
+    // outcome=DEVICE_MATCH_FAILED in het logbestand) — onthoudt welke
+    // waarde voor `unusedSensor` het LAATST daadwerkelijk verstuurd is
+    // (zie het schrijf-moment bij CHAR_APP_ID hieronder), zodat de
+    // afwijzings-tak in handleAppIdNotification() weet of de afwijzing
+    // de "doorgaan met bestaande sessie"-claim (false) betrof of de
+    // "nog nooit gezien"-claim (true). Los van/aanvullend op
+    // appIdRejectedOnce hierboven: die vlag kan `unusedSensor` alleen
+    // van true náár false forceren (mirror van Juggluco's eigen,
+    // eenrichtings-gedrag), maar loste DEZE live-situatie niet op — hier
+    // was lastSequence al > 0 (een eerder succesvolle sessie), dus
+    // `unusedSensor` was al bij de EERSTE poging al false, en bleef dat
+    // bij alle 5 volgende pogingen, zonder dat er ooit een "unusedSensor
+    // =true"-poging overbleef om te proberen. Root cause (bevestigd via
+    // vergelijking met de bronongewijzigde air.hpp en Juggluco's eigen
+    // AirGattCallback.java): dit is GEEN FCLGlucoLink-regressie, maar een
+    // gevolg van de sensor zelf — die was tussentijds op een tweede
+    // telefoon met Juggluco gekoppeld, en Juggluco kon daar alleen
+    // verbinden omdat het voor die telefoon NOOIT eerdere
+    // kalibratiegeschiedenis had (dus unusedSensor=true verstuurde, wat
+    // de sensor accepteerde als nieuwe koppelclaim). Onze telefoon had
+    // nog wél de oude geschiedenis (lastSequence>0), dus bleven we de
+    // nu-door-de-sensor-afgewezen "doorgaan"-claim herhalen. Zie de
+    // afwijzings-tak hieronder voor de daadwerkelijke fix (geschiedenis
+    // wissen zodat de volgende poging zelf weer unusedSensor=true
+    // aflevert).
+    private var lastSentUnusedSensor: Boolean = true
+
     // 01/08/2026 (editor, na live-test — de app probeerde na een
     // AppID-afwijzing wél opnieuw te verbinden via `gatt.connect()`, maar
     // dat bleek een no-op: zodra Android een BluetoothGatt-cliënt na een
@@ -340,6 +369,16 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
     // naar het oorspronkelijke raster, in plaats van steeds vanaf de laatst
     // ontvangen (mogelijk al verschoven) meting door te rekenen.
     private var cadenceAnchorAtMs: Long? = null
+
+    // 05/10/2026 (editor, RONDE 213) — meettijdstip (sensorklok, naar
+    // telefoontijd gecorrigeerd) van de NIEUWSTE ontvangen meting. De sensor
+    // meet exact elke 300s; dit tijdstip ligt dus precies op het
+    // 5-minuten-raster, in tegenstelling tot lastSuccessfulConnectionAtMs
+    // (ontvangsttijd, 0-4 of 60-240s na de meting). computeReconnect-
+    // CooldownMs() plant hiermee, zodat de herverbindingen niet langer
+    // met de ontvangstvertraging meeschuiven (live-log 05/10: 3/4/6/7-
+    // minuten-gaten door een op ontvangsttijd gebouwd raster).
+    private var lastMeasurementAtMs: Long? = null
 
     // 02/08/2026 (editor, na live-test dat de start- en einddatum-tijd nog
     // niet gevuld werd) — het 0xC0/2-antwoord (dat elapsedSecs draagt,
@@ -435,6 +474,7 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
         noticedNumberRecords = false
         lastSuccessfulConnectionAtMs = null
         cadenceAnchorAtMs = null
+        lastMeasurementAtMs = null
         val settings = AppSettings(context)
         appSettings = settings
         val scope = CoroutineScope(SupervisorJob())
@@ -469,6 +509,28 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
                 "Couldn't load the CareSens Air calibration library (libCALCULATION.so). " +
                     "This is a bundled file inside the app itself — if this keeps happening, " +
                     "the app installation may be corrupt."
+            )
+            return
+        }
+
+        // 03/10/2026 (editor, RONDE 209) — zie CareSensAirNative.kt's
+        // uitgebreide kdoc bij de crash-breaker-sectie voor het volledige
+        // verhaal: dit detecteert of het VORIGE proces is gecrasht middenin
+        // de risicovolle rekenaanroep (zie [handleGlucoseDataNotification]
+        // hieronder), en breekt na [CRASH_BREAKER_THRESHOLD] opeenvolgende
+        // crashes de eindeloze crash-herstart-lus af — anders blijft de
+        // HELE app (dus ook een eventuele actieve sensor op de andere slot)
+        // zich elke paar minuten herstarten. De BLE-verbinding zelf
+        // (handshake/koppeling) blijft hierna gewoon werken — alleen de
+        // rekenstap wordt overgeslagen, zie [handleGlucoseDataNotification].
+        val crashCount = CareSensAirNative.registerCrashIfArmed(appCtx, slot)
+        if (CareSensAirNative.isCrashBreakerTripped(appCtx, slot)) {
+            _connectionState.value = ConnectionState.Error(
+                "CareSens Air keeps crashing the app while processing this sensor's data " +
+                    "($crashCount times in a row) — FCLGlucoLink has stopped retrying to protect " +
+                    "the rest of the app. This usually means one specific stuck record this " +
+                    "sensor keeps resending isn't handled well. Try re-pairing this sensor, or " +
+                    "use Juggluco for it in the meantime; please send the log files."
             )
             return
         }
@@ -694,8 +756,15 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
             )
             return MIN_SCAN_COOLDOWN_MS
         }
-        val anchor = cadenceAnchorAtMs ?: lastReadingAtMs
-        val periodsElapsed = Math.floor((lastReadingAtMs - anchor) / SENSOR_PERIOD_MS.toDouble()).toLong()
+        // 05/10/2026 (editor, RONDE 213) — zie lastMeasurementAtMs: het
+        // raster loopt vanaf het ECHTE meettijdstip van de nieuwste meting
+        // (exact 300s-stappen), niet vanaf het ontvangstmoment. Het
+        // zelfcorrigerende anker/floor-mechanisme van Ronde 86/155 bestond
+        // om ontvangstjitter weg te filteren en is hier niet meer nodig.
+        val measuredAtMs = lastMeasurementAtMs
+        val anchor = if (measuredAtMs != null) measuredAtMs else (cadenceAnchorAtMs ?: lastReadingAtMs)
+        val periodsElapsed = if (measuredAtMs != null) 0L
+            else Math.floor((lastReadingAtMs - anchor) / SENSOR_PERIOD_MS.toDouble()).toLong()
         val gridReadingAtMs = anchor + periodsElapsed * SENSOR_PERIOD_MS
         val predictedNextReadingAtMs = gridReadingAtMs + SENSOR_PERIOD_MS
         // 12/08/2026 (editor, RONDE 100) — onvoorwaardelijk publiceren, zie
@@ -1117,9 +1186,11 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
         pendingAfterBond = null
         pendingAfterBondForConnect = null
         appIdRejectedOnce = false
+        lastSentUnusedSensor = true
         noticedNumberRecords = false
         lastSuccessfulConnectionAtMs = null
         cadenceAnchorAtMs = null
+        lastMeasurementAtMs = null
         unregisterBondReceiver()
         _connectionState.value = ConnectionState.Disconnected
     }
@@ -1391,6 +1462,12 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
                     val handle = nativeStateHandle
                     val unusedSensor = !appIdRejectedOnce &&
                         (handle == null || CareSensAirNative.getLastSequence(handle) <= 0)
+                    // 03/10/2026 (editor, RONDE 212) — zie lastSentUnusedSensor's
+                    // klasse-kdoc: onthouden welke claim nu daadwerkelijk
+                    // verstuurd wordt, zodat de afwijzings-tak hieronder weet
+                    // of een eventuele DEVICE_MATCH_FAILED de "doorgaan"- of
+                    // de "nog nooit gezien"-claim betrof.
+                    lastSentUnusedSensor = unusedSensor
                     val cmd = buildAppIdHandshakeCommand(unusedSensor)
                     // 01/08/2026 (editor) — diagnostische logregel, bewust
                     // NIET achter een debug-vlag: de vorige twee live-tests
@@ -1535,7 +1612,55 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
                     // ANDER handshake-commando stuurt i.p.v. hetzelfde
                     // (blijkbaar verkeerde) commando te herhalen. Zie
                     // appIdRejectedOnce's kdoc bij het klasse-veld.
-                    appIdRejectedOnce = true
+                    // 03/10/2026 (editor, RONDE 212, BUGFIX van de
+                    // eerdere Ronde 212-poging zelf — zie lastSentUnusedSensor's
+                    // klasse-kdoc voor het volledige verhaal) — de EERSTE versie
+                    // van deze fix zette hieronder ALTIJD `appIdRejectedOnce =
+                    // true`, VOORDAT de "geschiedenis wissen"-tak hieronder kon
+                    // draaien. Omdat `unusedSensor` hierboven berekend wordt als
+                    // `!appIdRejectedOnce && (...)`, bleef dat `!appIdRejectedOnce`
+                    // ZELF na het wissen van de geschiedenis nog steeds `false`
+                    // forceren — de hele reden dat een live-test ná die
+                    // eerdere fix nog steeds 100% unusedSensor=false liet zien,
+                    // ondanks dat de geschiedenis wél degelijk gewist werd.
+                    // appIdRejectedOnce mag dus NIET meer onvoorwaardelijk op
+                    // true gezet worden: alleen in de generieke afwijzings-tak
+                    // (de else hieronder), niet wanneer we zelf bewust een
+                    // verse "unusedSensor=true"-poging willen forceren.
+                    if (outcome == AppIdOutcome.DEVICE_MATCH_FAILED && !lastSentUnusedSensor) {
+                        // Zie hierboven: de sensor wijst specifiek onze
+                        // "doorgaan met bestaande sessie"-claim af — herkent
+                        // onze lokale kalibratiegeschiedenis niet meer (bijv.
+                        // na tussentijds gebruik met een andere telefoon/app).
+                        // Geschiedenis wissen + de huidige state-handle
+                        // loslaten (zonder 'm eerst te persisteren — hij is nu
+                        // aangetoond ongeldig) ÉN appIdRejectedOnce hier expliciet
+                        // op false houden (in plaats van de generieke true
+                        // hieronder) zorgt dat de volgende poging de
+                        // unusedSensor-berekening hierboven weer op true laat
+                        // uitkomen — exact de claim die een verse sensor (zoals
+                        // bij Juggluco op de tweede telefoon) accepteert.
+                        val serial = sensorSerial
+                        val ctx = appContext
+                        val handleToDrop = nativeStateHandle
+                        if (serial != null && ctx != null) {
+                            CareSensAirNative.clearPersisted(ctx, serial)
+                        }
+                        if (handleToDrop != null) {
+                            CareSensAirNative.destroyState(handleToDrop)
+                            nativeStateHandle = null
+                        }
+                        appIdRejectedOnce = false
+                    } else {
+                        // Generieke afwijzing (of een DEVICE_MATCH_FAILED
+                        // terwijl we net al unusedSensor=true probeerden, dus
+                        // de verse claim ZELF ook al afgewezen is) — mirror
+                        // van AirGattCallback.java regel 484: forceer
+                        // unusedSensor voor de rest van deze koppelsessie op
+                        // false, zodat er geen oneindige flip-flop ontstaat
+                        // tussen twee steeds afgewezen waarden.
+                        appIdRejectedOnce = true
+                    }
                     _connectionState.value = ConnectionState.Error(
                         "CareSens Air rejected the connection (${outcome.name.lowercase().replace('_', ' ')})."
                     )
@@ -1561,6 +1686,14 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
                         return
                     }
                     val handle = nativeStateHandle ?: return
+                    // 05/10/2026 (editor, RONDE 213) — klokverschil voor de
+                    // meettijdstippen; bij needsTimeSync wordt de sensor
+                    // hieronder op telefoontijd gezet, dus dan 0. Zie
+                    // caresensair_bridge.cpp.
+                    val clockOffsetSecs = if (info.needsTimeSync) 0L else nowSecs - info.deviceTimeSecs
+                    if (Math.abs(clockOffsetSecs) < 600L) {
+                        CareSensAirNative.setClockOffset(handle, clockOffsetSecs)
+                    }
                     val appInfoC = appInfoChar ?: return
                     if (CareSensAirNative.getLastSequence(handle) <= 0 || sensorStartedAtMsUnknown) {
                         // Eerste keer ooit voor deze sensor (kalibratie-
@@ -1660,7 +1793,42 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
 
         private fun handleGlucoseDataNotification(gatt: BluetoothGatt, value: ByteArray) {
             val handle = nativeStateHandle ?: return
-            when (val result = CareSensAirNative.processGlucoseData(handle, value)) {
+            // 03/10/2026 (editor, RONDE 209, BUGFIX 03/10/2026 avond — zie
+            // CareSensAirNative.kt's crash-breaker-kdoc voor het volledige
+            // verhaal van de fout) — de oorspronkelijke aanname hieronder was
+            // FOUT: "een 0xC4-aankondiging crasht in de praktijk nooit, dus
+            // onschadelijk om ook daar te armen/disarmen". Een live caselog
+            // (sensor bleef op exact hetzelfde vastgelopen record 267 hangen,
+            // 70+ minuten, ononderbroken) liet zien dat de opeenvolgende-
+            // crashes-teller NOOIT verder kwam dan 1: elke verbindingspoging
+            // ontvangt EERST een onschadelijke 0xC4-aankondiging (reg0=196,
+            // bereikt de rekenbibliotheek nooit, zie caresensair_bridge.cpp's
+            // 0xC4-tak) en DAARNA het echte, vastgelopen 0xC5-record
+            // (reg0=197). De 0xC4-aanroep armt en disarmt zichzelf dus altijd
+            // netjes — en [disarmCrashBreaker] wiste daarbij de OPGEBOUWDE
+            // teller van de vorige, echte crash, nog VOORDAT het 0xC5-record
+            // de kans kreeg opnieuw te crashen. Netto resultaat: de teller
+            // stond bij elke nieuwe procespoging alweer op 0 vóór de
+            // eigenlijke risicovolle aanroep, en kwam dus nooit bij de
+            // drempel van 3. Fix: alleen de daadwerkelijk risicovolle 0xC5-
+            // aanroepen (reg0 == 197, de enige tak die
+            // `air1_opcal4_algorithm()` ooit aanroept, zie
+            // caresensair_bridge.cpp) armen/disarmen — een 0xC4-aankondiging
+            // (reg0 == 196) slaat deze hele stap gewoon over, precies omdat
+            // die nooit risicovol is.
+            val isRiskyDataFrame = value.isNotEmpty() && (value[0].toInt() and 0xFF) == 0xC5
+            val ctxForBreaker = appContext
+            if (isRiskyDataFrame && ctxForBreaker != null) {
+                CareSensAirNative.armCrashBreaker(ctxForBreaker, slot)
+            }
+            val glucoseFrameResult = CareSensAirNative.processGlucoseData(handle, value)
+            // Deze regel wordt alleen bereikt als de aanroep hierboven NIET
+            // gecrasht is — exact het signaal dat [armCrashBreaker]/
+            // [registerCrashIfArmed] nodig hebben.
+            if (isRiskyDataFrame && ctxForBreaker != null) {
+                CareSensAirNative.disarmCrashBreaker(ctxForBreaker, slot)
+            }
+            when (val result = glucoseFrameResult) {
                 is CareSensAirNative.GlucoseFrameResult.RecordCountAnnounced -> {
                     // 24/09/2026 (editor, RONDE 181) — zie CareSensAirDiagnostics.kt's
                     // kdoc: publiceert (indien de moeite waard) de "al een
@@ -1734,6 +1902,11 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
                         // sessie; zie het klasse-veld en
                         // computeReconnectCooldownMs()'s kdoc.
                         if (cadenceAnchorAtMs == null) cadenceAnchorAtMs = connectedAtMs
+                        // 05/10/2026 (editor, RONDE 213) — zie het veld.
+                        val measuredMs = reading.epochSecs * 1000L
+                        if (lastMeasurementAtMs == null || measuredMs > lastMeasurementAtMs!!) {
+                            lastMeasurementAtMs = measuredMs
+                        }
                         scope.launch { settings.setCareSensAirLastConnectedAtMs(slot, connectedAtMs) }
                         scope.launch {
                             _readings.emit(

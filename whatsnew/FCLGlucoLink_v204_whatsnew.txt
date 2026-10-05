@@ -1,0 +1,7 @@
+Alarmscherm: een alarm kan nu niet meer per ongeluk worden weggeveegd — alleen Stoppen of Sluimeren sluit het scherm.
+
+Nieuw: waarschuwing in Alarminstellingen met een rechtstreekse link naar de systeeminstelling die nodig is zodat het alarmscherm vanzelf (ook bij vergrendeld toestel of slaapstand) actief naar voren komt, in plaats van als gewone meldingen te verschijnen.
+
+Taalfix: het alarmscherm volgde nog niet altijd de gekozen app-taal.
+
+Geen wijzigingen aan G6, G7 of CareSens Air in deze versie.

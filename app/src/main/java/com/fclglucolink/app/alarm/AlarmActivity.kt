@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -22,6 +23,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,9 +38,12 @@ import androidx.lifecycle.lifecycleScope
 import com.fclglucolink.app.data.AppSettings
 import com.fclglucolink.app.data.GlucoseReadingStore
 import com.fclglucolink.app.sensor.GlucoseReading
+import com.fclglucolink.app.ui.AppLanguage
 import com.fclglucolink.app.ui.GlucoseUnit
+import com.fclglucolink.app.ui.LocalAppLanguage
 import com.fclglucolink.app.ui.formatForDisplayWithUnit
 import com.fclglucolink.app.ui.theme.FCLGlucoLinkTheme
+import com.fclglucolink.app.ui.tr
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -73,31 +78,48 @@ class AlarmActivity : ComponentActivity() {
         alarmType = parseAlarmType(intent)
 
         setContent {
-            FCLGlucoLinkTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    val type = alarmType
-                    if (type == null) {
-                        // Geen (geldig) alarmtype meegegeven — kan in de
-                        // praktijk niet gebeuren via de normale
-                        // AlarmController-route, maar defensief: gewoon
-                        // meteen sluiten i.p.v. een leeg scherm tonen.
-                        LaunchedEffect(Unit) { finish() }
-                    } else {
-                        AlarmContent(
-                            type = type,
-                            onStop = {
-                                lifecycleScope.launch {
-                                    AlarmController.stop(this@AlarmActivity, type)
-                                    finish()
+            // 01/10/2026 (editor, RONDE 196, op verzoek — een alarm moet
+            // echt geaccordeerd of gesnoozed worden, niet per ongeluk weg te
+            // krijgen) — [BackHandler] hieronder consumeert de terug-knop/
+            // -gebaar zonder iets te doen: de enige manier om dit scherm te
+            // sluiten is via onStop/onSnooze. `AlarmActivity` is bewust een
+            // EIGEN `ComponentActivity` (zie klasse-kdoc), dus zit NIET
+            // binnen `FclGlucoLinkNavHost()`'s `CompositionLocalProvider`
+            // voor [LocalAppLanguage] — zonder de eigen provider hieronder
+            // zou [tr] hier altijd stilzwijgend op Engels terugvallen,
+            // ongeacht de door de gebruiker gekozen taal.
+            var language by remember { mutableStateOf(AppLanguage.ENGLISH) }
+            LaunchedEffect(Unit) {
+                language = AppSettings(this@AlarmActivity).getAppLanguageOnce()
+            }
+            CompositionLocalProvider(LocalAppLanguage provides language) {
+                FCLGlucoLinkTheme {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        BackHandler(enabled = true) { /* bewust genegeerd, zie kdoc hierboven */ }
+                        val type = alarmType
+                        if (type == null) {
+                            // Geen (geldig) alarmtype meegegeven — kan in de
+                            // praktijk niet gebeuren via de normale
+                            // AlarmController-route, maar defensief: gewoon
+                            // meteen sluiten i.p.v. een leeg scherm tonen.
+                            LaunchedEffect(Unit) { finish() }
+                        } else {
+                            AlarmContent(
+                                type = type,
+                                onStop = {
+                                    lifecycleScope.launch {
+                                        AlarmController.stop(this@AlarmActivity, type)
+                                        finish()
+                                    }
+                                },
+                                onSnooze = { minutes ->
+                                    lifecycleScope.launch {
+                                        AlarmController.snooze(this@AlarmActivity, type, minutes)
+                                        finish()
+                                    }
                                 }
-                            },
-                            onSnooze = { minutes ->
-                                lifecycleScope.launch {
-                                    AlarmController.snooze(this@AlarmActivity, type, minutes)
-                                    finish()
-                                }
-                            }
-                        )
+                            )
+                        }
                     }
                 }
             }
@@ -179,9 +201,9 @@ private fun AlarmContent(type: AlarmType, onStop: () -> Unit, onSnooze: (Int) ->
             Text(reading.glucoseMgdl.formatForDisplayWithUnit(displayUnit), style = MaterialTheme.typography.displayMedium)
         }
         Spacer(Modifier.height(40.dp))
-        Button(onClick = onStop, modifier = Modifier.fillMaxWidth()) { Text("Stop") }
+        Button(onClick = onStop, modifier = Modifier.fillMaxWidth()) { Text(tr("Stop", "Stoppen")) }
         Spacer(Modifier.height(24.dp))
-        Text("Snooze", style = MaterialTheme.typography.titleMedium)
+        Text(tr("Snooze", "Sluimeren"), style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(8.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(15, 30, 60).forEach { minutes ->

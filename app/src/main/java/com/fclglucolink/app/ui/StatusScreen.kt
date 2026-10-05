@@ -913,6 +913,24 @@ private fun CompactSensorSummary(
             val text = dexcomG7StatusText(connectionState, lastConnectedAtMs)
             text to startedAtMs
         }
+        // 02/10/2026 (editor, RONDE 202, na live-melding: "hoofdscherm toont
+        // nu niet hoelang hij al draait") — ACCUCHEK_SMARTGUIDE ontbrak hier
+        // volledig, exact dezelfde makke als G7 vóór Ronde 183 (zie die
+        // kdoc hierboven): viel terug op de generieke `else`-tak, dus geen
+        // "Last connected"-tekst en geen looptijd-regel. accuChekStatusText()
+        // en accuChekLastConnectedAtMs() bestonden al
+        // (AccuChekSmartGuideStatusScreen.kt, Ronde 198) — alleen nooit hier
+        // aangeroepen. Looptijd: accuChekSessionStartAtMs is de sessiestart
+        // zoals door de sensor zelf gerapporteerd (CGM Session Run Time /
+        // CGM Status timeOffsetMinutes, zie AccuChekSmartGuideDriver.kt) —
+        // specifieker dan de generieke per-slot fallback, dus bewust die
+        // hier gebruikt i.p.v. effectiveSensorSessionStartedAtMsFlow.
+        SensorType.ACCUCHEK_SMARTGUIDE -> {
+            val lastConnectedAtMs by settings.accuChekLastConnectedAtMs(slot).collectAsState(initial = null)
+            val sessionStartAtMs by settings.accuChekSessionStartAtMs(slot).collectAsState(initial = null)
+            val text = accuChekStatusText(connectionState, lastConnectedAtMs)
+            text to sessionStartAtMs
+        }
         else -> connectionStatusText(connectionState) to null
     }
     val runtimeText = sensorRuntimeText(sensorStartedAtMs, nowMs)

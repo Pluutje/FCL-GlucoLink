@@ -27,7 +27,17 @@ enum class SensorType(val displayName: String, val implemented: Boolean) {
     // DexcomG7Driver.kt voor de volledige implementatie en wat daar bewust
     // nog niet in zit.
     DEXCOM_G7("Dexcom G7 / ONE+", implemented = true),
-    ACCUCHEK_SMARTGUIDE("Accu-Chek SmartGuide", implemented = false),
+    // 01/10/2026 (editor, RONDE 197) — `implemented = true` vóór de eerste
+    // live-test tegen een echte SmartGuide-meter, exact dezelfde aanpak als
+    // destijds bij CareSens Air/G6/G7 (zie die kdoc's hierboven/hieronder):
+    // nog niet tegen echte hardware geverifieerd op dit moment, bijgesteld
+    // na de eerste live-test. Zie sensor/accuchek/AccuChekSmartGuideDriver.kt
+    // en AccuChekSmartGuideProtocol.kt voor de volledige implementatie
+    // (standaard Bluetooth SIG Glucose Profile, service 0x1808 — GEEN
+    // vendor-crypto zoals G6/G7, GEEN closed-source bridge zoals CareSens
+    // Air) en README.md's Ronde 197-sectie voor het onderzoek dat hieraan
+    // voorafging.
+    ACCUCHEK_SMARTGUIDE("Accu-Chek SmartGuide", implemented = true),
     // 08/08/2026 (editor, RONDE 55) — G6 stond hier tot vandaag bewust niet
     // in, omdat Juggluco er zelf ook geen ondersteuning voor heeft. Dat is
     // achterhaald: de gebruiker gebruikt BYODA (een gemodificeerde Dexcom-

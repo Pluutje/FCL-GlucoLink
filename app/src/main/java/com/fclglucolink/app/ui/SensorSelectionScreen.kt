@@ -315,6 +315,30 @@ private fun SensorCard(sensor: SensorType, isActive: Boolean, onClick: () -> Uni
                         ),
                         color = MaterialTheme.colorScheme.secondary
                     )
+                    // 01/10/2026 (editor, RONDE 199, correctie op Ronde 198)
+                    // — Ronde 198's waarschuwing hier ("moet eerst met de
+                    // officiële app gestart worden") bleek ONJUIST: de
+                    // gebruiker heeft een gloednieuwe, nog nooit gebruikte
+                    // sensor rechtstreeks met FCLGlucoLink geplakt en
+                    // verbonden — geen andere app aangeraakt — en kreeg
+                    // gewoon Android's koppelscherm, daarna de opwarmtijd en
+                    // na 60 minuten echte metingen. De eerdere aanname kwam
+                    // uit GitHub-discussies waarin iedereen toevallig al een
+                    // geactiveerde sensor had; dat bewees dus nooit dat een
+                    // fabrieksnieuwe sensor NIET rechtstreeks kon starten.
+                    // Enter the 4-digit... (G7 boven) laat zien dat nieuw-en-
+                    // ongetest wél vermeld mag worden — dat doen we hier ook,
+                    // i.p.v. de ingetrokken claim.
+                    sensor == SensorType.ACCUCHEK_SMARTGUIDE -> Text(
+                        tr(
+                            "Scan the data matrix on the blue cap, then enter the PIN. Works " +
+                                "directly with a brand-new sensor, no other app needed.",
+                            "Scan de data matrix op de blauwe dop, en voer dan de PIN in. " +
+                                "Werkt rechtstreeks met een fabrieksnieuwe sensor, geen andere " +
+                                "app nodig."
+                        ),
+                        color = MaterialTheme.colorScheme.secondary
+                    )
                 }
             },
             leadingContent = { Icon(Icons.Filled.Bluetooth, contentDescription = null) }

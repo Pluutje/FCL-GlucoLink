@@ -374,7 +374,15 @@ void clearPendingFrame() {
 // `SensorInfo`/`AirData`-verwerking in java.cpp, zonder de Juggluco-eigen
 // SensorGlucoseData/mmap-laag eromheen.
 struct CareSensAirState {
-    air1_opcal4_device_info_t sensorInfo{};   // fabriekskalibratieprofiel — per sensor, via BLE ontvangen (0xC2-berichten)
+    // 03/10/2026 (editor, BUGFIX — zie nativeCreateState()'s kdoc hieronder
+    // voor het volledige verhaal: dit was tot nu toe `air1_opcal4_device_info_t`,
+    // wat GEEN eigen default-waarden heeft, in plaats van `DeviceInfo3Obj`
+    // (zelfde velden + in-class defaults, air.hpp regel 604/722) zoals
+    // Juggluco zelf gebruikt — `DeviceInfo3Obj` is gekozen i.p.v. de ~100
+    // defaultwaarden hier handmatig over te typen, om fouten daarbij
+    // uit te sluiten en bij een eventuele toekomstige air.hpp-wijziging
+    // vanzelf in sync te blijven met Juggluco's eigen bron.
+    DeviceInfo3Obj sensorInfo{};   // fabriekskalibratieprofiel — per sensor, via BLE ontvangen (0xC2-berichten)
     air1_opcal4_arguments_t generated{};      // algoritme-interne status — bouwt op over metingen heen, MOET persistent zijn
     air1_opcal4_output_t output{};
     air1_opcal4_debug_t debug{};
@@ -422,6 +430,10 @@ struct CareSensAirState {
     // app-herstart heen bewaard te blijven — vers beginnen bij 0 kost
     // hooguit één cyclus voordat de eerste correctie binnenkomt.
     int64_t clockOffsetSecs = 0;
+    // 05/10/2026 (editor, RONDE 213) — false tot de eerste verse meting de
+    // offset voor het eerst bepaald heeft; zie de offset-logica in
+    // nativeProcessGlucoseData(). Niet gepersisteerd (zelfde als clockOffsetSecs).
+    bool clockOffsetValid = false;
 };
 
 // Export/import-blob-layout: vaste volgorde, vaste groottes (alle velden
@@ -440,8 +452,16 @@ struct CareSensAirState {
 // velden aangehangen. Een blob van vóór deze wijziging (dus ook van vóór
 // Ronde 175/176) faalt weer gewoon de size-check hieronder en start vers —
 // voor een sensor die al maandenlang bevroren zit is dat geen verlies.
+// 03/10/2026 (editor, BUGFIX) — sensorInfo is nu een `DeviceInfo3Obj`
+// (zie CareSensAirState's kdoc), niet meer het kale `air1_opcal4_device_info_t`
+// — beide hebben identieke veldvolgorde/groottes (DeviceInfo3Obj voegt zelf
+// geen velden toe t.o.v. air1_opcal4_device_info_t, alleen in-class defaults),
+// dus `sizeof(DeviceInfo3Obj)` hier is nog steeds gelijk aan de oude waarde —
+// maar het juiste, bij de werkelijke opslagtype passende type gebruiken
+// voorkomt verwarring/toekomstige mismatch als een van de twee structs ooit
+// uit de pas gaat lopen.
 constexpr size_t kExportSize =
-    sizeof(air1_opcal4_device_info_t) + sizeof(air1_opcal4_arguments_t) + sizeof(int) * 2
+    sizeof(DeviceInfo3Obj) + sizeof(air1_opcal4_arguments_t) + sizeof(int) * 2
     + sizeof(int) + sizeof(uint32_t) + sizeof(uint32_t);
 
 } // namespace
@@ -542,15 +562,33 @@ Java_com_fclglucolink_app_sensor_caresensair_CareSensAirNative_nativeInstallCras
 JNIEXPORT jlong JNICALL
 Java_com_fclglucolink_app_sensor_caresensair_CareSensAirNative_nativeCreateState(
     JNIEnv *, jclass) {
-    // 01/08/2026 (editor) — `CareSensAirState{}` initialiseert sensorInfo
-    // met air1_opcal4_device_info_t's eigen defaults (géén — die struct zelf
-    // heeft geen in-class-defaults; de fallbackwaarden zoals ycept=1.0,
-    // vref=1.49594 staan op DeviceInfo2Obj, niet op air1_opcal4_device_info_t
-    // — zie kdoc bij nativeSaveSensorInfoChunk1 hieronder voor waarom dat
-    // hier geen probleem is) en `generated` op nul — exact hetzelfde
+    // 01/08/2026 (editor, FOUTIEF — zie BUGFIX-kdoc 03/10/2026 hieronder)
+    // [oorspronkelijke, onjuiste aanname, bewust NIET verwijderd maar
+    // doorgestreept gelaten als waarschuwing voor toekomstige editors]:
+    // "`CareSensAirState{}` initialiseert sensorInfo met air1_opcal4_
+    // device_info_t's eigen defaults (géén — die struct zelf heeft geen
+    // in-class-defaults [...]) en `generated` op nul — exact hetzelfde
     // startpunt als Juggluco's mmap-constructor voor een NIEUWE sensor
-    // (streamdata.hpp: `sensorInfo(...,[](DeviceInfo3Obj *gegs){ *gegs={}; })`,
-    // `generated(...)` zonder init-lambda = zero-initialisatie).
+    // (streamdata.hpp: `sensorInfo(...,[](DeviceInfo3Obj *gegs){ *gegs={}; })`
+    // [...])". DIT KLOPTE NIET: `*gegs={}` op een `DeviceInfo3Obj*` wijst
+    // niet naar nul — het wijst een TIJDELIJK `DeviceInfo3Obj{}`-object toe,
+    // en omdat `DeviceInfo3Obj`/`DeviceInfo2Obj` wél in-class-defaults hebben
+    // (air.hpp regel 604-724: ycept=1.0, slope100=3.5226, maximumValue=500,
+    // minimumValue=40, en ~90 err1/err2/err6-ruisdrempelconstanten), levert
+    // `DeviceInfo3Obj{}` juist een object MET die defaults op, niet een
+    // genulde struct. Juggluco's sensorInfo begint dus met zinvolle
+    // fabriekswaarden; FCLGlucoLink's oude `air1_opcal4_device_info_t
+    // sensorInfo{}` (géén in-class-defaults op DIE struct) begon met louter
+    // nullen voor elk veld dat de 0xC2-koppelstap niet raakt (±205 bytes,
+    // offsets 229-433: alle err1/err2/err6-drempels, maximumValue/
+    // minimumValue, kalman-/slope-constanten). Dat is de bevestigde
+    // oorzaak van de CareSens Air-crash-lus — zie README Ronde 211:
+    // `sensorInfo` is daarom per vandaag van type `DeviceInfo3Obj`
+    // veranderd (zie CareSensAirState's kdoc), zodat deze in-class-defaults
+    // er automatisch INSTAAN, exact zoals bij Juggluco. `generated` blijft
+    // wél gewoon op nul — dat deel van de oorspronkelijke aanname was
+    // correct (Juggluco's `generated(...)` heeft ZELF geen init-lambda en
+    // geen in-class-defaults op `air1_opcal4_arguments_t`).
     auto *state = new CareSensAirState();
     return reinterpret_cast<jlong>(state);
 }
@@ -627,6 +665,16 @@ Java_com_fclglucolink_app_sensor_caresensair_CareSensAirNative_nativeImportState
     memcpy(&state->firstGlucoseFrameEpochSec, bytes + offset, sizeof(uint32_t));
     env->ReleaseByteArrayElements(blob, bytes, JNI_ABORT);
     return JNI_TRUE;
+}
+
+// 05/10/2026 (editor, RONDE 213) — zie de offset-toelichting in
+// nativeProcessGlucoseData(): klokverschil telefoon - sensor (seconden).
+JNIEXPORT void JNICALL
+Java_com_fclglucolink_app_sensor_caresensair_CareSensAirNative_nativeSetClockOffset(
+    JNIEnv *, jclass, jlong handle, jlong offsetSecs) {
+    auto *state = reinterpret_cast<CareSensAirState *>(handle);
+    state->clockOffsetSecs = static_cast<int64_t>(offsetSecs);
+    state->clockOffsetValid = true;
 }
 
 JNIEXPORT jint JNICALL
@@ -1006,8 +1054,17 @@ Java_com_fclglucolink_app_sensor_caresensair_CareSensAirNative_nativeProcessGluc
     air1_opcal4_output_t output{};
     air1_opcal4_debug_t debug{};
 
+    // 03/10/2026 (editor, BUGFIX) — `state->sensorInfo` is nu `DeviceInfo3Obj`
+    // (zie CareSensAirState's kdoc), niet het kale `air1_opcal4_device_info_t`
+    // dat `g_air1_opcal4_algorithm`'s functiehandtekening verwacht — zelfde
+    // reinterpret_cast als Juggluco's eigen aanroep (java.cpp:
+    // `reinterpret_cast<air1_opcal4_device_info_t *>(deviceInfo)`), want de
+    // twee structs zijn layout-identiek (DeviceInfo3Obj = DeviceInfo2Obj +
+    // sensor_start_time, letterlijk dezelfde velden/volgorde/groottes als
+    // air1_opcal4_device_info_t, alleen MET in-class-defaults).
     const unsigned char algoRes = g_air1_opcal4_algorithm(
-        &state->sensorInfo, &input.cgm_input, &input.empty, &state->generated, &output, &debug);
+        reinterpret_cast<air1_opcal4_device_info_t *>(&state->sensorInfo),
+        &input.cgm_input, &input.empty, &state->generated, &output, &debug);
 
     // 13/09/2026 (editor, RONDE 179) — de aanroep hierboven is veilig
     // teruggekomen (geen crash), dus dit record hoeft niet langer als
@@ -1058,9 +1115,37 @@ Java_com_fclglucolink_app_sensor_caresensair_CareSensAirNative_nativeProcessGluc
             const auto rawMeasurementTime = static_cast<int64_t>(output.measurement_time_standard);
             const int64_t candidateOffset = static_cast<int64_t>(nowSec) - rawMeasurementTime;
             const int64_t candidateOffsetAbs = candidateOffset < 0 ? -candidateOffset : candidateOffset;
-            if (candidateOffsetAbs < kFreshRecordThresholdSecs) {
-                state->clockOffsetSecs = candidateOffset;
-            }
+            // 05/10/2026 (editor, RONDE 213, live-log fclglucolink_2026-10-05:
+            // de sensor meet exact elke 300s, maar de zichtbare intervallen
+            // waren 3-8 minuten) — de regel hierboven zette de offset bij
+            // ELK vers record opnieuw op (nu - sensortijd), dus incl. de
+            // ontvangstvertraging (0-4s of ~60/120/180s, afhankelijk van
+            // welke 2-minuten-herverbinding het record toevallig ophaalde).
+            // Die vertraging werd zo in het meettijdstip gebakken: de
+            // timestamps volgden de ontvangsttijd i.p.v. het 5-minuten-raster
+            // van de sensor. Een vertraging is altijd >= 0, dus de laagste
+            // kandidaat is het dichtst bij de waarheid: lager -> meteen
+            // overnemen; hoger -> hooguit 1s per record bijschuiven (volgt
+            // alleen echte kristaldrift, nooit een eenmalige ontvangst-
+            // vertraging). Resultaat: opeenvolgende metingen liggen op
+            // 300s (+-1s) van elkaar, constant voor AAPS.
+            // 05/10/2026 (editor, RONDE 213, HERZIEN na het testen tegen de
+            // eigen log van de gebruiker, 08:12-14:10: daar was de ontvangst-
+            // vertraging stabiel ~121s, waardoor de ratchet hierboven de
+            // offset naar ~121s zou trekken en de timestamps alsnog op
+            // ontvangsttijd zou zetten) — de sensorklok loopt gelijk met de
+            // telefoonklok (de app synchroniseert 'm zodra het verschil
+            // >= 2s is, zie parseAppInfoResponse), dus de offset is een
+            // KLOKverschil van hooguit enkele seconden en géén
+            // ontvangstvertraging. De offset komt daarom niet meer uit de
+            // records zelf, maar wordt per verbinding gezet door de driver
+            // via nativeSetClockOffset(), uit het tijdstip dat de sensor in
+            // zijn app-info-antwoord meestuurt (ontvangstvertraging daarvan
+            // is milliseconden). Records die langer in de sensor lagen
+            // behouden zo hun echte meettijd (exact 300s uit elkaar).
+            (void)candidateOffsetAbs;
+            (void)kFreshRecordThresholdSecs;
+            (void)candidateOffset;
             resultBuf[3] = static_cast<jlong>(rawMeasurementTime + state->clockOffsetSecs);
             resultBuf[4] = std::isnan(trendrate)
                                 ? std::numeric_limits<jlong>::min()

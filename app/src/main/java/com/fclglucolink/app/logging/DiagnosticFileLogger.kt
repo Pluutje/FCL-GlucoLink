@@ -231,14 +231,32 @@ object DiagnosticFileLogger {
      * bestaande "nieuwe dag = nieuw bestand"-conventie (zie [writeLine]):
      * een meerdaagse test krijgt zo bij elke dagwisseling opnieuw de
      * (mogelijk inmiddels bijgewerkte) versie te zien.
+     *
+     * 02/10/2026 (editor, RONDE 205, bugfix na live-controle) — de
+     * `if (file.exists()) return`-gate hierboven betekende: binnen één
+     * kalenderdag schrijft dit precies ÉÉN keer een banner, bij het EERSTE
+     * schrijfmoment van die dag — niet bij elke app-herstart. Een
+     * update/herinstallatie die later diezelfde dag gebeurt (bv. tijdens
+     * een intensieve live-testsessie met meerdere builds per dag, precies
+     * wat hier gebeurde) levert dan GEEN nieuwe banner op, ook al draait
+     * er feitelijk een andere build — het logbestand suggereert dan ten
+     * onrechte dat alles nog steeds dezelfde build is. Nu: een banner bij
+     * ELKE app-start (zie [init] in FclGlucoLinkApp.kt), niet meer alleen
+     * bij het eerste schrijfmoment van de dag — zo blijft het 100%
+     * duidelijk welke build op welk moment daadwerkelijk draaide, ook bij
+     * meerdere herinstallaties/herstarts binnen dezelfde dag.
      */
-    private fun writeVersionHeaderIfNewFile(file: File) {
-        if (file.exists()) return
+    @Volatile
+    private var versionBannerWrittenThisProcess = false
+
+    private fun writeVersionHeaderIfNeeded(file: File) {
+        if (versionBannerWrittenThisProcess) return
+        versionBannerWrittenThisProcess = true
         runCatching {
             val timeStamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US).format(Date())
             file.appendText(
                 "$timeStamp [$instanceTag] === FCLGlucoLink ${BuildConfig.VERSION_NAME} " +
-                    "(build ${BuildConfig.VERSION_CODE}) ===\n"
+                    "(build ${BuildConfig.VERSION_CODE}, gebouwd ${BuildConfig.BUILD_TIME}) ===\n"
             )
         }
     }
@@ -249,7 +267,7 @@ object DiagnosticFileLogger {
             val dir = logDirOrNull() ?: return
             val dateStamp = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
             val file = File(dir, "fclglucolink_$dateStamp.txt")
-            writeVersionHeaderIfNewFile(file)
+            writeVersionHeaderIfNeeded(file)
             val timeStamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US).format(Date())
             file.appendText("$timeStamp [$instanceTag] $message\n")
         }
@@ -304,10 +322,11 @@ object DiagnosticFileLogger {
             if (!dir.exists() && !dir.mkdirs() && !dir.exists()) return@runCatching
             val dateStamp = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
             val file = File(dir, "fclglucolink_$dateStamp.txt")
-            // 24/09/2026 (editor, RONDE 182) — zie writeVersionHeaderIfNewFile()'s
-            // kdoc: ook hier, voor het (zeldzame) geval dat een crash het
-            // allereerste is wat vandaag naar het logbestand geschreven wordt.
-            writeVersionHeaderIfNewFile(file)
+            // 24/09/2026 (editor, RONDE 182, hernoemd RONDE 205) — zie
+            // writeVersionHeaderIfNeeded()'s kdoc: ook hier, voor het
+            // (zeldzame) geval dat een crash het allereerste is wat dit
+            // proces naar het logbestand schrijft.
+            writeVersionHeaderIfNeeded(file)
             val timeStamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US).format(Date())
             file.appendText(
                 "$timeStamp [$instanceTag] === UNCAUGHT EXCEPTION on thread ${thread.name} ===\n$stackTrace\n"

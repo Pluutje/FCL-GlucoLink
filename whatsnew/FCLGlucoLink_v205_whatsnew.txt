@@ -1,0 +1,7 @@
+Nieuw: koppeling met de Accu-Chek SmartGuide-sensor toegevoegd.
+
+Let op: dit is nieuw en nog niet uitgebreid getest. Het kan zijn dat de sensor eerst één keer met de officiële mySugr-app gekoppeld moet worden voordat FCLGlucoLink hem goed kan uitlezen. Lukt koppelen hier niet meteen, probeer dat dan eerst. Op het koppelscherm staat nu ook zelf een waarschuwing hierover.
+
+Fix: bij een sensor-slot op "Geen" zetten viel het andere slot (bv. een actieve Dexcom G7) onnodig mee weg, herstelbaar alleen met een volledige herstart van de app. Werkt nu gewoon door, ongeacht welke sensor op het andere slot staat.
+
+Daarnaast diverse stabiliteitsfixes voor de SmartGuide-koppeling zelf: geen hangende koppeling meer naast een actieve G7, geen verbroken G7-verbinding meer tijdens een SmartGuide-sessie, de looptijd en laatste-meting-tijd worden nu correct getoond, en eerdere metingen worden niet meer telkens opnieuw opgehaald bij elke herverbinding.

@@ -157,6 +157,21 @@ fun AboutScreen(onBack: () -> Unit) {
                 tr("Version", "Versie") + " ${BuildConfig.VERSION_NAME}",
                 style = MaterialTheme.typography.bodyMedium
             )
+            // 02/10/2026 (editor, RONDE 205, op verzoek) — zie
+            // build.gradle.kts' kdoc bij BUILD_TIME: versionName wordt
+            // bewust alleen op expliciet verzoek gebumpt, dus tijdens een
+            // reeks snelle testrondes kan dezelfde versietekst dagenlang
+            // ongewijzigd blijven staan terwijl de onderliggende code wél
+            // verandert. BUILD_TIME is automatisch gevuld op het moment
+            // van bouwen (nooit handmatig bij te werken, dus nooit
+            // "vergeten") en geeft zo altijd een uniek, controleerbaar
+            // moment — kleiner/secundair getoond, de versieregel blijft
+            // het primaire label.
+            Text(
+                tr("Built", "Gebouwd op") + " ${BuildConfig.BUILD_TIME}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.secondary
+            )
             Text(
                 tr(
                     "The xDrip-broadcast implementation is a Kotlin port of " +

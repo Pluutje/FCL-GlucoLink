@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.VpnKey
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -170,6 +171,47 @@ fun PairingScreen(
 
             Button(onClick = { startScan() }) {
                 Text(if (scanning) "Search again" else "Search for sensor")
+            }
+
+            // 02/10/2026 (editor, RONDE 207, op verzoek) — Accu-Chek
+            // SmartGuide-support is nieuw (Ronde 196+) en tot nu toe alleen
+            // getest op twee toestellen, allebei NA een eerdere koppeling
+            // met de officiële mySugr-app. Onbekend of een sensor die NOOIT
+            // met mySugr geweest is, zich meteen hier laat koppelen, of eerst
+            // één keer met mySugr moet draaien — zelfde type onzekerheid als
+            // de G7-kdoc elders in dit bestand over "nog niet tegen echte
+            // hardware getest" bij een nieuwe driver. Deze kaart waarschuwt
+            // daar nu vooraf voor i.p.v. de gebruiker pas achteraf, na een
+            // mislukte koppelpoging, te laten uitzoeken of mySugr nodig is.
+            if (sensorType == SensorType.ACCUCHEK_SMARTGUIDE) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.Top
+                    ) {
+                        Icon(
+                            Icons.Filled.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Text(
+                            "Accu-Chek SmartGuide support is new and not yet " +
+                                "extensively tested. If pairing here doesn't " +
+                                "work, try pairing the sensor once with the " +
+                                "official mySugr app first, then come back " +
+                                "and try again here.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
             }
 
             // 20/08/2026 (editor, RONDE 116) — zie kdoc hierboven bij

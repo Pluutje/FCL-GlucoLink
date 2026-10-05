@@ -14,8 +14,10 @@ import androidx.navigation.compose.rememberNavController
 import com.fclglucolink.app.data.AppSettings
 import com.fclglucolink.app.sensor.SensorSlot
 import com.fclglucolink.app.sensor.SensorType
+import com.fclglucolink.app.sensor.caresensair.CareSensAirNative
 import com.fclglucolink.app.sensor.ble.ConnectionStatusBridge
 import com.fclglucolink.app.sensor.ConnectionState
+import com.fclglucolink.app.startBleConnectionService
 import com.fclglucolink.app.stopBleConnectionService
 import kotlinx.coroutines.launch
 
@@ -71,6 +73,10 @@ private val ROUTE_CARESENS_STATUS = "$BASE_CARESENS_STATUS/{slot}"
 // vervangt de statusRouteFor()-fallback naar PairingScreen uit Ronde 127.
 private const val BASE_DEXCOM_G7_STATUS = "dexcom_g7_status"
 private val ROUTE_DEXCOM_G7_STATUS = "$BASE_DEXCOM_G7_STATUS/{slot}"
+// 01/10/2026 (editor, RONDE 198) — zie AccuChekSmartGuideStatusScreen.kt's
+// kdoc, zelfde patroon als ROUTE_DEXCOM_G7_STATUS hierboven.
+private const val BASE_ACCUCHEK_STATUS = "accuchek_smartguide_status"
+private val ROUTE_ACCUCHEK_STATUS = "$BASE_ACCUCHEK_STATUS/{slot}"
 private const val ROUTE_SETTINGS = "settings"
 private const val ROUTE_ABOUT = "about"
 // 13/08/2026 (editor, RONDE 106) — geen slot-argument nodig, zie
@@ -209,6 +215,11 @@ fun FclGlucoLinkNavHost() {
         SensorType.CARESENS_AIR -> slotRoute(BASE_CARESENS_STATUS, slot)
         SensorType.SIMULATOR -> slotRoute(BASE_SIMULATOR_SETUP, slot)
         SensorType.DEXCOM_G7 -> slotRoute(BASE_DEXCOM_G7_STATUS, slot)
+        // 01/10/2026 (editor, RONDE 198) — zie AccuChekSmartGuideStatusScreen.kt's
+        // kdoc: zelfde eigen-statusscherm-patroon als G6/G7/CareSens Air
+        // hierboven, i.p.v. in de `else`-fallback naar SensorSelectionScreen
+        // te vallen.
+        SensorType.ACCUCHEK_SMARTGUIDE -> slotRoute(BASE_ACCUCHEK_STATUS, slot)
         else -> slotRoute(BASE_SENSOR_SELECTION, slot)
     }
 
@@ -356,6 +367,25 @@ fun FclGlucoLinkNavHost() {
                 // code op en navigeert door naar het koppelscherm.
                 onChangePairingCode = {
                     navController.navigate(slotRoute(BASE_DEXCOM_G7_SETUP, slot))
+                }
+            )
+        }
+
+        // 01/10/2026 (editor, RONDE 198) — zie AccuChekSmartGuideStatusScreen.kt's
+        // kdoc, zelfde patroon als ROUTE_DEXCOM_G7_STATUS hierboven. Geen
+        // "change pairing code"-achtige actie nodig (dit profiel kent geen
+        // app-ingevoerde pairingcode — koppeling verloopt via Android's
+        // eigen bonding-/PIN-dialoog, zie AccuChekSmartGuideDriver.kt's
+        // klasse-kdoc): alleen Back/Disconnect, net als CareSensAirStatusScreen.
+        composable(ROUTE_ACCUCHEK_STATUS) { backStackEntry ->
+            val slot = slotArg(backStackEntry)
+            AccuChekSmartGuideStatusScreen(
+                slot = slot,
+                onBack = { navController.popBackStack() },
+                onDisconnect = {
+                    stopBleConnectionService(context)
+                    ConnectionStatusBridge.update(slot, ConnectionState.Disconnected)
+                    scope.launch { settings.clearDeviceAddress(slot) }
                 }
             )
         }
@@ -511,6 +541,34 @@ fun FclGlucoLinkNavHost() {
                 // kwam (CombiScreen's tabblad voor deze slot), dat leest
                 // selectedSensor(slot) zelf al reactief en toont dan
                 // vanzelf de "No sensor chosen"-staat.
+                //
+                // 02/10/2026 (editor, RONDE 206, structurele fix na live-
+                // melding: "bij het zetten van slot a op 'none' verliest
+                // slot B direct de verbinding en komt alleen terug na
+                // afsluiten/herstarten van de app") — root cause:
+                // `stopBleConnectionService()` hierboven stopt de HELE
+                // `BleConnectionService` (één `Service`-instantie voor BEIDE
+                // slots, zie die klasse's kdoc) en annuleert ook
+                // `ConnectionWatchdog`'s herstart-wekker, dus ALLE slots
+                // (ook de andere, nog actieve slot) vallen onmiddellijk weg.
+                // Elk ander sensorwissel-pad in deze NavHost doet exact
+                // dezelfde stop (onSensorChosen hierboven, CareSens/G6/G7-
+                // keuzes) maar komt daarna altijd uit op een setup-/pairing-
+                // scherm dat ná het opslaan van de nieuwe keuze zelf weer
+                // `startBleConnectionService()` aanroept (zie
+                // DexcomG6NewSensorScreen.kt/PairingScreen.kt/
+                // SimulatorSetupScreen.kt) — dat herstart de service voor
+                // BEIDE slots, dus de andere slot herstelt daar vanzelf weer.
+                // Dit "None"-pad had als ENIGE geen vervolgscherm en dus ook
+                // nooit die herstart-aanroep: de service bleef daardoor
+                // volledig gestopt totdat de gebruiker de app handmatig
+                // sloot en weer opende (waar MainActivity's opstartpad 'm
+                // weer aanzet). Fix: na het opslaan van de lege keuze voor
+                // DEZE slot alsnog de service herstarten — `ensureSlotConnected()`
+                // in BleConnectionService.kt ziet voor deze slot direct een
+                // `null` sensorType en doet dan terecht niets, terwijl de
+                // andere slot daar gewoon weer een verse driver/connectie
+                // voor opgebouwd krijgt, zonder app-herstart.
                 onClearSensor = {
                     stopBleConnectionService(context)
                     ConnectionStatusBridge.update(slot, ConnectionState.Disconnected)
@@ -523,6 +581,10 @@ fun FclGlucoLinkNavHost() {
                             settings.clearDexcomG7PairingCode(slot)
                         }
                         settings.clearSelectedSensor(slot)
+                        // RONDE 206 — zie kdoc hierboven: zonder deze aanroep
+                        // blijft de service (en dus ELKE slot, niet alleen
+                        // deze) volledig gestopt.
+                        startBleConnectionService(context)
                         navController.popBackStack()
                     }
                 }
@@ -562,6 +624,14 @@ fun FclGlucoLinkNavHost() {
                         // End-tijd zichtbaar totdat de nieuwe sensor zijn
                         // eerste live GATT-antwoord had gestuurd.
                         settings.clearCareSensAirSensorSession(slot)
+                        // 03/10/2026 (editor, RONDE 209) — zie
+                        // CareSensAirNative.kt's crash-breaker-kdoc: de
+                        // opeenvolgende-crashes-teller is per SLOT bijgehouden
+                        // (niet per sensor-serienummer), dus zonder deze reset
+                        // zou een opnieuw koppelen — bv. met een ANDERE,
+                        // gezonde sensor — alsnog geblokkeerd blijven door de
+                        // vorige, kapotte sensor's crash-geschiedenis.
+                        CareSensAirNative.disarmCrashBreaker(context, slot)
                         settings.setSelectedSensor(slot, SensorType.CARESENS_AIR)
                         navController.navigate("$BASE_PAIRING/${SensorType.CARESENS_AIR.name}/${slot.name}") {
                             popUpTo(ROUTE_CARESENS_AIR_CHOICE) { inclusive = true }
@@ -596,6 +666,9 @@ fun FclGlucoLinkNavHost() {
                         // AppSettings.clearCareSensAirSensorSession()'s kdoc/
                         // de identieke reset hierboven bij onExistingSensor.
                         settings.clearCareSensAirSensorSession(slot)
+                        // 03/10/2026 (editor, RONDE 209) — zie de identieke
+                        // reset + kdoc hierboven bij onExistingSensor.
+                        CareSensAirNative.disarmCrashBreaker(context, slot)
                         settings.setSelectedSensor(slot, SensorType.CARESENS_AIR)
                         settings.saveCareSensAirScan(slot, result)
                         // 31/07/2026 (editor) — koppel-stap 2/4: de barcode

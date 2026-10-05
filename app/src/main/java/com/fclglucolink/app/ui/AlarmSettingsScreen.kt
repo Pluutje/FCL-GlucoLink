@@ -1,9 +1,13 @@
 package com.fclglucolink.app.ui
 
 import android.app.Activity
+import android.app.NotificationManager
+import android.content.Context
 import android.content.Intent
 import android.media.RingtoneManager
 import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -18,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,14 +38,20 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.fclglucolink.app.alarm.AlarmAlertMode
 import com.fclglucolink.app.alarm.AlarmCategory
 import com.fclglucolink.app.alarm.AlarmEscalation
@@ -107,6 +118,33 @@ fun AlarmSettingsScreen(onBack: () -> Unit) {
     val masterEnabled by settings.alarmsMasterEnabled.collectAsState(initial = false)
     val displayUnit by settings.displayUnit.collectAsState(initial = GlucoseUnit.MMOL)
 
+    // 01/10/2026 (editor, RONDE 196, op verzoek — alarmen die "per ongeluk
+    // weg te swipen" waren, bleken geen bug in AlarmActivity/AlarmController
+    // zelf: die bouwen al een full-screen-intent + wake-screen-Activity (zie
+    // AlarmController.kt's kdoc bij showFullScreenNotification()), maar
+    // sinds Android 14 (API 34) staat `USE_FULL_SCREEN_INTENT` niet meer
+    // automatisch aan voor gewone apps — zonder die toestemming valt dit
+    // stilletjes terug op een gewone, wél wegswipebare melding. Precies de
+    // "knop zelfde patroon als de batterij-optimalisatie-knop" die
+    // AlarmController.kt's kdoc al als logische vervolgstap noemde.
+    // `canUseFullScreenIntent()` bestaat pas sinds API 34 — op oudere
+    // versies gold de beperking niet, dus daar simpelweg altijd `true`.
+    var fullScreenIntentAllowed by remember { mutableStateOf(canUseFullScreenIntent(context)) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        // Her-checken bij elke terugkeer naar dit scherm (bv. na het
+        // systeeminstellingenscherm hieronder weer te hebben verlaten) —
+        // zonder dit zou de banner na het inschakelen van de toestemming
+        // pas verdwijnen na een volledige her-navigatie naar dit scherm.
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                fullScreenIntentAllowed = canUseFullScreenIntent(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -127,6 +165,40 @@ fun AlarmSettingsScreen(onBack: () -> Unit) {
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            if (!fullScreenIntentAllowed) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            tr("Full-screen alarms are off", "Volledig-scherm-alarmen staan uit"),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Text(
+                            tr(
+                                "Android is currently only allowed to show a normal, " +
+                                    "swipeable notification for alarms — not the full-screen, " +
+                                    "wake-the-screen alert this app is built to show. Enable " +
+                                    "\"Full screen notifications\" for FCLGlucoLink to fix this.",
+                                "Android mag voor alarmen nu alleen een gewone, wegswipebare " +
+                                    "melding tonen — niet de volledig-scherm-melding die het " +
+                                    "scherm wakker maakt waar deze app voor gebouwd is. Zet " +
+                                    "\"Volledig scherm-meldingen\" voor FCLGlucoLink aan om dit " +
+                                    "op te lossen."
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Button(onClick = { openFullScreenIntentSettings(context) }) {
+                            Text(tr("Open settings", "Instellingen openen"))
+                        }
+                    }
+                }
+            }
+
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -522,4 +594,33 @@ private fun MinutesStepper(
             }
         }
     }
+}
+
+/** 01/10/2026 (editor, RONDE 196) — zie de banner-kdoc hierboven in
+ *  [AlarmSettingsScreen]. `NotificationManager.canUseFullScreenIntent()`
+ *  bestaat pas sinds API 34 (Android 14) — op elke oudere versie gold deze
+ *  beperking niet (full-screen-intents werkten daar altijd al zonder
+ *  aparte toestemming), dus daar simpelweg `true`. */
+private fun canUseFullScreenIntent(context: Context): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return true
+    val manager = context.getSystemService(NotificationManager::class.java) ?: return true
+    return manager.canUseFullScreenIntent()
+}
+
+/** 01/10/2026 (editor, RONDE 196) — stuurt de gebruiker naar Android's eigen
+ *  systeemscherm om FCLGlucoLink toestemming te geven voor full-screen-
+ *  intents, zelfde patroon als MainActivity.kt's
+ *  requestIgnoreBatteryOptimizations(): een systeemscherm dat de gebruiker
+ *  zelf moet bevestigen, deze functie kan dat niet omzeilen.
+ *  `ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT` bestaat pas sinds API 34; de
+ *  knop die dit aanroept is sowieso alleen zichtbaar als
+ *  [canUseFullScreenIntent] `false` teruggaf, wat op oudere versies nooit
+ *  gebeurt, maar de SDK-check hier is de robuuste garantie daarvoor. */
+private fun openFullScreenIntentSettings(context: Context) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return
+    val intent = Intent(
+        Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+        Uri.parse("package:${context.packageName}")
+    )
+    runCatching { context.startActivity(intent) }
 }

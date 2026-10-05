@@ -12315,3 +12315,1100 @@ waarden logt. Puur informatief — geen gedragswijziging.
 
 Gewijzigd: `sensor/dexcomg7/DexcomG7Driver.kt`.
 Geen versiebump.
+
+## Ronde 196 — Alarmscherm: niet per ongeluk wegswipebaar + taalfix
+
+01/10/2026 (editor, op verzoek: een alarm-popup die je echt moet
+accorderen of sluimeren en niet per ongeluk kunt wegswipen, liefst met
+het scherm dat vanzelf actief naar voren komt) — onderzoek wees uit dat
+de kernvereisten al bestonden sinds Ronde 106-108: `AlarmController.kt`
+bouwt al een full-screen-notificatie (`setFullScreenIntent`) die
+`AlarmActivity` opent, met wake-screen-vlaggen (`setShowWhenLocked`,
+`setTurnScreenOn`, keyguard-dismiss) zodat die boven het vergrendelscherm
+verschijnt, plus Stop- en Snooze-knoppen. Twee echte gaten bleken over:
+
+**1) Android 14's `USE_FULL_SCREEN_INTENT`-toestemming.** Sinds API 34
+moet de gebruiker deze app apart toestemming geven voor full-screen-
+intents (`Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT`) — zonder
+die toestemming valt Android stilzwijgend terug op een gewone,
+wegswipebare notificatie, exact het probleem dat gemeld werd.
+`AlarmController.kt`'s eigen kdoc documenteerde dit gat al als bekend
+maar nog niet opgelost. Nu toegevoegd aan `AlarmSettingsScreen.kt`: een
+waarschuwingsbanner (zichtbaar zodra `canUseFullScreenIntent()` `false`
+teruggeeft, met een automatische her-check bij elke terugkeer naar het
+scherm via `DisposableEffect`/`LifecycleEventObserver`) met een knop die
+rechtstreeks naar dat systeeminstellingenscherm stuurt — zelfde patroon
+als de bestaande batterij-optimalisatie-knop in `MainActivity.kt`.
+
+**2) Wegswipen/terug-knop.** `AlarmActivity` blokkeerde de terug-knop
+nog niet. Toegevoegd: `BackHandler(enabled = true) { }` die terug-
+gebaar/-knop bewust negeert — de enige manier om het scherm te sluiten
+is nu via de Stop- of Snooze-knop.
+
+**Bijvangst: i18n-bug.** Bij het bouwen hiervan bleek `AlarmActivity`
+een eigen `ComponentActivity` buiten `FclGlucoLinkNavHost()` te zijn, en
+dus NIET binnen de `CompositionLocalProvider` voor `LocalAppLanguage` te
+vallen — `tr()`-aanroepen op het alarmscherm zouden daardoor altijd
+stilzwijgend Engels hebben getoond, ongeacht de taalkeuze. Opgelost door
+de opgeslagen taal zelf te laden (`AppSettings.getAppLanguageOnce()`) en
+de inhoud in een eigen `CompositionLocalProvider` te wikkelen. De Stop-
+en Snooze-knoppen zijn meteen ook vertaald.
+
+**Niet aangeraakt:** het automatisch openen/naar-voren-halen van het
+scherm werkte via de bestaande full-screen-intent al zoals gevraagd —
+zodra de nieuwe toestemming (punt 1) verleend is, komt het scherm vanzelf
+actief naar voren, ook bij vergrendeld toestel of app op de achtergrond.
+
+**Verificatie.** Haakjes-balans gecontroleerd: `AlarmActivity.kt`
+36/36 accolades, 82/82 haakjes; `AlarmSettingsScreen.kt` 91/91
+accolades, 230/230 haakjes. Geen wijzigingen aan het manifest nodig —
+`USE_FULL_SCREEN_INTENT` stond daar al.
+
+Gewijzigd: `alarm/AlarmActivity.kt`, `ui/AlarmSettingsScreen.kt`.
+Nieuw: `whatsnew/FCLGlucoLink_v204_whatsnew.txt`.
+Op verzoek versiebump: versionCode 203→204, versionName
+"0.10.4-g7-rebond-fix"→"0.10.5-alarm-popup".
+
+## Ronde 197 — Accu-Chek SmartGuide: eerste echte sensor-driver
+
+01/10/2026 (editor, op verzoek: Accu-Chek SmartGuide afmaken i.p.v. de
+`error(...)` in `SensorRegistry.kt` te laten staan) — eerst onderzoek, toen
+bouwen.
+
+**Onderzoek.** Twee open-source projecten gekloond en geïnspecteerd:
+github.com/j-kaltes/Juggluco en github.com/NightscoutFoundation/xDrip.
+Conclusie: xDrip wikkelt voor deze meter een CLOSED-SOURCE prebuilt
+bibliotheek (`lwld.glucose.profile`/`libglupro`) — geen bruikbare
+protocolreferentie, net zomin als CareSens Air's eigen native bridge dat
+ooit was. Juggluco implementeert SmartGuide daarentegen gewoon in het open
+via het STANDAARD Bluetooth SIG "Glucose Profile" (GATT-service 0x1808) —
+hetzelfde vendor-neutrale profiel dat vrijwel elke losse
+bloedglucosemeter gebruikt (Accu-Chek Mobile, Accu-Chek SmartGuide, ...).
+Geen vendor-encryptie, geen certificaatuitwisseling, geen eigen/reverse-
+engineered bibliotheek nodig — fundamenteel eenvoudiger dan de bestaande
+G6-/G7-/CareSens Air-drivers.
+
+**Gekozen aanpak.** Standaard Bluetooth SIG Glucose Profile: scannen op de
+geadverteerde service-UUID 0x1808, Glucose Measurement (0x2A18, notify) +
+Record Access Control Point (0x2A52, RACP, indicate) gebruiken om de
+historie te synchroniseren ("Report Stored Records" >= het laatst bekende
+sequence-nummer), optioneel Glucose Measurement Context (0x2A34) en
+Current Time (0x2A08, voor een klok-offset tussen sensor en telefoon)
+meenemen. Geen vaste 5-minuten-meetcadans zoals een CGM: na de initiële
+RACP-sync blijft de verbinding gewoon open en luistert de driver passief
+verder op realtime metingen, in plaats van actief te disconnecten en
+voorspellend te herverbinden zoals G6/G7 dat wél moeten.
+
+**Nieuw:**
+- `sensor/accuchek/AccuChekSmartGuideProtocol.kt` — zuivere parse-/
+  bouwlaag (UUID's, date_time-struct, SFLOAT-decoder, Glucose Measurement-
+  parser, RACP-commandobouwer/-responsparser), geen Android-BLE-
+  afhankelijkheden, zelfde opzet als `DexcomG7Protocol.kt`.
+- `sensor/accuchek/AccuChekSmartGuideDriver.kt` — de `SensorDriver`-
+  implementatie: scan-dan-verbind (ScanFilter op service-UUID voor
+  koppelen, op apparaatadres voor herverbinden), `GattExclusivityGate`
+  voor de gedeelde GATT-poort tussen Slot A/B, een bond-broadcast-
+  ontvanger voor een eventuele OS-koppeldialoog bij
+  GATT_INSUFFICIENT_AUTHENTICATION (status 15), oplopende foutenbackoff
+  bij mislukte verbindpogingen — structureel een mirror van
+  `DexcomG6Driver.kt`, maar zonder diens auth-handshake en voorspellende-
+  cadans-laag (niet nodig voor dit standaardprofiel/deze meter, zie
+  klasse-kdoc).
+
+**Gewijzigd:**
+- `sensor/SensorDriver.kt` — `SensorType.ACCUCHEK_SMARTGUIDE`:
+  `implemented = false` → `true`, vóór de eerste live-test tegen een
+  echte meter — exact dezelfde aanpak als destijds bij CareSens Air/G6/G7.
+- `sensor/SensorRegistry.kt` — `createDriver()`'s `error(...)`-tak voor
+  `ACCUCHEK_SMARTGUIDE` vervangen door een echte
+  `AccuChekSmartGuideDriver(slot)`-instantiatie.
+- `data/AppSettings.kt` — nieuwe per-slot sleutel +
+  getter/setter (`getAccuChekSmartGuideNextSequenceOnce`/
+  `setAccuChekSmartGuideNextSequence`) voor het volgende RACP-sequence-
+  nummer, zelfde slot-sleutel-fabriekspatroon als de bestaande
+  `deviceAddress`-functies.
+
+**UI-wiring:** bewust GEEN nieuwe schermen nodig. `ui/PairingScreen.kt` is
+al generiek (maakt de driver via `SensorRegistry`, roept `startPairing()`
+aan, toont de gevonden apparaten) en `ui/FclGlucoLinkNavHost.kt`'s
+`onSensorChosen`-dispatch had voor een sensor zonder eigen setup-scherm
+al een generieke `else -> navigate("$BASE_PAIRING/...")`-tak — die matcht
+nu vanzelf ook op dit type zodra `implemented = true` staat. Er is (nog)
+geen eigen statusscherm (zoals G6/G7/CareSens Air die wél hebben) — een
+tik op de sensorinfo routeert voor dit type dus naar
+`SensorSelectionScreen` (`statusRouteFor()`'s `else`-tak) — en dus ook
+Ronde 181's generieke diagnostiek-kaart is hier niet aan toegevoegd, want
+die hangt aan die sensor-specifieke statusschermen.
+
+**Verificatie.** Geen echte Kotlin-compiler in deze omgeving — haakjes-/
+accolade-balans handmatig gecontroleerd (Python-scriptje, zelfde aanpak
+als eerdere ronden):
+`AccuChekSmartGuideProtocol.kt` 16/16 accolades, 94/94 haakjes;
+`AccuChekSmartGuideDriver.kt` 117/117 accolades, 277/277 haakjes;
+`SensorDriver.kt` 4/4 accolades, 21/21 haakjes;
+`SensorRegistry.kt` 2/2 accolades, 7/7 haakjes;
+`AppSettings.kt` 274/274 accolades, 744/744 haakjes.
+Nog NIET tegen een echte SmartGuide-meter getest — de eerste live-
+koppelpoging moet uitwijzen of de aannames hierboven (vooral de exacte
+RACP-indicatie-/CCCD-bytewaarden en de units-schaalfactor in
+`parseGlucoseMeasurement()`) kloppen; bijstellen zoals gebruikelijk na
+een eerste live-test.
+
+Gewijzigd: `sensor/SensorDriver.kt`, `sensor/SensorRegistry.kt`,
+`data/AppSettings.kt`.
+Nieuw: `sensor/accuchek/AccuChekSmartGuideProtocol.kt`,
+`sensor/accuchek/AccuChekSmartGuideDriver.kt`.
+Geen versiebump.
+
+## Ronde 198 — Accu-Chek SmartGuide: herbouw op de ECHTE CGM Service
+
+01/10/2026 (editor, op verzoek, na verder onderzoek) — Ronde 197 bleek het
+verkeerde Bluetooth-profiel gekozen te hebben.
+
+**Wat er mis was.** Ronde 197 bouwde de driver op het standaard Bluetooth
+SIG "Glucose Profile" (GATT-service 0x1808, "GLS") — het profiel voor een
+LOSSE bloedglucosemeter die alleen meet wanneer de gebruiker 'm gebruikt
+(RACP-"pull" per losse meting, geen vast ritme). De Accu-Chek SmartGuide is
+echter geen losse meter maar een echte CGM (continue-glucosemonitor): hij
+zendt zelf automatisch elke ~5 minuten een waarde ("push"), precies zoals
+G6/G7 dat doen. GLS was dus functioneel het verkeerde profiel om op te
+bouwen, ook al zou het apparaat de service wellicht toch beantwoord hebben.
+
+**Nieuw onderzoek.** xDrip+'s eigen (open-source, GPL) `libglupro`-module
+(`lwld/glucose/profile/GluProBle.java`,
+github.com/NightscoutFoundation/xDrip) — eerder in Ronde 197 afgeschreven
+als "closed-source prebuilt bibliotheek" — bleek bij nader inzien wél
+degelijk open source te zijn, en laat zien dat SmartGuide de ECHTE
+Bluetooth SIG "Continuous Glucose Monitoring Service" (CGM Service,
+0x181F) implementeert: CGM Measurement (0x2AA7, notify), Record Access
+Control Point (0x2A52, indicate+write, voor backfill), CGM Specific Ops
+Control Point (0x2AAC, indicate+write, o.a. voor het communicatie-
+interval), CGM Feature (0x2AA8), CGM Status (0x2AA9), CGM Session Start
+Time (0x2AAA) en CGM Session Run Time (0x2AAB) — plus de gewone Device
+Information Service (0x180A) voor fabrikant/model/serienummer/firmware-/
+hardwarerevisie. Alle UUID's geverifieerd tegen xDrip+'s eigen
+`lwld/glucose/profile/config/Uuids.java`.
+
+**Betrouwbaarheid (de kern-eis deze ronde): elke 5 minuten, gegarandeerd.**
+Een CGM-sensor die zelf een interval instelbaar maakt, moet dat interval
+ook expliciet afgedwongen worden — niet enkel gehoopt dat de sensor zijn
+eigen default aanhoudt. `AccuChekSmartGuideDriver.kt` stuurt daarom bij elke
+nieuwe verbind-sessie eerst "Get CGM Communication Interval" naar de CGM
+Specific Ops Control Point; als het antwoord niet al 5 (minuten) is, wordt
+eenmalig "Set CGM Communication Interval" naar 5 gestuurd (xDrip+'s
+`readOrChangeReportingPeriod()`-logica, overgenomen als idiomatisch
+Kotlin). Het statusscherm (zie hieronder) toont het bevestigde interval,
+zodat zichtbaar is dat deze eis daadwerkelijk actief is. Bovenop die
+expliciete schrijfactie herverbindt de driver nu voorspellend — een
+VEREENVOUDIGDE mirror van DexcomG6Driver.kt's `computeReconnectCooldownMs()`/
+`awaitCooldown()`, via dezelfde Doze-doorbrekende `PredictiveReconnectAlarm`
+(`AlarmManager.setExactAndAllowWhileIdle()`) die G6/G7/CareSens Air ook al
+gebruiken — zonder G6's eigen extra verfijningen (vroege-aankomst-
+tolerantie uit Ronde 187, kruis-slot-fasescheiding via `AapsSlotSchedule`).
+`ConnectionWatchdog.kt` (het generieke "leeft het proces nog?"-
+veiligheidsnet elke 6 minuten, AlarmManager-gebaseerd) hoeft NERGENS
+driver-specifiek aangeroepen te worden — die kijkt alleen naar
+`AppSettings.hasAnySlotConfigured()` en dekt deze driver dus al automatisch
+mee, zonder enige wijziging.
+
+**Nieuw/herbouwd:**
+- `sensor/accuchek/AccuChekSmartGuideProtocol.kt` — volledig herschreven:
+  CGM Service-UUID's, IEEE 11073-20601 SFLOAT-decoder (nu met een apart
+  `SfloatValue`-resultaattype i.p.v. een kale `Double?`, omdat -INFINITY
+  hier apart behandeld moet worden — zie hieronder), CGM Status-/Sensor
+  Status Annunciation-vlaggendecoder (18 losse booleans, 1-op-1 overgenomen
+  uit xDrip+'s `Status.java`), CGM Measurement-parser, CGM Specific Ops
+  Control Point-commandobouwer/-responsparser, RACP blijft functioneel
+  ongewijzigd (zelfde byte-envelop, nu voor CGM-backfill i.p.v. GLS-
+  historie).
+- `sensor/accuchek/AccuChekSmartGuideDriver.kt` — volledig herschreven:
+  leest Device Information + CGM Status (bepaalt sessiestart) + CGM
+  Session Run Time eenmalig per sessie, schakelt notificaties/indicaties
+  in voor CGM Measurement/RACP/CGM Specific Ops, forceert het 5-minuten-
+  interval (zie boven), gebruikt RACP voor backfill na een disconnect.
+  Voorspellende herverbind-cooldown via `PredictiveReconnectAlarm`.
+- `ui/AccuChekSmartGuideStatusScreen.kt` — nieuw statusscherm, qua opzet
+  1-op-1 gemirrord van `DexcomG7StatusScreen.kt`: fabrikant/model/
+  serienummer/firmware-/hardwarerevisie, sessie-startmoment + totale
+  sessieduur + resterende tijd (CGM Session Run Time), het bevestigde
+  communicatie-interval (rood als het niet 5 is), laatste meting se
+  kwaliteitspercentage, en een losse kaart met de volledige gedecodeerde
+  CGM Status-vlaggenset (kalibratie/batterij/temperatuur/sensorfout/
+  buiten-bereik — "alles ok" als geen enkele vlag gezet is). Gebruikt
+  dezelfde generieke `DiagnosticsCard` (Ronde 181) als G6/G7/CareSens Air.
+- `ui/FclGlucoLinkNavHost.kt` — nieuwe route
+  `accuchek_smartguide_status/{slot}`, `statusRouteFor()` stuurt
+  `ACCUCHEK_SMARTGUIDE` er nu naartoe i.p.v. naar de generieke
+  `SensorSelectionScreen`-fallback (zelfde patroon als G6/G7/CareSens Air).
+
+**Gewijzigd:**
+- `data/AppSettings.kt` — `accuchek_smartguide_next_sequence` blijft
+  ONGEWIJZIGD staan (RACP wordt binnen de CGM Service nog steeds gebruikt
+  voor backfill, zie xDrip+'s `backFill()`/`reportStoredRecordsFromRange()`
+  in `GluProBle.java` — geen dode instelling om op te ruimen). Nieuw: een
+  hele reeks per-slot CGM-velden (apparaatinfo, CGM Status-rauwe bytes,
+  sessie-start/-duur, bevestigd communicatie-interval, laatste-connectie-
+  tijd, laatste-kwaliteitspercentage) — zelfde `slotString`/`slotLong`/
+  `slotInt`/`slotDouble`-sleutelfabriekspatroon als de rest van dit bestand.
+
+**Verificatie.** Geen echte Kotlin-compiler in deze omgeving — haakjes-/
+accolade-/haakje-balans handmatig gecontroleerd (Python-scriptje, zelfde
+aanpak als eerdere ronden, commentaar/strings gestript):
+`AccuChekSmartGuideProtocol.kt` 24/24 accolades, 134/134 haakjes, 25/25
+blokhaken; `AccuChekSmartGuideDriver.kt` 156/156 accolades, 402/402
+haakjes, 3/3 blokhaken; `AppSettings.kt` 300/300 accolades, 791/791
+haakjes, 306/306 blokhaken; `AccuChekSmartGuideStatusScreen.kt` 32/32
+accolades, 150/150 haakjes; `FclGlucoLinkNavHost.kt` 121/121 accolades,
+206/206 haakjes. Elk bestand na het schrijven volledig opnieuw gelezen als
+sanity-check.
+
+**Wat nog onzeker is, te bevestigen bij een live-test.** (1) De CGM
+Measurement-flags zijn hier als één octet behandeld (byte 1, direct na de
+Size-byte) — dat is wat de officiële Bluetooth CGM-spec voorschrijft en wat
+uit `GluProBle.java`'s velduitlezing is af te leiden, maar is NIET tegen
+een echte sensor-byte-capture bevestigd. (2) De exacte offsets van de
+Response Code-envelop (opcode 0x1C) op de CGM Specific Ops Control Point
+zijn overgenomen van hoe RACP's eigen Response Code elders in deze driver
+al gedecodeerd wordt (zelfde envelopvorm, geen aparte sensor-capture ter
+bevestiging). (3) -INFINITY-SFLOAT in een CGM Measurement wordt vertaald
+naar een vaste "LO"-waarde (39 mg/dL, `AccuChekSmartGuideProtocol.
+LOW_FLOOR_MGDL`) — gebaseerd op Accu-Cheks eigen gedocumenteerde "< 40
+mg/dL"-gedrag en xDrip+'s GitHub-geschiedenis hierover, maar er bestaat
+géén eerdere FCLGlucoLink-conventie voor "onmeetbaar laag" bij G6/G7 om
+tegen te toetsen — een nieuwe, op zichzelf staande keuze. (4) De
+voorspellende herverbind-cooldown is een VEREENVOUDIGDE mirror van G6's
+eigen mechanisme (zie "Betrouwbaarheid" hierboven) — geen vroege-aankomst-
+tolerantie, geen kruis-slot-fasescheiding.
+
+**Addendum (zelfde dag, op verzoek).** Waarschuwing toegevoegd op het
+sensorkeuzescherm (`ui/SensorSelectionScreen.kt`): bij Accu-Chek SmartGuide
+staat nu expliciet dat de sensor eerst met de officiële Accu-Chek/MySugr-app
+gestart moet worden, vóórdat er hier naar FCLGlucoLink overgeschakeld kan
+worden — zie het onderzoek verderop in dit document (GitHub-uitspraken van
+zowel Juggluco's als xDrip's ontwikkelaars) voor de onderbouwing. Bewust al
+zichtbaar op het keuzescherm, niet pas op het koppelscherm, zodat dit bekend
+is vóórdat iemand een sensor aanschaft of al geplakt heeft.
+
+Gewijzigd: `data/AppSettings.kt`, `ui/FclGlucoLinkNavHost.kt`,
+`ui/SensorSelectionScreen.kt`.
+Nieuw/herbouwd: `sensor/accuchek/AccuChekSmartGuideProtocol.kt`,
+`sensor/accuchek/AccuChekSmartGuideDriver.kt`,
+`ui/AccuChekSmartGuideStatusScreen.kt`.
+Geen versiebump.
+
+## Ronde 199 — Accu-Chek SmartGuide: live-test, en Ronde 198's aanname bleek fout
+
+01/10/2026 (editor, naar aanleiding van een echte eerste koppeling door de
+gebruiker) — de gebruiker heeft een GLOEDNIEUWE, nog nooit gebruikte
+SmartGuide-sensor rechtstreeks met FCLGlucoLink (en, ter vergelijking,
+rechtstreeks met xDrip) geplakt en gekoppeld — GEEN officiële Accu-Chek/
+MySugr-app ooit aangeraakt. Android's eigen koppelscherm verscheen meteen,
+de opwarmtijd liep af, en na 60 minuten kwamen er gewoon metingen binnen.
+
+**Correctie op Ronde 198.** De waarschuwing die daar is toegevoegd ("moet
+eerst met de officiële app gestart worden") is hiermee weerlegd. Die aanname
+kwam uit GitHub-discussies (Juggluco-issue #372, xDrip-discussies #4296/
+#4586) waarin iedereen toevallig al een eerder geactiveerde sensor had —
+dat bewees dus nooit dat een fabrieksnieuwe sensor niet rechtstreeks kon
+starten. De waarschuwingstekst in `ui/SensorSelectionScreen.kt` is
+vervangen door een neutrale koppel-instructie (data matrix + PIN scannen),
+zonder de ingetrokken claim.
+
+**Bugfix: naamfilter matchte nooit.** `AccuChekSmartGuideDriver.kt`'s
+`buildPairingListFilter()` zocht naar de substring "ACCU-CHEK" in de
+Bluetooth-apparaatnaam. De echte sensor adverteert zichzelf als
+"AC-<serienummer>" (bv. "AC-1R001475881") — bevat die substring dus
+nergens. Gevolg: het koppelscherm toonde altijd "geen apparaten komen
+overeen", en de gebruiker moest handmatig "toon alle apparaten" aanzetten.
+Naamhint aangepast naar "AC-".
+
+**Nog openstaand, met echte logdata (zie volgende sectie voor de fix):** de
+trend- en kwaliteitswaarden in de meegeleverde log lopen soms volledig uit
+de rails (bv. trend=77800.0 mg/dL/min, kwaliteit=-5290000%), en het
+statusscherm toont tijdens de opwarmperiode geen resterende tijd (xDrip wel)
+en een verwarrende rode "Malfunction"-regel terwijl de sensor gewoon aan
+het opwarmen is.
+
+Gewijzigd: `sensor/accuchek/AccuChekSmartGuideDriver.kt`,
+`ui/SensorSelectionScreen.kt`.
+Geen versiebump.
+
+## Ronde 200 — Accu-Chek SmartGuide: trend/kwaliteit-decodeerfout, write-ruis, opwarmscherm
+
+01/10/2026 (editor, vervolg op Ronde 199's live-test) — vier losse fixes,
+allemaal gebaseerd op het echte logbestand van Ronde 199's live-test.
+
+**1. Trend-/kwaliteitswaarden liepen volledig uit de rails.** De log toonde
+trend=77800.0 mg/dL/min, trend=-0.00246, kwaliteit die op het statusscherm
+als "-5290000%" verscheen — terwijl de glucosewaarde zelf (`glucoseMgdl`)
+in diezelfde metingen steeds plausibel bleef. Twee losse oorzaken:
+
+- `parseCgmMeasurement()` gebruikte voor trend/kwaliteit dezelfde
+  `sfloatToGlucoseMgdl()`-functie als voor de glucosewaarde zelf. Die
+  functie is GLUCOSE-CONCENTRATIE-specifiek: een -INFINITY-SFLOAT wordt
+  omgezet naar `LOW_FLOOR_MGDL` (39.0) — een businessregel die alleen voor
+  een glucosewaarde zinvol is, niet voor een trend (mg/dL/min) of een
+  kwaliteitspercentage. Nieuwe helper `SfloatValue.rawOrNull()` haalt nu de
+  kale waarde eruit en behandelt NaN/+INFINITY/-INFINITY/gereserveerd
+  allemaal gelijk als "geen bruikbare waarde".
+- Veel ernstiger: de BYTE-VOLGORDE klopte niet. Ronde 198's aanname was dat
+  trend en kwaliteit vóór de Sensor Status Annunciation-octetten komen, en
+  dat die octetten als één gecombineerd 3-byte-blok golden op vlagbits
+  0x08/0x20. Tegen Nordic Semiconductor's officiële, open-source
+  `no.nordicsemi.android.ble.common`-bibliotheek aangehouden (dezelfde
+  bibliotheek die xDrip+'s eigen `GluProBle.java` gebruikt voor exact deze
+  parse — zie `ContinuousGlucoseMeasurementDataCallback.java`,
+  github.com/NordicSemiconductor/Android-BLE-Library) bleek de ECHTE
+  volgorde ná Time Offset: (1) de annunciation-octetten, elk los op hun
+  EIGEN vlagbit (0x20/0x40/0x80), (2) dan pas CGM Trend Information, (3) dan
+  pas CGM Quality. `AccuChekSmartGuideProtocol.kt`'s `parseCgmMeasurement()`
+  is herschreven naar die volgorde.
+
+  Eerlijkheid: dit is een REFERENTIE-gebaseerde correctie, niet 1-op-1
+  bevestigd tegen een eigen rauwe hex-capture van deze specifieke sensor —
+  de vorige aanname bleek immers ook fout ondanks dat ze ook "overgenomen
+  uit xDrip" leek. Daarom twee vangnetten erbij:
+  - `AccuChekSmartGuideDriver.kt` logt nu de rauwe hex van ELKE CGM
+    Measurement-notificatie (zelfde patroon als `DexcomG7Driver.kt`'s
+    `logRound1ValidationFailure()`), zodat een volgende live-log capture
+    de nieuwe aanname exact kan narekenen.
+  - Een plausibiliteitsklem: een trend buiten ±30 mg/dL/min, of een
+    kwaliteit buiten 0-100%, wordt gediscardeerd (`null`) i.p.v. ooit
+    getoond te worden, met een duidelijke logregel. Een afgekeurde
+    sensor-trend valt terug op de bestaande `TrendCalculator`-berekening
+    (zelfde patroon als wanneer de sensor zelf geen trend meestuurt).
+
+**2. CGM Specific Ops Control Point-write faalde elke verbinding (status
+128), ook als het interval al goed stond.** Verklaring: deze sensor
+rapporteert zijn write-beschermde default niet als letterlijk "5" maar via
+de CGM-spec's eigen 0xFF-sentinel ("snelst door het apparaat ondersteunde
+interval") — en Ronde 198/199 behandelde alleen een letterlijke "5" als
+acceptabel, dus probeerde (zinloos) elke keer een Set te forceren naar een
+al-bereikte situatie, wat vervolgens met status 128 (write not permitted)
+afgewezen werd. Nu: 5 én 0xFF worden beide als "al acceptabel" behandeld
+(geen Set-poging), én een write die toch mislukt terwijl het gerapporteerde
+interval al acceptabel was, wordt als informatieve regel gelogd
+("device already reports Xmin... — leaving as-is") i.p.v. als
+"write FAILED"-fout — een write die wél iets had moeten veranderen blijft
+gewoon als echte fout gelogd.
+
+**3. Opwarmscherm: geen aftelling, wel een alarmerende "Malfunction".**
+`AccuChekSmartGuideStatusScreen.kt` toonde tijdens het opwarmvenster geen
+resterende tijd (xDrip, ter vergelijking, wel) en een rode
+"Sensor: Malfunction"-regel — waarschijnlijk gewoon de sensor's eigen "nog
+niet klaar"-bit, geen echte fout. Nieuwe constante
+`AccuChekSmartGuideDriver.WARMUP_DURATION_MINUTES = 60` — GEEN officiële
+Accu-Chek-spec-waarde (de handleiding-URL uit de opdracht gaf deze ronde
+geen bruikbare inhoud terug), puur de gebruiker's eigen, rechtstreeks
+geobserveerde tijdsduur (sensor-start tot eerste echte meting was in de
+live-test exact 60 minuten). Het statusscherm toont nu, zolang
+sessie-start + 60 minuten nog niet verstreken is, een neutrale
+"Warming up — Xh Ym remaining"-regel, en vervangt de rode "Malfunction"-
+regel door een neutrale "Warming up (not ready yet)" zolang dat venster
+loopt — zelfde geest als hoe G6/G7's statusschermen al een opwarm-
+aftelling i.p.v. alarmerende tekst tonen.
+
+**4. "Calibration: Not allowed" + "Calibration: Required" tegelijk oogde
+tegenstrijdig.** Dit is geen decodeerfout — per spec plausibel ("nog niet
+toegestaan, bv. nog aan het stabiliseren, maar zal straks wel vereist
+zijn") — maar zonder context verwarrend. Beide vlaggen tegelijk tonen nu
+één gecombineerde regel: "Calibration: Not allowed yet (will be required
+once available)".
+
+**Addendum (zelfde dag, verduidelijking van de gebruiker).** De gebruiker
+wist precies waar deze vlag vandaan komt: de officiële Accu-Chek/MySugr-app
+blokkeert zelf kalibratie-invoer gedurende de eerste ~12 uur, om de sensor
+te laten stabiliseren — vermoedelijk exact deze sensor-gerapporteerde
+"calibrationNotAllowed"-vlag. Expliciet geverifieerd en in de kdoc
+vastgelegd: deze vlag wordt NERGENS in deze codebase gebruikt om
+kalibratie-invoer te blokkeren (`ui/CalibrationScreen.kt` kent de vlag
+niet, geen enkele sensor-type-specifieke gate) — FCLGlucoLink legt de
+beperking van de officiële app bewust niet op, de gebruiker kan hier altijd
+een kalibratie invoeren. De statusregel-tekst is aangepast om dat expliciet
+te benoemen ("... — informational only, FCLGlucoLink doesn't block entry").
+
+Gewijzigd: `sensor/accuchek/AccuChekSmartGuideProtocol.kt`,
+`sensor/accuchek/AccuChekSmartGuideDriver.kt`,
+`ui/AccuChekSmartGuideStatusScreen.kt`.
+Geen versiebump.
+
+## Ronde 201 — AccuChekSmartGuideDriver.kt: `autoConnect=true`-bug (koppelen bleef hangen)
+
+Live-test op de hoofdtelefoon van de gebruiker (met de Dexcom G7 ernaast
+actief): bij het koppelen van de SmartGuide vond de scan het toestel
+(naam + MAC-adres) meteen, maar na op "Verbinden" te klikken bleef het
+scherm oneindig op "Connecting" staan — nooit Android's PIN-koppelscherm.
+Tegelijk sprong de G7 (die op "gekoppeld"/idle stond) zelf naar
+"Connecting".
+
+Oorzaak: `connectGatt(appCtx, true, callback, ...)` — de tweede parameter
+is `autoConnect`, en stond hier op `true`. Dat is Android's trage
+achtergrond-verbindmechanisme: bedoeld om te wachten tot een AL BEKEND/
+GEBOND toestel weer in bereik komt, niet voor een zojuist gescand,
+nog-niet-gebonden toestel. Android draait daarbij zelf een doorlopende
+achtergrondscan om het toestel te vinden — dat verklaart zowel het
+oneindige "Connecting" (de achtergrondmethode triggert soms minutenlang
+of nooit) als de extra radiodrukte die de G7's actieve sessie verstoorde.
+
+G6, G7 en CareSens Air gebruiken hier alle drie al bewust
+`autoConnect=false` (scan-dan-direct-verbinden) — CareSensAirDriver.kt's
+eigen klasse-kdoc documenteert exact dezelfde les uit een eerdere,
+losse live-test. De SmartGuide-driver was de enige uitzondering, kennelijk
+nog over van het referentiemateriaal waarop de eerste bouw-rondes waren
+gebaseerd. Nu gecorrigeerd naar `autoConnect=false`, in lijn met de andere
+drie drivers.
+
+Nog niet bevestigd: of dit ook de enige oorzaak was van de G7-interferentie
+(radio-contentie tijdens een actieve GATT-sessie is op dit moment nergens
+expliciet beschermd — zie GattExclusivityGate.kt, die alleen de
+connect-stap zelf beschermt, niet gelijktijdig scannen/verbinden naast een
+reeds actieve sessie van de andere sleuf) — vraagt om bevestiging via een
+nieuwe test op de hoofdtelefoon.
+
+Gewijzigd: `sensor/accuchek/AccuChekSmartGuideDriver.kt`.
+Geen versiebump.
+
+## Ronde 202 — SmartGuide: live-test na autoConnect-fix (drie nieuwe bevindingen)
+
+Koppelen op de hoofdtelefoon werkte na de Ronde 201-fix meteen — scan,
+Android-PIN-koppelscherm, bonding, metingen elke 5 minuten zonder
+onderbreking. De trend-decodefix (zie Ronde 200) hield ook stand: alle
+trend-waarden in de nieuwe log (-0,05 / 0,1 / -0,25 mg/dL/min) zijn nu
+plausibel, geen garbage-waarden meer.
+
+Drie nieuwe, kleinere bevindingen uit dezelfde live-test:
+
+**1. Hoofdscherm toonde geen looptijd.** `StatusScreen.kt`'s compacte
+kaartje-`when`-blok miste een `ACCUCHEK_SMARTGUIDE`-tak — exact dezelfde
+makke die G7 had vóór Ronde 183 (zie die sectie). Viel terug op de
+generieke `else`-tak: geen "Last connected"-tekst, geen "Running Xd Yh"-
+regel. Nu een eigen tak toegevoegd, mirror van G7's fix, met
+`accuChekLastConnectedAtMs`/`accuChekSessionStartAtMs` (al bestaande
+Ronde-198-settings, nooit hier aangeroepen).
+
+**2. "Last read" op het statusscherm bleef hangen op het connectiemoment.**
+`AccuChekSmartGuideStatusScreen.kt` toonde `cgmStatus?.atMs` — het
+tijdstip van de ÉÉNMALIGE CGM Status-characteristic-read bij het opzetten
+van de verbinding — terwijl de grote glucosewaarde en grafiek
+ondertussen gewoon elke 5 minuten bijwerkten. Vervangen door
+`GlucoseReadingStore.latestReading(slot)?.timestampMs`, hetzelfde
+patroon als `DexcomG6StatusScreen.kt`'s `lastRealReading`.
+
+**3. RACP-backfill (historische metingen ophalen) werd stilzwijgend
+overgeslagen.** De log toonde een "write FAILED status=128" voor
+0x2AAC als de ALLEREERSTE write naar dat control point (de "Get
+Communication Interval", niet de latere "Set") — deze sensor/firmware
+staat kennelijk helemaal geen write naar dit control point toe, zelfs
+geen Get. `writeRacpRequest()` (de aanvraag voor eventueel gemiste
+metingen sinds de vorige verbinding) werd tot nu toe ALLEEN aangeroepen
+vanuit de geslaagde paden (een CGM Ops-respons die binnenkomt) — bij een
+mislukte Get-write gebeurde er verder niets, dus werd de backfill de hele
+sessie lang stilzwijgend overgeslagen. Dat gaat lijnrecht in tegen de "zo
+betrouwbaar mogelijk"-eis. Nu: bij een mislukte Get-write (niet de
+Set-write, die blijft apart via `intervalSetWriteInFlight`) alsnog
+doorgaan naar de RACP-aanvraag. Het communicatie-interval blijft dan
+terecht onbekend (toont "—" op het statusscherm) — eerlijker dan een
+geraden waarde.
+
+Nog openstaand: of de RACP-backfill op DEZE sensor/firmware daadwerkelijk
+iets terugstuurt (dit control point lijkt sowieso write-beperkt) is nog
+niet bevestigd — vraagt om een log over een langere onderbroken periode
+(bv. een korte tijd buiten bereik) om te zien of gemiste metingen alsnog
+binnenkomen.
+
+Gewijzigd: `ui/StatusScreen.kt`, `ui/AccuChekSmartGuideStatusScreen.kt`,
+`sensor/accuchek/AccuChekSmartGuideDriver.kt`.
+Geen versiebump.
+
+## Ronde 203 — SmartGuide hield GattExclusivityGate de hele sessie vast, G7 stierf erdoor
+
+Live-test op de hoofdtelefoon met G7 (AAPS-slot) ernaast actief: koppelen
+zelf ging goed (RACP-backfill werkte zelfs, zie de rij snel binnenkomende
+historische metingen direct na bonding — bevestigt dat Ronde 202's
+backfill-fix werkt), maar kort daarna stopte de G7 met werken. Pas na het
+fysiek sluiten en heropenen van de hele app werkte de G7 weer.
+
+Het logbestand (`607307_fclglucolink_2026-10-02.txt`) liet het exacte
+mechanisme zien: rond 00:44 en 00:49 meldde
+`GattExclusivityGate: slot B kreeg de GATT-exclusiviteit niet binnen
+60000ms (andere slot nog bezig) — gaat door zonder exclusiviteit`, en
+vlak daarna (00:45:02, 00:50:02) viel de G7 om met
+`STATE_DISCONNECTED status=147` — een abnormale disconnect, niet de
+normale schone status=0 die de rest van de log laat zien. Na die tweede
+keer herstelde de G7 niet meer vanzelf binnen dat app-proces.
+
+Oorzaak: [GattExclusivityGate] (Ronde 187) is gebouwd op de aanname dat
+elke sensor-driver 'm maar KORT vasthoudt — connect, meting ophalen,
+actief disconnecten, pas bij de volgende voorspelde cyclus weer
+aanvragen — precies wat G6/G7/CareSens Air allemaal doen. De SmartGuide-
+driver wijkt daar BEWUST van af: de CGM Service is ontworpen om de
+verbinding gewoon continu open te houden en elke 5 minuten een meting te
+PUSHEN via notify, dus er zit hier nergens een actieve
+`gatt.disconnect()` na een geslaagde meting (zie
+`AccuChekSmartGuideDriver.kt`'s klasse-kdoc) — dat is op zichzelf
+correct voor dit protocol. Gevolg: `GattExclusivityGate.acquire()` werd
+bij het koppelen één keer aangevraagd en pas bij een ECHTE disconnect
+weer losgelaten — in de praktijk dus de HELE sessie lang, soms urenlang.
+De G7 moest daardoor bij elke eigen cyclus de volle 60 seconden
+(`MAX_WAIT_MS`) wachten en ging dan "onbeschermd" door — en precies in
+dat venster, met de SmartGuide's doorlopende verbinding nog actief op
+dezelfde radio, liep de G7's eigen verbinding vast.
+
+Fix: `handleRacpResponse()` (het einde van de eenmalige opzet-burst na
+elke (her)verbinding: Device Info -> CGM Status -> Session Run Time ->
+interval-check -> RACP-backfill) geeft de exclusiviteit nu AL vrij zodra
+die opzet klaar is, in plaats van pas bij disconnect. Vanaf dat punt is
+de verbinding alleen nog passief luisterend naar periodieke notify-
+pushes — dat heeft geen exclusieve GATT-toegang meer nodig. Bij een
+latere herverbinding vraagt `connectToDevice()` de gate gewoon opnieuw
+aan, voor DIE nieuwe opzet-burst.
+
+Nog niet bevestigd: of dit de G7-interferentie volledig oplost (de
+onderliggende radio-contentie tussen twee gelijktijdig actieve
+GATT-verbindingen blijft bestaan, dit verkleint alleen het venster
+drastisch van "de hele sessie" naar "een paar seconden per
+herverbinding") — vraagt om een nieuwe, langere dual-sensor-test.
+
+Gewijzigd: `sensor/accuchek/AccuChekSmartGuideDriver.kt`.
+Geen versiebump.
+
+## Ronde 204 — RACP sequence-tracking werd nergens bijgewerkt, altijd volledige geschiedenis opnieuw
+
+Belangrijke kanttekening vooraf: het logbestand waarop deze ronde is
+gebaseerd (`607307_fclglucolink_2026-10-02-95bda0d0.txt`, van
+'s avonds laat tot de volgende ochtend) draaide de HELE tijd nog op
+build 204 — de Ronde 201-203-fixes zaten daar dus nog niet in. De
+hieronder beschreven bug komt BOVENOP die eerdere fixes, niet in
+plaats daarvan.
+
+De gebruiker had de sensor 's avonds niet succesvol gekoppeld, de
+Bluetooth-koppeling toen gewist, en 's ochtends opnieuw gekoppeld — dat
+lukte, maar de G7 verloor de verbinding (bekend, zie Ronde 203) en de
+SmartGuide "levert geen nieuwe data en ververst ook niet". Het logbestand
+liet iets opvallends zien: de reeks glucosewaarden die 's ochtends na het
+koppelen binnenkwam (94.5, 93.5, 87.0, 88.0, 91.5, 109.5 ... 42.5) was
+LETTERLIJK IDENTIEK aan de reeks van de avond ervoor — dezelfde oude
+metingen kwamen gewoon opnieuw voorbij, gevolgd door stilte.
+
+Oorzaak: `highestSequenceSeenThisSession` (bedoeld om bij te houden tot
+welk punt de geschiedenis al opgehaald is, zodat de volgende RACP-
+aanvraag alleen om NIEUWE records vraagt) werd in de hele driver
+NERGENS daadwerkelijk bijgewerkt vanuit binnenkomende metingen — alleen
+teruggezet naar `null` bij elke disconnect. Daardoor kwam
+`handleRacpResponse()`'s `if (highest != null)`-tak (die
+`nextSequenceNumber` bijwerkt en persisteert) NOOIT aan bod, bleef
+`nextSequenceNumber` permanent op 0 staan, en vroeg ELKE (her)verbinding
+— ook de volgende dag — gewoon de VOLLEDIGE sensorgeschiedenis opnieuw
+op ("requesting records >= seq=0", zowel 's avonds als 's ochtends).
+
+Voor de CGM Service is het RACP-filter overigens sowieso gebaseerd op
+Time Offset (minuten sinds sessiestart), niet op een letterlijk
+sequentienummer zoals bij de oudere Glucose Profile (0x1808, de Ronde
+197-misgreep) — `nextSequenceNumber` was dus altijd al bedoeld als
+"offset in minuten", alleen nooit gevuld.
+
+Fix: `handleCgmMeasurement()` werkt `highestSequenceSeenThisSession` nu
+bij met de tijd-offset van elke succesvol geparste meting — ook een
+zonder bruikbare glucosewaarde (bv. tijdens opwarmen), die telt immers
+ook mee in de geschiedenis. Dit lost niet alleen de "oude data komt
+telkens terug"-klacht op, maar verkleint ook de opzet-burst bij elke
+herverbinding drastisch (was tot ~30 metingen in één keer, wordt
+typisch 1-2) — relevant voor Ronde 203's GATT-exclusiviteitsvenster:
+hoe korter die burst, hoe minder kans op radiocontentie met de G7
+ernaast.
+
+Gewijzigd: `sensor/accuchek/AccuChekSmartGuideDriver.kt`.
+Geen versiebump.
+
+## Ronde 205 — versie-banner in het logbestand nu bij elke app-start, niet alleen eenmaal per dag
+
+Op verzoek, na een eigen misser: ik concludeerde ten onrechte uit het
+ontbreken van een tweede `=== FCLGlucoLink ... ===`-banner in een
+logbestand dat er die nacht geen update geïnstalleerd was — de
+gebruiker wees terecht aan dat dat niet klopt, want de banner werd tot
+nu toe maar ÉÉN keer per kalenderdag geschreven (bij het allereerste
+schrijfmoment, `writeVersionHeaderIfNewFile`'s `if (file.exists())
+return`-gate), niet bij elke app-herstart. Een update later diezelfde
+dag liet dus helemaal geen nieuwe banner achter, ook al draaide er
+feitelijk een andere build.
+
+Fix: de banner wordt nu bij ELKE app-start geschreven (één keer per
+proces, via een nieuwe `versionBannerWrittenThisProcess`-vlag), niet
+meer gekoppeld aan "eerste schrijfmoment van de dag". Een logbestand
+toont zo voortaan onmiskenbaar welke build op welk moment daadwerkelijk
+actief was, ook bij meerdere herinstallaties binnen dezelfde dag.
+
+Gewijzigd: `logging/DiagnosticFileLogger.kt`.
+Geen versiebump.
+
+**Addendum (zelfde dag, op verzoek).** Dit lost alleen het logbestand op
+— de About-tekst zelf toonde na meerdere her-installaties op één dag nog
+steeds dezelfde `0.10.5-alarm-popup`, omdat versionName hier bewust
+alleen op expliciet verzoek gebumpt wordt (zie standing conventions).
+Gevraagd en gebouwd: een nieuw `BuildConfig.BUILD_TIME`-veld
+(`app/build.gradle.kts`), automatisch gevuld op het moment van bouwen —
+dus nooit handmatig bij te werken, en dus ook nooit "vergeten" — getoond
+als kleine, secundaire regel onder de versietekst op `AboutScreen.kt`
+("Gebouwd op dd-MM-jjjj uu:mm"), en meegenomen in de Ronde 205-
+logbanner hierboven ("gebouwd ..."). Geeft zo altijd een uniek,
+controleerbaar moment, zonder de versiebump-afspraak zelf los te laten.
+
+Gewijzigd: `build.gradle.kts`, `ui/AboutScreen.kt`,
+`logging/DiagnosticFileLogger.kt`.
+Geen versiebump.
+
+## Ronde 206 — structurele fix: slot op "Geen" zetten liet de andere slot ook vallen
+
+Live-melding: "bij het zetten van slot A op 'none' slot B (de Dexcom G7)
+direct de verbinding verliest en alleen terug komt na afsluiten en
+opstarten van de app".
+
+Oorzaak: `BleConnectionService` is ÉÉN `Service`-instantie voor BEIDE
+slots samen (zie die klasse's eigen kdoc bij de dual-slot-herschrijving).
+"Een sensor loskoppelen/op Geen zetten" stopt daarom altijd eerst de
+HELE service via `stopBleConnectionService()` (`stopService()` +
+`ConnectionWatchdog.cancel()`) — ongeacht welke slot het betreft, dus ook
+de andere, nog actieve slot valt daardoor onmiddellijk weg. Op elk ANDER
+sensorwissel-pad in `FclGlucoLinkNavHost.kt` (nieuwe sensor kiezen,
+wisselen van type) is dat onschadelijk, omdat die paden daarna altijd
+uitkomen op een setup-/koppelscherm (`DexcomG6NewSensorScreen.kt`,
+`PairingScreen.kt`, `SimulatorSetupScreen.kt`, …) dat ná het opslaan van
+de nieuwe keuze zelf weer `startBleConnectionService()` aanroept — dat
+herstart de service voor BEIDE slots, dus de andere slot herstelt daar
+gewoon weer vanzelf.
+
+Het "Geen"-pad (`onClearSensor` in `FclGlucoLinkNavHost.kt`) had als
+ENIGE sensorwissel-pad geen vervolgscherm — het sloeg de lege keuze op
+en ging direct terug (`popBackStack()`), zonder de service ooit weer te
+starten. De service bleef daardoor volledig gestopt totdat de gebruiker
+de app handmatig sloot en opnieuw opende (waar `MainActivity`'s
+opstartpad 'm weer aanzet) — precies het gemelde symptoom.
+
+Fix: `onClearSensor` roept na `settings.clearSelectedSensor(slot)` nu
+ook `startBleConnectionService(context)` aan, zoals elk ander
+sensorwissel-pad al deed. `ensureSlotConnected()` in
+`BleConnectionService.kt` ziet voor de zojuist leeggemaakte slot direct
+een `null` sensorType en doet terecht niets, terwijl de andere slot
+daarbij gewoon weer een verse driver/connectie opgebouwd krijgt — zonder
+dat de app herstart moet worden.
+
+Gewijzigd: `ui/FclGlucoLinkNavHost.kt`.
+Geen versiebump.
+
+## Ronde 207 — waarschuwing op het SmartGuide-koppelscherm + versiebump
+
+Op verzoek: een waarschuwingskaart op `PairingScreen.kt`, alleen zichtbaar
+bij `SensorType.ACCUCHEK_SMARTGUIDE`, dat deze koppeling nieuw en nog niet
+uitgebreid getest is, en dat de sensor mogelijk eerst één keer met de
+officiële mySugr-app gekoppeld moet worden voordat FCLGlucoLink hem goed
+kan uitlezen — zelfde kaart-opzet als de bestaande CareSens Air-PIN-kaart
+iets verderop in hetzelfde bestand, nu met `errorContainer`-kleuren en een
+waarschuwingsicoon i.p.v. de neutrale PIN-stijl.
+
+Versiebump (op verzoek): `versionCode` 204 → 205, `versionName`
+`0.10.5-alarm-popup` → `0.10.6-smartguide` — dit dekt alle ongebumpte
+wijzigingen van Ronde 201 t/m 207 in één keer (autoConnect-fix,
+GattExclusivityGate-fix, RACP-backfill/sequence-tracking-fixes,
+bouwtijd-veld, slot-op-"Geen"-fix, en deze waarschuwing). Nieuwe
+`whatsnew/FCLGlucoLink_v205_whatsnew.txt` aangemaakt (zie
+`WhatsNewChecker.kt`'s kdoc voor de bestandsconventie) — gebruikersgericht,
+kort, met de mySugr-waarschuwing als eerste punt.
+
+Gewijzigd: `ui/PairingScreen.kt`, `app/build.gradle.kts`,
+`whatsnew/FCLGlucoLink_v205_whatsnew.txt` (nieuw).
+
+## Ronde 208 — "Last connected" toont nu echt contact, niet alleen oude geheugenwaarde
+
+Live-melding na het testen van de Ronde 206-fix (die werkte): op het
+SmartGuide-statusscherm bleef "Last connected" een tijdstip van uren
+terug tonen, ook terwijl de app op de achtergrond gewoon herhaaldelijk
+opnieuw verbond en de sensor bevroeg (bevestigd in het meegestuurde
+logbestand: CGM Status-uitlezingen en RACP-antwoorden om 10:38, 10:40,
+11:12, 11:35, 11:45 en 11:49, allemaal na het getoonde tijdstip van
+10:16). De gebruiker kon zo niet onderscheiden of de app daadwerkelijk
+nog iets probeerde, of ergens muurvast zat — expliciet verzoek: laat
+daar het tijdstip van de laatste ECHTE actieve uitleespoging zien, zodat
+een foutmelding ernaast bewijst dat er wél gelezen is, niet dat de app
+hangt.
+
+Oorzaak: `setAccuChekLastConnectedAtMs()` (de backing store achter
+"Last connected") werd tot nu toe alleen aangeroepen vanuit
+`handleCgmMeasurement()`, en ook daar pas NA de
+`glucoseMgdl == null`-early-return — dus alleen bij een meting met een
+bruikbare glucosewaarde. Zodra de sensorsessie stopt (zoals hier,
+`sessionStopped=true`/`sensorMalfunction=true`) komen er geen metingen
+met bruikbare waarde meer binnen, dus bleef dit veld voor altijd hangen
+op de laatste ECHTE meting (00:50) — ook al herverbond de app daarna
+nog tientallen keren en kreeg elke keer gewoon netjes antwoord (CGM
+Status + RACP "geen nieuwe records", precies zoals verwacht bij een
+gestopte sessie).
+
+Fix: `setAccuChekLastConnectedAtMs()` wordt nu bij ELK bevestigd contact
+met de sensor aangeroepen, niet alleen bij een bruikbare meting:
+- in `handleDeviceInfoOrStatusRead()`'s CGM Status-tak — gebeurt bij
+  elke (her)verbinding, ook als de sessie al gestopt is;
+- in `handleRacpResponse()` — ongeacht of het antwoord succes, "geen
+  nieuwe records" of een fout meldt, elk antwoord bewijst dat de
+  sensor daadwerkelijk heeft gereageerd;
+- in `handleCgmMeasurement()`, nu VÓÓR de `glucoseMgdl == null`-early-
+  return — ook een meting zonder bruikbare waarde telt mee als contact.
+
+"Last read" (de laatste bruikbare glucosewaarde) en "Last connected"
+(het laatste bevestigde contact) zijn hiermee bewust twee verschillende
+velden — zie de uitgebreide kdoc bij `lastRealReading` in
+`AccuChekSmartGuideStatusScreen.kt`. Dit verbetert ook de compacte
+statustekst op het hoofdscherm (`accuChekStatusText()`), die dezelfde
+waarde hergebruikt.
+
+Gewijzigd: `sensor/accuchek/AccuChekSmartGuideDriver.kt`,
+`ui/AccuChekSmartGuideStatusScreen.kt`.
+Geen versiebump.
+
+## Ronde 209 — CareSens Air crash-lus doorbroken (circuit breaker, geen bevestigde root-cause-fix)
+
+Live-melding: "sinds ongeveer 1 à 2 uur crasht de app en werkt de
+CareSens Air op slot A niet meer". Het meegestuurde logbestand bestrijkt
+ruim 70 minuten (00:01 tot 19:17) en laat een onafgebroken crash-herstart-
+lus zien: het hele app-proces crasht, Android herstart het, de BLE-
+verbinding met de sensor komt weer tot stand, en binnen enkele seconden
+crasht het weer — waardoor ook een eventuele actieve sensor op de andere
+slot telkens meesleurt.
+
+Diagnose: byte-voor-byte vergelijking van alle
+`onCharacteristicChanged uuid=c4de9b74...`-regels over de volledige
+logperiode (tientallen crashes, verspreid over losse processen) laat
+zien dat het staartstuk van de AirData-payload — sequenceNumber, time,
+temperature, glucose_array, precies de velden die
+`PendingFrameFingerprint` (Ronde 179/180) vergelijkt — bij ELKE crash
+byte-identiek is. Dit is dus bewijsbaar hetzelfde vastgelopen record dat
+telkens opnieuw wordt aangeboden aan `air1_opcal4_algorithm()` en daarop
+crasht. Toch komt de diagnostische regel van het bestaande skip-
+mechanisme ("...overgeslagen...eerdere crash...") geen enkele keer voor
+in het hele logbestand — de bescherming die dit exact zou moeten
+opvangen heeft in 70+ minuten geen moment ingegrepen, ondanks dat Ronde
+179 en 180 hier al specifiek op gericht waren.
+
+De precieze oorzaak waarom de bestaande `PendingFrameFingerprint`-check
+in `caresensair_bridge.cpp` niet aanslaat kon niet worden vastgesteld via
+statische code-review alleen — er is in deze omgeving geen C++-compiler
+of uitvoeromgeving beschikbaar om de native code te instrumenteren of
+stap voor stap te debuggen. Bewuste keuze: geen vierde poging wagen aan
+dezelfde fragiele native constructie na twee eerdere (177/178, 179/180)
+die dit exacte probleem niet hebben opgelost, zonder dat zeker vast te
+kunnen stellen waarom. In plaats daarvan een volledig onafhankelijke,
+Kotlin-kant vangnet gebouwd dat niet afhankelijk is van het herkennen
+van WELK record vastloopt — alleen van de vraag "is het vorige proces
+veilig teruggekomen uit de risicovolle rekenaanroep, of is het
+daarbinnen gecrasht?".
+
+Fix — crash-breaker in `CareSensAirNative.kt` (nieuwe sectie), per
+`SensorSlot` bijgehouden met kleine bestanden in `context.filesDir`
+(bewust gewone synchrone `java.io.File`-I/O, niet DataStore/coroutines —
+een asynchrone wegschrijving zou kunnen wegrace tegen een op handen
+zijnde crash en nooit op tijd op schijf landen):
+- `armCrashBreaker()` wordt aangeroepen vlak VOOR elke aanroep van
+  `CareSensAirNative.processGlucoseData()` (in
+  `CareSensAirDriver.handleGlucoseDataNotification()`), `disarmCrashBreaker()`
+  direct NA een veilige terugkeer;
+- staat het "armed"-bestand nog klaar bij de volgende `connect()` (d.w.z.
+  het vorige proces is er nooit aan toegekomen om het netjes op te
+  ruimen — het crashte dus middenin de rekenaanroep), dan telt
+  `registerCrashIfArmed()` de opeenvolgende-crashes-teller een stap op;
+- bij 3 opeenvolgende crashes (`CRASH_BREAKER_THRESHOLD`) geeft
+  `connect()` in `CareSensAirDriver.kt` direct een duidelijke
+  `ConnectionState.Error` terug in plaats van de risicovolle aanroep
+  opnieuw te wagen — de BLE-koppeling zelf blijft daarna gewoon werken,
+  alleen de rekenstap wordt overgeslagen, dus de rest van de app (en een
+  eventuele sensor op de andere slot) wordt niet langer meegesleurt in
+  een crash-lus;
+- opnieuw koppelen (zowel een bestaande als een net gescande sensor, in
+  `FclGlucoLinkNavHost.kt`) roept `disarmCrashBreaker()` aan en zet de
+  teller terug op 0 — anders zou herkoppelen met een ANDERE, gezonde
+  sensor alsnog geblokkeerd blijven door de crash-geschiedenis van de
+  vorige, kapotte sensor (de teller is per slot bijgehouden, niet per
+  sensor-serienummer).
+
+Let op: dit is expliciet een circuit breaker, geen bevestigde fix van de
+onderliggende native crash. CareSens Air op het getroffen record zal na
+3 crashes een duidelijke foutmelding tonen in plaats van de app te
+blijven crashen — maar de sensor zal dat specifieke record niet alsnog
+succesvol verwerken. Herkoppelen van de sensor kan helpen (nieuwe
+sessie, nieuw record); lukt dat niet, dan is Juggluco voorlopig het
+alternatief voor deze sensor. De vraag waarom dit specifieke record de
+kalibratiebibliotheek laat crashen blijft open voor verder onderzoek,
+idealiter met een verse logvastlegging na deze fix.
+
+Gewijzigd: `sensor/caresensair/CareSensAirNative.kt`,
+`sensor/caresensair/CareSensAirDriver.kt`, `ui/FclGlucoLinkNavHost.kt`.
+Geen versiebump.
+
+## Ronde 210 — crash-breaker-bug gevonden + root-cause van de native crash zelf bevestigd
+
+Live-melding, direct na het testen van Ronde 209 met een gereset toestel
+en een verse installatie: "sinds ongeveer 1 à 2 uur crasht de app en
+werkt de CareSens Air op slot A niet meer" — én, terecht: "als Juggluco
+wel de verbinding aan kan en wel de sensor kan uitlezen, is de sensor
+niet kapot", met het uitdrukkelijke verzoek nu toch de daadwerkelijke
+oorzaak te achterhalen in plaats van alleen de symptomen op te vangen.
+
+**Twee bevindingen uit het nieuwe logbestand (00:01 t/m 19:54, byte-
+niveau geanalyseerd):**
+
+1. **De sensor zelf loopt al om 18:14 vast op record #267** (sequentie-
+   nummer, meettijd, temperatuur en de 30 glucosewaarden allemaal byte-
+   voor-byte identiek bij elke latere aanbieding) — dit gebeurde AL
+   vóórdat het toestel gereset en de app opnieuw geïnstalleerd werd, en
+   bleef daarna gewoon doorlopen: de vastgelopen aanvraagpositie leeft
+   dus op de SENSOR, niet in de app's eigen data. Tot 18:06 liep de
+   sequentie nog iedere ~5 minuten netjes op (49 → 266), dus dit is geen
+   structureel CareSens Air-probleem, maar een eenmalige vastgelopen
+   positie bij deze specifieke sensor-sessie — consistent met eerdere
+   caselogs (Ronde 175/176) van exact hetzelfde "bevroren aanvraagpositie"
+   patroon.
+2. **De crash-breaker uit Ronde 209 werkte zelf niet** — de
+   opeenvolgende-crashes-teller kwam bij elke nieuwe procespoging nooit
+   verder dan 1, ondanks tientallen crashes op rij. Oorzaak gevonden:
+   `armCrashBreaker()`/`disarmCrashBreaker()` werden rond ELKE
+   `processGlucoseData()`-aanroep gezet, inclusief de onschadelijke 0xC4-
+   aankondiging ("er staan N nieuwe records klaar") die `nativeProcessGlucoseData`
+   NOOIT aan de rekenbibliotheek aanbiedt. Omdat die 0xC4-aankondiging bij
+   élke nieuwe verbindingspoging ALTIJD eerder binnenkomt dan het
+   daadwerkelijk vastgelopen 0xC5-record, armde/disarmde de code zichzelf
+   daar steeds netjes — en `disarmCrashBreaker()` wist daarbij ook de
+   OPGEBOUWDE teller van de vorige, echte crash, nog vóórdat het 0xC5-
+   record de kans kreeg hem opnieuw op te hogen. Gevolg: de teller stond
+   bij elke nieuwe poging alweer op 0 vóór de risicovolle aanroep, en
+   bereikte de drempel van 3 dus nooit — exact zichtbaar in het
+   logbestand ("teller nu 1" bij elke crash, nooit 2 of 3).
+
+   Fix (`CareSensAirDriver.kt`'s `handleGlucoseDataNotification()`):
+   arm/disarm alleen nog rond een daadwerkelijk risicovol 0xC5-record
+   (`value[0] == 0xC5`, de enige tak die de rekenbibliotheek aanroept) —
+   een 0xC4-aankondiging slaat deze stap nu gewoon over.
+
+**Wat dit niet oplost:** de onderliggende native crash in
+`air1_opcal4_algorithm()` zelf (waarom record #267 specifiek crasht, en
+waarom de EIGEN `PendingFrameFingerprint`-skip in `caresensair_bridge.cpp`
+— die de teller-bug niet had, en wél theoretisch moet aanslaan op dit
+exacte byte-identieke record — in de praktijk nooit lijkt te hebben
+aangeslagen) blijft onderzocht maar niet bevestigd opgelost; dat vereist
+C++-debugging die in deze omgeving niet mogelijk is. Met deze fix zou
+de crash-breaker nu echter wél daadwerkelijk NA 3 opeenvolgende crashes
+moeten ingrijpen (in plaats van nooit), dus de eindeloze crash-lus zou
+hiermee hoe dan ook moeten stoppen, ook als de onderliggende native bug
+blijft bestaan.
+
+Gewijzigd: `sensor/caresensair/CareSensAirDriver.kt`,
+`sensor/caresensair/CareSensAirNative.kt`.
+Geen versiebump.
+
+## Ronde 211 — CareSens Air crash: bevestigde root cause gevonden en gefixt
+
+Vervolg op Ronde 209/210. Live-verzoek: "als Juggluco wel de verbinding aan
+kan en wel de sensor kan uitlezen is de sensor niet kapot, kun je uitzoeken
+hoe Juggluco dat doet" — de gebruiker testte dezelfde fysieke sensor op een
+tweede telefoon met Juggluco, en die las de sensor gewoon iedere 5 minuten
+succesvol uit (met wisselende rauwe BLE-verbindingsstatuscodes 147/257,
+maar géén crash-lus).
+
+Onderzoek in drie stappen:
+1. **`libCALCULATION.so` zelf is niet het verschil** — byte-voor-byte
+   vergeleken (sha256) met zowel de oudere Juggluco 10.9.8-apk als de
+   daadwerkelijk door de gebruiker gebruikte 11.2.0 (build 913, via `adb
+   pull` van de arm64-v8a-splitapk gehaald, aangezien een APK-extractor-app
+   alleen de basis-apk zonder native bibliotheken opleverde) — in beide
+   gevallen exact dezelfde hash als onze gebundelde kopie. Geen gepatchte
+   of nieuwere rekenbibliotheek bij Juggluco.
+2. **Juggluco's eigen `java.cpp` bevat geen "unstick"-trucje** — het
+   laatst-verwerkte-sequentienummer schuift bij Juggluco ook alleen op na
+   een niet-gecrashte aanroep van de bibliotheek, er is geen aparte
+   behandeling voor oude/achterstallige records, en de foutcodes 147/257
+   zijn gewoon de rauwe Android BLE-verbindingsstatus, rechtstreeks
+   doorgegeven — geen Juggluco-eigen betekenis.
+3. **Gevonden: FCLGlucoLink geeft de rekenbibliotheek een kalibratieprofiel
+   met ~90 lege (nul) parameters die bij Juggluco altijd zinvolle
+   fabriekswaarden hebben.** `air.hpp` (letterlijk identiek bestand bij
+   beide apps, `diff` bevestigt 0 verschillen) definieert naast de kale
+   `air1_opcal4_device_info_t`-struct (die naar de rekenbibliotheek gaat)
+   ook een `DeviceInfo2Obj`/`DeviceInfo3Obj` — dezelfde velden, maar WEL
+   met in-class-defaultwaarden (ycept=1.0, slope100=3.5226,
+   maximumValue=500, minimumValue=40, en zo'n 90 err1/err2/err6-
+   ruisdrempelconstanten). Juggluco gebruikt uitsluitend `DeviceInfo3Obj`
+   als opslagtype voor zijn sensorprofiel; het 0xC2-kalibratiebericht van
+   de sensor overschrijft daarbij alleen de eerste ~229 bytes (ycept,
+   slope, lot, kalman-/slope-parameters, ...) — de resterende ~205 bytes
+   (offsets 229-433: alle err1/err2/err6-drempels, maximumValue,
+   minimumValue) blijven op hun zinvolle fabrieksdefault staan.
+   FCLGlucoLink gebruikte tot nu toe de kale `air1_opcal4_device_info_t`
+   (géén in-class-defaults) als opslagtype — dezelfde ~205 bytes bleven
+   daardoor op nul staan. Een oudere kdoc (01/08/2026) concludeerde
+   ten onrechte dat dit geen probleem was, met als redenering dat
+   Juggluco's eigen `*gegs={}`-initialisatie "ook" neerkomt op nul —
+   maar `{}` op een object MET in-class-defaults (`DeviceInfo3Obj`) vult
+   juist die defaults in, het nult niet. Precies die verkeerde aanname
+   is de oorzaak: `air1_opcal4_algorithm()` kreeg bij FCLGlucoLink dus al
+   die tijd zinloze nul-ruisdrempels/nul-maximumValue/nul-minimumValue
+   mee, wat een sensor-datapunt-afhankelijke crash in de closed-source
+   bibliotheek verklaart (welke exacte berekening raakt, hangt af van de
+   ruwe ADC-waarden van dat specifieke record — vandaar dat het altijd
+   precies op hetzelfde vastgelopen record crashte, en nergens anders).
+
+Fix (`caresensair_bridge.cpp`): `CareSensAirState::sensorInfo` is van type
+veranderd van `air1_opcal4_device_info_t` naar `DeviceInfo3Obj` — dus
+dezelfde velden, maar nu MET Juggluco's eigen in-class-defaults, exact
+dezelfde bron (`air.hpp`) als waar Juggluco deze defaults zelf uit haalt.
+Bij de aanroep van `g_air1_opcal4_algorithm()` wordt dit object met een
+`reinterpret_cast<air1_opcal4_device_info_t *>(...)` doorgegeven — zelfde
+cast als Juggluco's eigen aanroep in `java.cpp`, veilig omdat beide
+structs letterlijk dezelfde velden/volgorde/groottes hebben (`DeviceInfo3Obj`
+voegt alleen `sensor_start_time` toe, wat `air1_opcal4_device_info_t` ook
+al als laatste veld heeft). `kExportSize` (voor de persistente
+kalibratiegeschiedenis per sensor) is meeveranderd naar `sizeof(DeviceInfo3Obj)`
+— functioneel dezelfde grootte, maar nu het juiste, bij het opslagtype
+passende type.
+
+Dit is, voor zover met de beschikbare broncode-vergelijking vast te
+stellen, de daadwerkelijke oorzaak van de crash — geen vermoeden of
+circuit breaker zoals Ronde 209/210, maar een concreet, bevestigd
+verschil tussen de twee apps' invoer aan exact dezelfde, identieke
+rekenbibliotheek. De crash-breaker uit Ronde 209/210 blijft daarnaast
+gewoon bestaan als extra vangnet, voor het geval er toch nog een ander,
+nog onbekend scenario is dat de bibliotheek laat crashen.
+
+Gewijzigd: `cpp/caresensair_bridge.cpp`.
+Geen versiebump (op verzoek van voorgaande rondes pas bumpen als
+expliciet gevraagd — zeg het als je een testbare build wil).
+
+## Ronde 212 — DEVICE_MATCH_FAILED-vastlooplus na gebruik met Juggluco op tweede telefoon
+
+Na de Ronde 211-fix (geen native crashes meer) meldde een nieuw logbestand
+een ANDER probleem: de vraag "waarom roept de koppeling van de CareSens Air
+het Android-koppelscherm niet meer aan, hij blijft hangen?". Analyse van het
+logbestand toonde 5x op rij `outcome=DEVICE_MATCH_FAILED` bij de allereerste
+stap van het protocol (de "csair"-AppID-handshake), gevolgd door een
+onmiddellijke disconnect en een 60s-wachtlus — dus NOOIT ver genoeg om bij
+de stap te komen die het Android-koppelscherm (`createBond()`) aanroept.
+Dat scherm wordt namelijk alleen aangeroepen in de SUCCES-tak van deze
+handshake (zie `handleAppIdNotification()`), niet in de afwijzings-tak — de
+vraag was dus letterlijk correct beantwoord door deze afwijzing zelf, geen
+aparte regressie in het koppelscherm.
+
+Root cause: `unusedSensor` (byte 34 van de handshake — claimt "ik heb nog
+nooit eerder met je gepraat") wordt lokaal afgeleid uit de eigen opgeslagen
+kalibratiegeschiedenis (`CareSensAirNative.getLastSequence`). Zolang die
+geschiedenis > 0 is, blijft `unusedSensor=false` ("ik zet een bestaande
+sessie voort") — en de bestaande `appIdRejectedOnce`-vlag (Ronde origineel,
+01/08/2026) kan dit alleen van true náár false forceren, nooit omgekeerd.
+In dit scenario was er al vóór de eerste poging een lokale geschiedenis
+(sequence>0, van een eerder succesvolle sessie), dus bleef de app bij alle
+5 pogingen dezelfde, door de sensor inmiddels afgewezen claim herhalen,
+zonder enige kans op herstel.
+
+Vergelijking met Juggluco's eigen bron (`AirGattCallback.java`, via adb
+gepulde APK van Juggluco 11.2.0/build 913, zie Ronde 211) bevestigde: dit
+is géén FCLGlucoLink-regressie. Juggluco's eigen `unusedSensor`-logica is
+exact even eenrichtings (`unusedSensor=false;` vóór de disconnect bij een
+afwijzing, nooit terug naar true) en heeft ook geen geheime "ontgrendel"-
+truc. Juggluco kon de sensor alleen uitlezen op de tweede telefoon omdat
+die telefoon NOG NOOIT eerder met deze sensor gepraat had — dus zelf met
+`unusedSensor=true` begon, wat de sensor accepteerde als een nieuwe
+koppelclaim. Onze eigen telefoon had die "schone lei" niet meer, puur
+omdat de sensor zelf (vermoedelijk door het tussentijdse gebruik met de
+andere telefoon/app) onze oude sessie niet langer herkent.
+
+Fix (`CareSensAirNative.kt`: nieuwe `clearPersisted()`; `CareSensAirDriver.kt`:
+nieuw veld `lastSentUnusedSensor`, bijgehouden bij elke daadwerkelijk
+verstuurde handshake): als de afwijzing specifiek `DEVICE_MATCH_FAILED` is
+ÉN de net verstuurde claim `unusedSensor=false` was (dus de "doorgaan"-
+claim, niet de "nog nooit gezien"-claim), wissen we de opgeslagen
+kalibratiegeschiedenis voor deze sensor-serie en laten we de huidige
+native state-handle los (zonder 'm eerst te persisteren — hij is nu
+aangetoond ongeldig). De volgende koppelpoging vindt dan geen oude
+geschiedenis meer terug, waardoor de bestaande `unusedSensor`-berekening
+vanzelf weer `true` aflevert — exact de claim die de sensor nu kennelijk
+verwacht, zonder dat er een apart, geforceerd-tegenovergesteld pad nodig
+is. Dit is dus geen gok: dezelfde mechanica die Juggluco toevallig liet
+werken (beginnen zonder geschiedenis) wordt hier bewust gereproduceerd op
+het moment dat blijkt dat de oude geschiedenis niet meer klopt.
+
+Nog niet bevestigd door een live test na deze fix — de analyse en de fix
+volgen rechtstreeks uit het logbestand en de broncodevergelijking, maar de
+daadwerkelijke sensor-reactie op een hernieuwde `unusedSensor=true`-claim
+(na een eerder `unusedSensor=false`-afwijzing) is nog niet in de praktijk
+gezien.
+
+**Addendum (zelfde dag, ná live-test met build "gebouwd 03-10-2026 22:18")**
+— de fix hierboven werkte NIET: een nieuw logbestand toonde nog steeds
+`unusedSensor=false` bij ELKE poging, ononderbroken, ook na deze fix.
+Oorzaak: deze fix wiste de kalibratiegeschiedenis wel correct, maar zette
+op de regel ERVOOR nog steeds onvoorwaardelijk `appIdRejectedOnce = true`
+— en `unusedSensor` wordt berekend als `!appIdRejectedOnce && (...)`. Dat
+`!appIdRejectedOnce` bleef dus `false` forceren, ONGEACHT of de
+geschiedenis net gewist was. De geschiedenis-wis-actie had dus geen enkel
+effect op de daadwerkelijk verstuurde waarde. Fix op de fix: in de
+`DEVICE_MATCH_FAILED`-bij-`unusedSensor=false`-tak wordt `appIdRejectedOnce`
+nu expliciet op `false` gezet (in plaats van op `true`, wat alleen nog in
+de overige/generieke afwijzingsgevallen gebeurt) — zodat de net
+opgeschoonde geschiedenis ook daadwerkelijk tot een verse
+`unusedSensor=true`-poging leidt. Nog steeds niet live bevestigd.
+
+**Addendum 2 (zelfde dag, ná live-test met build "gebouwd 03-10-2026
+22:33")** — de fix werkte deze keer WEL zoals bedoeld: het logbestand
+toont nu daadwerkelijk afwisselend `unusedSensor=true` en
+`unusedSensor=false` bij opeenvolgende pogingen (bevestigt dat de
+geschiedenis-wis + appIdRejectedOnce-reset allebei functioneren). Maar
+de sensor wijst BEIDE waarden nu consequent af met exact dezelfde
+`outcome=DEVICE_MATCH_FAILED` — inclusief de "verse, nog-nooit-gezien"-
+claim (`unusedSensor=true`) vlak nadat de lokale geschiedenis bewezen
+leeg was. Dat is het sluitende bewijs dat dit NOOIT een probleem in
+FCLGlucoLink's eigen `unusedSensor`-logica was: een oprecht verse claim
+wordt nu ook afgewezen, en dat kan deze app onmogelijk met lokale state
+oplossen — de vergelijking die "DEVICE_MATCH_FAILED" teruggeeft, gebeurt
+dus niet op basis van onze claim, maar op basis van de daadwerkelijke
+BLE-identiteit van de verbindende telefoon zelf. De aannemelijkste
+verklaring: deze CareSens Air-sensor onthoudt, op firmwareniveau,
+precies ÉÉN "eigenaar"-telefoon, en wijst elke andere telefoon af zodra
+die eigenaar vastligt — ongeacht wat er in de AppID-handshake wordt
+geclaimd. Sinds de sensor tussentijds succesvol met de TWEEDE telefoon
+(Juggluco) gepraat heeft, is die telefoon nu waarschijnlijk de
+vastgelegde eigenaar, en wijst de sensor deze (eerste) telefoon af totdat
+hij hardware-matig gereset wordt (dezelfde resetprocedure als aan het
+begin van dit traject) — ditmaal vóórdat een andere telefoon 'm opnieuw
+claimt. Geen verdere softwarewijziging deze ronde: de twee eerdere
+pogingen (geschiedenis wissen, appIdRejectedOnce-fix) waren beide
+gerechtvaardigde, correct werkende fixes op een reëel geconstateerd
+Kotlin-bug, maar lossen dit specifieke, buiten de app liggende
+sensor-eigenaarschapsprobleem niet op.
+
+Gewijzigd: `sensor/caresensair/CareSensAirDriver.kt`,
+`sensor/caresensair/CareSensAirNative.kt`.
+Geen versiebump (zeg het als je een testbare build wil).
+
+## Ronde 213 — CareSens Air: meettijdstip en herverbindritme op vast 5-minuten-raster
+
+Analyse van twee logs van 05/10/2026 (sensor "CSAir 1084", herverbinden elke
+2 min; sensor "CSAir 1458", herverbinden elke ~5 min): de sensor meet exact
+elke 300s (volgnummers aaneengesloten, niets verloren) en zijn klok loopt
+gelijk met de telefoon (verschil 0-2s; de app synchroniseert vanaf 2s). Toch
+zagen AAPS/grafiek intervallen van 3-8 minuten, want:
+
+1. De klokcorrectie uit Ronde 40 zette de offset bij elk vers record op
+   (nu - sensortijd), dus incl. de ontvangstvertraging (0-4s tot 60-240s).
+   Meettijdstip = ontvangsttijd. Een eerste herziening (offset laten
+   ratchetten) bleek bij de tweede log fout: bij een stabiele vertraging van
+   ~121s zou die alsnog naar ontvangsttijd toe kruipen.
+   Definitieve fix: de offset komt niet meer uit de records maar per
+   verbinding uit de sensorklok in het app-info-antwoord
+   (`nativeSetClockOffset`, 0 als er een tijdsync volgt; |offset| >= 600s
+   genegeerd). Test op beide logs: opeenvolgende timestamps 300s (+-1s).
+2. Het herverbindraster (`computeReconnectCooldownMs`) was gebouwd op de
+   ontvangsttijd (anker + floor), waardoor ontvangstjitter het raster liet
+   verspringen (4/6- en 3/7-minuten-paren). Nu plant het vanaf het echte
+   meettijdstip van de nieuwste meting (`lastMeasurementAtMs` + 300s).
+
+De ~121s vaste aankomstvertraging in de 1458-log is bewust: de G7-scheidings-
+regel (60s afstand) schuift de scan naar G7+60s. Nog niet live bevestigd.
+
+Gewijzigd: `cpp/caresensair_bridge.cpp`, `sensor/caresensair/CareSensAirNative.kt`,
+`sensor/caresensair/CareSensAirDriver.kt`.
+Versiebump: versionCode 206, versionName `0.10.7-caresens-ritme`, `whatsnew/FCLGlucoLink_v206_whatsnew.txt`.

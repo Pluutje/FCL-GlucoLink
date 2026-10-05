@@ -1,3 +1,5 @@
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Properties
 
 // FCLGlucoLink — app module.
@@ -46,6 +48,19 @@ val localProperties = Properties().apply {
     }
 }
 
+// 02/10/2026 (editor, RONDE 205, bugfix na build-fout "Unresolved
+// reference: text") — zelfde makke als hierboven bij `localProperties`
+// (zie die kdoc): `java.text.SimpleDateFormat(...)` INLINE in de
+// `defaultConfig { ... }`-DSL-block (verderop) botste op dezelfde manier
+// met AGP 8's eigen `java { ... }`-DSL-extensie, die de kale
+// `java`-pakketnaam daar overschaduwt — Kotlin probeerde toen `.text` als
+// lid van DIE extensie te vinden i.p.v. als onderdeel van het
+// `java.text`-pakket. Standaardfix, consistent met `localProperties`:
+// hier op het top-level van het script berekenen (waar `java` ondubbelzinnig
+// het pakket is) en verderop alleen de kale `buildTimeString`-waarde
+// gebruiken.
+val buildTimeString = SimpleDateFormat("dd-MM-yyyy HH:mm").format(Date())
+
 android {
     namespace = "com.fclglucolink.app"
     compileSdk = 34
@@ -54,8 +69,8 @@ android {
         applicationId = "com.fclglucolink.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 203
-        versionName = "0.10.4-g7-rebond-fix"
+        versionCode = 206
+        versionName = "0.10.7-caresens-ritme"
 
         // 01/08/2026 (editor) — alleen arm64-v8a: libCALCULATION.so (in
         // app/src/main/jniLibs/arm64-v8a/) is alleen voor die ABI
@@ -104,6 +119,27 @@ android {
             "DRIVE_LOG_UPLOAD_SECRET",
             "\"${localProperties.getProperty("fclLogUploadSecret", "")}\""
         )
+
+        // 02/10/2026 (editor, RONDE 205, op verzoek — de gebruiker kon
+        // tijdens een intensieve test-dag met meerdere builds per dag niet
+        // meer zien welke build daadwerkelijk actief was: versionName
+        // wordt bewust alleen op expliciet verzoek gebumpt (zie README's
+        // standing conventions), dus bleef "0.10.5-alarm-popup" dagenlang
+        // ongewijzigd staan terwijl er onderhuids allang andere code
+        // draaide. Een los BUILD_TIME-veld, automatisch gevuld op het
+        // moment van `./gradlew`/Android Studio's build (dus NIET
+        // handmatig bij te werken, en dus ook nooit "vergeten"), geeft een
+        // altijd-uniek, altijd-actueel moment erbij — zonder de
+        // versiebump-afspraak zelf te hoeven doorbreken. Zie
+        // AboutScreen.kt voor waar dit getoond wordt. Waarde zelf
+        // berekend in [buildTimeString] hierboven (top-level, zie die
+        // kdoc voor de "Unresolved reference: text"-bugfix-aanleiding) —
+        // hier alleen nog de kale variabele gebruiken.
+        buildConfigField(
+            "String",
+            "BUILD_TIME",
+            "\"$buildTimeString\""
+        )
     }
 
     externalNativeBuild {
@@ -113,7 +149,9 @@ android {
         }
     }
 
-    // 01/08/2026 (editor, na live-test — "Couldn't load the CareSens Air
+
+
+            // 01/08/2026 (editor, na live-test — "Couldn't load the CareSens Air
     // calibration library") — libCALCULATION.so wordt in
     // CareSensAirNative.kt zelf via dlopen() op een bestandspad geladen
     // (context.applicationInfo.nativeLibraryDir + "/libCALCULATION.so"),

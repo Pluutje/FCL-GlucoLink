@@ -7,8 +7,10 @@ public final class BuildConfig {
   public static final boolean DEBUG = false;
   public static final String APPLICATION_ID = "com.fclglucolink.app";
   public static final String BUILD_TYPE = "release";
-  public static final int VERSION_CODE = 203;
-  public static final String VERSION_NAME = "0.10.4-g7-rebond-fix";
+  public static final int VERSION_CODE = 206;
+  public static final String VERSION_NAME = "0.10.7-caresens-ritme";
+  // Field from default config.
+  public static final String BUILD_TIME = "05-10-2026 14:31";
   // Field from default config.
   public static final String DRIVE_LOG_UPLOAD_SECRET = "GlucoLink_log";
   // Field from default config.

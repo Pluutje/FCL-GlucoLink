@@ -12,8 +12,8 @@
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.fclglucolink.app"
-    android:versionCode="203"
-    android:versionName="0.10.4-g7-rebond-fix" >
+    android:versionCode="206"
+    android:versionName="0.10.7-caresens-ritme" >
 
     <uses-sdk
         android:minSdkVersion="26"
