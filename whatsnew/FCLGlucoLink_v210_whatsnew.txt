@@ -1,0 +1,7 @@
+Dexcom G7 / ONE+: de Bluetooth-koppeling van een G6 (zoals een Anubis die in de Dexcom-app draait) wordt nooit meer door GlucoLink verwijderd. Bij het verwijderen van een koppeling controleert de app nu de naam van het apparaat en weigert bij een naam die met "Dexcom" begint (G6-transmitter). In de bevestigingsdialoog van de knop staan nu de naam en het adres van het apparaat, zodat je kunt zien welk apparaat het betreft.
+
+De G7/ONE+ probeerde bij elke scan eerst zelf te koppelen voordat het inloggen met de koppelcode klaar was. Dat werd door de sensor steeds meteen geweigerd en verstoorde de rustperiode. Dat is uitgezet; het koppelen gebeurt nu alleen via het normale inlogproces. Na een bond-reset (automatisch of met de knop) wacht de app bovendien minimaal 20 minuten voor de volgende koppelpoging.
+
+In de log staat nu de naam van het apparaat bij elke verbindpoging en bij elke bond-reset.
+
+Extra veiligheid: het automatische verwijderen van een koppeling gebeurt alleen nog voor een adres waarvan de app ooit echt een G7/ONE+-meting heeft ontvangen. Zo kan een ander Dexcom-apparaat (bijvoorbeeld een G6 in de Dexcom-app) dat per ongeluk als G7-sensor is gekozen nooit automatisch worden ontkoppeld. De knop op het statusscherm blijft werken voor G7/ONE+ (met naam en adres in de bevestiging).

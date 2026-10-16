@@ -1,0 +1,5 @@
+Nieuwe melding voor lockscreen en uitgeklapt scherm: de actuele bloedglucose staat nu groot rechts in de melding, zoals in AAPS (Android 17 en nieuwer). Op Android 16 staat de BG in een chip in de statusbalk, en op Samsung One UI 7 en nieuwer in de Now Bar / Live-meldingen.
+
+Regel 1 toont de BG met trendpijl, regel 2 het verschil met de vorige meting en hoeveel minuten geleden die was. Bij twee sensoren staat per sensor één regel. De melding ververst elke minuut.
+
+Mogelijk moet je op je toestel de instelling voor "gepromote meldingen" of "Live-meldingen" voor FCLGlucoLink aanzetten (Instellingen, Apps, Meldingen).

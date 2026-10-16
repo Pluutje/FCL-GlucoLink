@@ -1,0 +1,7 @@
+CareSens Air: updates om het 2-minuten-interval te beperken. Bij sommige sensoren verbond de app elke ~2 minuten opnieuw zonder dat er een nieuwe meting klaarstond, doordat de planning op een verouderd tijdstip was gebaseerd. De app plant nu vanaf het echte meettijdstip van de nieuwste meting, zodat verbinden weer netjes op het 5-minuten-ritme van de sensor valt.
+
+Daarnaast krijgt elke meting nu het echte meettijdstip van de sensor in plaats van het moment van ontvangst. Opeenvolgende metingen liggen daardoor altijd 5 minuten uit elkaar richting grafiek en AAPS, ook als een meting later wordt opgehaald.
+
+Fix: CareSens Air-sensor die door het gebruik met een andere telefoon of app werd afgewezen (DEVICE_MATCH_FAILED), herstelt nu eerst met een schone lei in plaats van oneindig dezelfde afgewezen poging te herhalen. Is de sensor aan een andere telefoon gekoppeld, dan blijft een reset van de sensor nodig. Let op een Caresens AIR sensor kan slechts 1 keer van device wisselen. Binnen verschillende app's op 1 device is geen probleem
+
+Geen wijzigingen aan G6, G7 of SmartGuide in deze versie.

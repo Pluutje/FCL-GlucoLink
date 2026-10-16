@@ -1,0 +1,5 @@
+Dexcom G6: de grootste oorzaak van de gemiste metingen is gevonden en opgelost. Soms stuurt de transmitter zijn login-uitdaging net iets eerder dan Android meldt dat het inlogverzoek is aangekomen. Het antwoord van de app werd dan geweigerd zonder dat de app het merkte, en de transmitter verbrak na 15 seconden de verbinding. De app probeert het antwoord nu meteen opnieuw. In het logbestand zie je dat aan de regel "schrijfactie geweigerd" met daarna "alsnog gestart".
+
+Dexcom G6: de meettijd die naar AAPS gaat is nu stabiel. De transmitter meet precies elke 5 minuten, maar de app verbindt soms net na de meting en soms een minuut later. Daardoor sprongen de tijden in AAPS heen en weer. De app rekent nu terug naar het echte meetmoment, zodat de metingen netjes 5 minuten uit elkaar liggen.
+
+De versie op de Over-kaart is bijgewerkt en wordt voortaan bij elke update aangepast.

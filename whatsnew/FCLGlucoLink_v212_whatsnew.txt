@@ -1,0 +1,7 @@
+Dexcom G7 / ONE+: betere afhandeling en diagnose als er na het verwijderen van de koppeling geen Android-koppelvenster verschijnt.
+
+Als de sensor de verbinding verbreekt voordat hij het teken geeft om te koppelen (de "bond-trigger"), roept de app niet langer alsnog het koppelen aan op een verbinding die al weg is. Dat veroorzaakte 30 seconden lang een mislukte koppelpoging van Android zelf, zonder venster. De app breekt nu direct af en probeert het bij de volgende gelegenheid opnieuw.
+
+In de log staat nu duidelijk "sensor verbrak de verbinding VÓÓR de bond-trigger", zodat te zien is of de sensor de koppeling weigert (bijvoorbeeld door een oude koppeling of rustperiode aan sensorzijde) of dat het aan de app ligt.
+
+Tip bij herhaald koppelen: laat de sensor na het verwijderen van de koppeling ongeveer 15 tot 20 minuten met rust (ook niet zelf zoeken in de Bluetooth-instellingen van de telefoon) en doe dan één poging via "Change pairing code".

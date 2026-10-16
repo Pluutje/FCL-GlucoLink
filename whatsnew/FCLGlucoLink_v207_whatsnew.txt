@@ -1,0 +1,7 @@
+Diagnose-logging: een poging om een sensor te verbinden laat nu altijd een spoor achter in de logbestanden, ook als de sensor niet beschikbaar is (bijvoorbeeld een Dexcom G6-transmitter in slaapstand).
+
+Bij G6, G7, CareSens Air en SmartGuide wordt nu gelogd wanneer een verbindpoging start ("connect() gestart") en wanneer een scan start. Wordt er na ruim 6 minuten scannen geen apparaat gevonden, dan staat dat ook in de log ("geen apparaat gevonden ... scan wordt herstart"). Bij de G6 wordt ook gelogd als er geen geldige transmitter-ID is opgeslagen.
+
+Hierdoor is bij problemen met koppelen of ontbrekende data voortaan te zien of de app het wel geprobeerd heeft. Geen gedragswijzigingen, alleen logging.
+
+Lockscreen: de melding van de app toont de glucosewaarde met trendpijl nu ook op het lockscreen, voor zover de telefoon dat toestaat. Sommige telefoons tonen op het lockscreen alleen een icoon; dat kan in de Android-instellingen (Meldingen > Meldingen op vergrendelscherm) worden aangepast.

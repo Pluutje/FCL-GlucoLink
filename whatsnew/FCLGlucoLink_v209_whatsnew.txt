@@ -1,0 +1,7 @@
+Dexcom G7 / ONE+: de app herstelt nu zelf van een verouderde koppeling met de sensor. Als de sensor steeds direct na het inloggen de verbinding verbreekt (zonder meting), wist de app na 6 mislukte pogingen de opgeslagen sleutel en de Bluetooth-koppeling van deze sensor en koppelt daarna opnieuw met de opgeslagen koppelcode. Dit is wat je anders handmatig moest doen (sensor uit Bluetooth gooien en opnieuw koppelen). Omdat de G7 en ONE+ na een verloren koppeling ongeveer 15 minuten rust nodig heeft, doet de app daarna hooguit één poging per 20 minuten, tot er weer een meting binnenkomt. Android kan om bevestiging van de koppeling vragen.
+
+Nieuw: op het G7-statusscherm staat een knop "Bluetooth-koppeling verwijderen en opnieuw koppelen" om dat zelf te doen. Dit verwijdert alleen de koppeling van deze ene sensor, maar geldt ook voor andere apps op deze telefoon die dezelfde sensor gebruiken.
+
+Fix: een ongeldig pakket van de sensor tijdens het koppelen liet de hele app crashen. Dat wordt nu gewoon als mislukte poging behandeld.
+
+Bij herhaalde mislukkingen worden de pogingen vertraagd in plaats van elke 10 seconden. In de log staat nu per mislukte verbinding hoe vaak het op rij mislukte.

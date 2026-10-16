@@ -1,0 +1,13 @@
+Fix Dexcom G7 / ONE+: na het verwijderen van de Bluetooth-koppeling werd de sensor niet meer opnieuw gekoppeld en kwam het koppelvenster van Android niet meer tevoorschijn.
+
+Oorzaak 1: de rustperiode van 20 minuten na een bond-reset blokkeerde ook een koppelpoging die de gebruiker zelf startte. Nu geldt die rustperiode alleen nog voor het automatische herstel; de knop "Bluetooth-koppeling verwijderen en opnieuw koppelen" zet geen wachttijd meer, en een nieuwe sensorkeuze (bijvoorbeeld via "Change pairing code") heft een lopende wachttijd direct op.
+
+Oorzaak 2: na het verwijderen van de koppeling kan de sensor onder een ander Bluetooth-adres adverteren, terwijl de app bleef zoeken naar het oude adres. De app zoekt nu ook op de naam van de sensor (bijvoorbeeld DX02LA), en werkt het opgeslagen adres automatisch bij als de sensor onder een nieuw adres wordt gevonden. De naam wordt onthouden zodra de app de sensor één keer heeft gezien.
+
+Nieuw: automatische opruiming van verouderde slot-gegevens, zodat de app geen oude sensoradressen of sleutels meer vasthoudt.
+
+Dubbele adressen: levert het ene slot recent metingen van een sensor, en staat dezelfde sensor (zelfde adres of naam) ook nog in het andere slot zonder dat daar data binnenkomt, dan wordt dat verouderde duplicaat opgeruimd: het adres wordt gewist en dat slot stopt met zoeken. Hetzelfde geldt voor een slot dat nog nooit een meting leverde terwijl het andere slot het afgelopen uur wel data kreeg (een verlaten koppelpoging).
+
+Een uur zonder meting en zonder verbinding: de opgeslagen sessiesleutel en de herstel-/wachtstatus worden gewist, zodat de volgende poging met een schone lei begint. Het adres en de koppelcode van een slot dat ooit wel data leverde blijven staan, omdat de sensor dan gewoon buiten bereik kan zijn.
+
+Let op: bij een logbestand met "ronde 2: ongeldig bewijs" is de ingevoerde koppelcode niet de code van die sensor; elke sensor heeft zijn eigen koppelcode.

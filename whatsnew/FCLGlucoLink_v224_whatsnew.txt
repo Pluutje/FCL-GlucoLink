@@ -1,0 +1,11 @@
+Dexcom G7 / ONE+: bij het koppelen van een nieuwe sensor wacht de app nu 15 minuten na elke 3 mislukte pogingen. De sensor blokkeert zichzelf namelijk een tijd als je te vaak probeert, en snel opnieuw proberen maakte dat erger. Op het scherm staat dan tot hoe laat de app wacht.
+
+Dexcom G7 / ONE+: het logbestand laat nu per poging zien welk nummer het was, hoeveel seconden na de vorige poging het startte, hoe lang het duurde en waarom het mislukte (bijvoorbeeld: de sensor wees de koppelcode af).
+
+Dexcom G7 / ONE+: een onverwachte fout tijdens het koppelen laat de app niet meer stoppen. Het telt nu als een gewone mislukte poging en komt in het logbestand.
+
+Dexcom G7 / ONE+: tijdens de eerste 30 minuten van een nieuwe sensor (opwarmen) geeft de sensor geen bruikbare waarde. De app slaat daarom een paar verbindingen over en komt terug vlak voordat de opwarmtijd voorbij is. Dat scheelt onnodige verbindingen bij het koppelen.
+
+Dexcom G7 / ONE+: de looptijd begint nu opnieuw bij een nieuwe sensor. Eerder bleef de looptijd van de vorige sensor staan (bijvoorbeeld 21 dagen). Daardoor telde ook de kalibratie van de vorige sensor nog mee; dat is nu ook opgelost.
+
+Dexcom G7 / ONE+: viel de verbinding met een bekende sensor binnen enkele seconden weg, dan probeert de app het nu meteen opnieuw (tot 3 keer) in plaats van een volle 5 minuten te wachten. Zo ontstaat er minder vaak een gat van 10 tot 15 minuten in de metingen.

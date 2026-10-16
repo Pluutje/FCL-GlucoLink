@@ -1,0 +1,3 @@
+Dexcom G6: als er een gat zit in de metingen (bijvoorbeeld doordat de verbinding een tijd niet lukte), haalt de app de gemiste metingen nu achteraf bij de transmitter op. Die komen op de juiste tijd in de grafiek en bij AAPS. De app gebruikt ze alleen als ze duidelijk kloppen: ze moeten tussen de laatste en de huidige meting liggen, een zinnige waarde hebben en minstens 3 minuten uit elkaar liggen. Mislukt het ophalen, dan probeert de app het de volgende keer opnieuw, maximaal drie keer.
+
+Dexcom G6: het logbestand bevat nu meer informatie over elke verbinding (koppelstatus, hoe lang de verbinding duurde en of de transmitter op het inlogverzoek antwoordde). Hiermee zoeken we uit waarom de transmitter 's nachts soms niet antwoordt.

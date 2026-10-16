@@ -1,0 +1,3 @@
+CareSens Air: een record dat de rekenbibliotheek laat crashen wordt nu (na de eerste crash) onthouden en niet nogmaals aangeboden. Daardoor crasht de app niet meer 3 keer op rij op hetzelfde record en gaat hij na dat ene record weer door met de volgende metingen.
+
+CareSens Air: extra diagnose in het logbestand (alleen voor ons om de crash op te sporen). Vlak voor elke berekening schrijft de app de exacte invoer weg.

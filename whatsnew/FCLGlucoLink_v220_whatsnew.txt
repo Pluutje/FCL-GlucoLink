@@ -1,0 +1,3 @@
+Dexcom G6: bij een net gestarte sensor meldt de transmitter soms dat de trend nog niet te berekenen is. De app maakte daar ten onrechte een zeer snelle stijging van (+12,7 mg/dL per minuut), met een verkeerde pijl en mogelijk een onterecht voorspellend alarm. Nu telt dit als "geen trend".
+
+Dexcom G6 (stock transmitter): de opwarmtijd op het infoscherm is nu 2 uur (was 1 uur geschat). De statusregel telt de opwarmtijd af, bijvoorbeeld "Sensor started · 1h 12m warmup remaining". De afteltijd is alleen informatie; de app toont waarden zodra de transmitter ze doorgeeft.

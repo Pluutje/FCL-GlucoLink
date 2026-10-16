@@ -1,0 +1,5 @@
+Dexcom G7 / ONE+: de app herkent nu wanneer de sensor het koppelen weigert, en haalt gemiste metingen alsnog op.
+
+Weigert de sensor de koppelronde (hij stuurt dan een foutcode en een lege uitdaging), dan stopt de app direct en toont op het G7-statusscherm een waarschuwing: zet Bluetooth van de telefoon uit en aan, en herstart de telefoon als dat niet helpt. De waarschuwing verdwijnt zodra er weer een meting binnenkomt.
+
+Is er een gat van meer dan 8 minuten in de metingen (bijvoorbeeld na een nieuwe koppeling of een tijd buiten bereik), dan vraagt de app de sensor om de gemiste waarden en zet die in de grafiek, in de juiste volgorde en vóór de actuele meting. Maximaal 24 uur terug, en nooit van vóór de start van de sensor. Zonder bekende vorige verbinding worden de laatste 6 uur opgehaald. Lukt het ophalen niet, dan probeert de app het hooguit elke 15 minuten opnieuw.

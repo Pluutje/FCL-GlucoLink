@@ -1,0 +1,5 @@
+Dexcom G7 / ONE+: extra diagnose voor het geval de sensor na het verwijderen van de koppeling niet meer wordt gevonden of niet wil koppelen.
+
+Vindt de gerichte scan na een minuut niets, dan doet de app eenmalig (maximaal één keer per 30 minuten) 20 seconden een brede scan en schrijft de gevonden Dexcom-achtige apparaten in de log, met naam, adres en signaalsterkte. Zo is te zien of de sensor wel adverteert, onder welk adres of welke naam, en of hij verbindbaar is.
+
+Geen andere gedragswijzigingen.

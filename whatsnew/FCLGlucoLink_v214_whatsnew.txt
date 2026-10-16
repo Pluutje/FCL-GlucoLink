@@ -1,0 +1,7 @@
+Dexcom G7 / ONE+: extra diagnose bij het koppelen, zodat te zien is waarom de sensor na de certificaatstap de verbinding verbreekt.
+
+De app schrijft nu de ruwe antwoorden van de sensor in de log: de uitdaging van de sensor, onze handtekening en vooral het antwoord op de laatste certificaatstap, plus de ruwe statusbytes van de authenticatie. Daarmee is te zien of de sensor onze handtekening afwijst.
+
+De brede diagnostische scan wordt alleen nog uitgevoerd als het scherm aan staat, omdat Android bij een uitgeschakeld scherm geen resultaten van brede scans levert en de uitkomst dan misleidend was.
+
+Geen andere gedragswijzigingen.

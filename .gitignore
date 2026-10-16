@@ -1,0 +1,19 @@
+# Build-uitvoer en Gradle-cache
+build/
+.gradle/
+.cxx/
+.kotlin/
+.idea/
+*.iml
+
+# Lokale bestanden
+local.properties
+FCLGlucoLink_LogUpload_AppsScript.gs.txt
+
+# Grote bestanden
+*.apk
+*.aab
+dexcom_apk/
+
+# Lokaal archief (niet in git)
+_archief/

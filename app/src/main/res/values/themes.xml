@@ -1,0 +1,6 @@
+<resources>
+    <!-- Puur een manifest-vereiste basisthema — de daadwerkelijke, AAPS-
+         achtige styling zit in ui/theme/Theme.kt (Compose Material3), niet
+         hier. -->
+    <style name="Theme.FCLGlucoLink" parent="android:Theme.Material.NoActionBar" />
+</resources>

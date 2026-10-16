@@ -1,0 +1,10 @@
+Dexcom ONE+ / G7: het koppelverzoek komt nu als melding met geluid en trillen ("Tik nu op Koppelen"). De sensor wacht maar ongeveer 25 seconden op je antwoord. Daarom mislukte de koppeling vaak als je niet op tijd keek.
+
+De app verwijdert de Bluetooth-koppeling van de sensor niet meer zo snel zelf. Een paar mislukte verbindingen komen meestal door een korte Bluetooth-storing en niet door een kapotte koppeling. De koppeling wordt nu pas hersteld na veel mislukte pogingen op rij, en nooit als je het koppelverzoek niet op tijd hebt bevestigd.
+
+De opgeslagen sessiesleutel wordt alleen nog gewist als de sensor hem echt afwijst, of na drie keer geen antwoord. Een nieuwe sleutel wordt pas definitief bewaard als er een echte meting binnen is. Na een mislukte verbinding wacht de app minstens een minuut voor de volgende poging.
+
+Nieuw sinds de vorige versie: lockscreen- en statusbalkmelding met grote BG, trendpijl, verschil en leeftijd van de meting, ook voor Samsung (One UI 7 en nieuwer).
+
+Alarmen: het alarmscherm vraagt op het vergrendelscherm niet meer om je PIN. Je kunt direct op Stop of Snooze tikken. Veeg je de alarmmelding weg, dan stopt het alarm nu ook (net als de knop Stop). In de melding staan ook knoppen voor Stop en Snooze 15 minuten.
+

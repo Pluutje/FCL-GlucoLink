@@ -1,0 +1,7 @@
+Dexcom G6: de app houdt nu de leeftijd van de transmitter zelf bij (los van de sensorsessie van 10 dagen) en waarschuwt wanneer een standaard G6-transmitter aan het einde van zijn levensduur komt.
+
+Op het G6-statusscherm staat bij Transmitter een nieuwe regel "Transmitter leeftijd" in dagen. Op het hoofdscherm staat dezelfde regel onder de looptijd van de sensor. De leeftijd wordt uit de transmitter zelf uitgelezen (ongeveer elke 8 uur) en daartussen doorgerekend.
+
+Waarschuwingen: vanaf dag 80 kleurt de regel oranje (zorg voor een vervanger), vanaf dag 90 donkeroranje (kan elk moment stoppen; een nieuwe sensor kan nog tot dag 99 gestart worden) en vanaf dag 99 rood (er kan geen nieuwe sensor meer gestart worden; de lopende sessie kan tot ongeveer dag 109 doorlopen). Op het statusscherm staat daar ook een toelichting bij.
+
+Alleen voor standaard (Original) G6-transmitters; bij een Anubis-transmitter wordt dit niet getoond. Ook nieuw: een poging om een sensor te verbinden laat nu altijd een regel in de log achter (G6, G7, CareSens Air en SmartGuide).
