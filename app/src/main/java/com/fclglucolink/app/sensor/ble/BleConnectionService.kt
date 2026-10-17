@@ -278,6 +278,14 @@ class BleConnectionService : Service() {
         switchEventStore = SensorSwitchEventStore(this)
         createNotificationChannel()
 
+        // RONDE 224 — de grote waarde in de melding hoort bij de AAPS-zendende slot.
+        scope.launch {
+            settings.aapsActiveSlot.collect { slot ->
+                notificationAapsSlot = slot
+                if (slotRuntimes.values.any { it.latestBgArrowText != null }) refreshNotification()
+            }
+        }
+
         // RONDE 236 — de melding toont "x min": elke minuut verversen zodat de leeftijd klopt.
         scope.launch {
             while (true) {
@@ -1044,6 +1052,9 @@ class BleConnectionService : Service() {
      * "Slot B: niets gekozen"-ruis) — als GEEN van beide iets gekozen heeft,
      * valt terug op de oorspronkelijke "geen sensor gekozen"-tekst.
      */
+    // RONDE 224 — laatst bekende AAPS-zendende slot, voor de melding.
+    @Volatile private var notificationAapsSlot: SensorSlot? = null
+
     private fun refreshNotification() {
         val parts = SensorSlot.entries.mapNotNull { slot -> slotStatusText(slot) }
         val text = if (parts.isEmpty()) {
@@ -1174,7 +1185,13 @@ class BleConnectionService : Service() {
         )
         // RONDE 228 — de nieuwste meting van beide slots bepaalt titel (BG + pijl) en chip (alleen
         // BG). Een promoted ongoing melding heeft een titel nodig.
-        val newest = slotRuntimes.values
+        // RONDE 224 — de AAPS-zendende slot gaat voor: zijn waarde staat groot bovenaan, ook als
+        // de andere sensor een nieuwere meting heeft. Alleen als de AAPS-sensor (bijna) 15 minuten
+        // niets heeft gemeten valt de melding terug op de nieuwste meting van beide.
+        val nowMsForNotification = System.currentTimeMillis()
+        val aapsRuntime = notificationAapsSlot?.let { slotRuntimes[it] }
+            ?.takeIf { it.latestChipText != null && nowMsForNotification - it.latestReadingAtMs < 15 * 60_000L }
+        val newest = aapsRuntime ?: slotRuntimes.values
             .filter { it.latestChipText != null && it.lastConnectionState is ConnectionState.Connected }
             .maxByOrNull { it.latestReadingAtMs }
         val chipText = newest?.latestChipText
@@ -1183,8 +1200,8 @@ class BleConnectionService : Service() {
         // Sensoren zonder BG (verbinding kwijt e.d.) komen als status op de tweede regel.
         val withBg = SensorSlot.entries
             .map { slotRuntimes.getValue(it) }
-            .filter { it.latestBgArrowText != null && it.lastConnectionState is ConnectionState.Connected }
-            .sortedByDescending { it.latestReadingAtMs }
+            .filter { it.latestBgArrowText != null && (it.lastConnectionState is ConnectionState.Connected || it === aapsRuntime) }
+            .sortedWith(compareByDescending<SlotRuntime> { it === aapsRuntime }.thenByDescending { it.latestReadingAtMs })
         fun ageText(r: SlotRuntime): String {
             val min = ((System.currentTimeMillis() - r.latestReadingAtMs) / 60_000L).coerceAtLeast(0)
             return "$min min"

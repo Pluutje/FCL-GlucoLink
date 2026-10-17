@@ -71,6 +71,7 @@ class FclGlucoLinkApp : Application() {
     }
 
 
+
     /**
      * 27/08/2026 (editor, RONDE 126, na een analyse van diagnostische
      * logbestanden van een gebruiker die geen enkel spoor van een gemelde
