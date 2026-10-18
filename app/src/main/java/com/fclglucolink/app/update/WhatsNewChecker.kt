@@ -26,6 +26,23 @@ object WhatsNewChecker {
      *  de kop ("Version 183") in de UI. */
     data class Entry(val versionCode: Int, val body: String)
 
+    /** Scheidingsregel tussen de Nederlandse (eerst) en Engelse tekst in een release-tekst. */
+    const val ENGLISH_MARKER = "---EN---"
+
+    /**
+     * RONDE 241 — kiest de tekst in de gekozen taal. Een release-tekst mag twee delen hebben:
+     * Nederlands, dan een regel [ENGLISH_MARKER], dan Engels. Zonder marker is er één tekst voor
+     * beide talen. Is het gekozen deel leeg, dan wordt het andere deel getoond.
+     */
+    fun localize(body: String, dutch: Boolean): String {
+        val index = body.indexOf(ENGLISH_MARKER)
+        if (index < 0) return body.trim()
+        val nl = body.substring(0, index).trim()
+        val en = body.substring(index + ENGLISH_MARKER.length).trim()
+        val chosen = if (dutch) nl else en
+        return chosen.ifBlank { if (dutch) en else nl }
+    }
+
     sealed class WhatsNewResult {
         data class Success(val entries: List<Entry>) : WhatsNewResult()
         data object NotConfigured : WhatsNewResult()

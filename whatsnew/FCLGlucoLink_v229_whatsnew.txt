@@ -1,0 +1,3 @@
+Updates: de uitleg bij een nieuwe versie ("Wat is er nieuw" en de lijst "Andere versies") verschijnt nu in de taal die je in de app gekozen hebt, Nederlands of Engels.
+---EN---
+Updates: the notes for a new version ("What's new" and the "Other versions" list) are now shown in the language you chose in the app, Dutch or English.

@@ -468,7 +468,7 @@ fun AboutScreen(onBack: () -> Unit) {
                                 color = MaterialTheme.colorScheme.primary
                             )
                             if (option.notes.isNotBlank()) {
-                                Text(option.notes, style = MaterialTheme.typography.bodySmall)
+                                Text(WhatsNewChecker.localize(option.notes, language == AppLanguage.DUTCH), style = MaterialTheme.typography.bodySmall)
                             }
                             if (blocked) {
                                 Text(
@@ -551,7 +551,7 @@ fun AboutScreen(onBack: () -> Unit) {
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.primary
                             )
-                            Text(entry.body, style = MaterialTheme.typography.bodyMedium)
+                            Text(WhatsNewChecker.localize(entry.body, language == AppLanguage.DUTCH), style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                 }

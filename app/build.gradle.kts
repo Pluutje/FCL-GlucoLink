@@ -56,7 +56,7 @@ val buildTimeString = SimpleDateFormat("dd-MM-yyyy HH:mm").format(Date())
 
 // RONDE 240 — het versienummer van een uitgave (tag `v<nummer>` op GitHub). Dit is wat de app
 // vergelijkt om een update te herkennen. Dit getal gaat bij elke uitgave omhoog.
-val releaseNumber = 228
+val releaseNumber = 229
 
 android {
     namespace = "com.fclglucolink.app"
@@ -72,7 +72,7 @@ android {
         // gebruiker via de update-knop ook terug naar een eerdere versie. Het uitgavenummer staat
         // in `releaseNumber` hierboven en komt in de app als BuildConfig.RELEASE_NUMBER.
         versionCode = 227
-        versionName = "0.10.28-terugzetten"
+        versionName = "0.10.29-tweetalig"
 
         // 01/08/2026 (editor) — alleen arm64-v8a: libCALCULATION.so (in
         // app/src/main/jniLibs/arm64-v8a/) is alleen voor die ABI
