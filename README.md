@@ -34,7 +34,7 @@ zodat de twee Bluetooth-verbindingen elkaar niet storen (`AapsSlotSchedule`).
   hoog en geen gegevens meer. Geluid, trillen of beide.
 - Eenheden mg/dL of mmol/L, taal Engels of Nederlands.
 - Meldingen op het vergrendelscherm via de foreground-service.
-- Update-controle in het Over-scherm (map op Google Drive) en een
+- Update-controle in het Over-scherm (GitHub Releases van deze repo) en een
   "Wat is nieuw"-lijst.
 - Logbestand per dag (`fclglucolink_JJJJ-MM-DD.txt`), te versturen met de knop
   "Log sturen" in de instellingen.

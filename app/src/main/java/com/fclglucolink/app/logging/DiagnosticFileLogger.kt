@@ -256,7 +256,7 @@ object DiagnosticFileLogger {
             val timeStamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US).format(Date())
             file.appendText(
                 "$timeStamp [$instanceTag] === FCLGlucoLink ${BuildConfig.VERSION_NAME} " +
-                    "(build ${BuildConfig.VERSION_CODE}, gebouwd ${BuildConfig.BUILD_TIME}) ===\n"
+                    "(build ${BuildConfig.RELEASE_NUMBER}, gebouwd ${BuildConfig.BUILD_TIME}) ===\n"
             )
         }
     }

@@ -203,6 +203,8 @@ fun DexcomG7StatusScreen(
         is ConnectionState.Error -> "Error"
         ConnectionState.Disconnected -> "Disconnected"
     }
+    // RONDE 228 — activatiemoment volgens de eigen klok van de sensor.
+    val activatedText = clockEstimatedStartedAtMs?.let { dateFormat.format(Date(it)) } ?: "—"
     val lastConnectedText = lastConnectedAtMs?.let { dateFormat.format(Date(it)) } ?: "—"
     // 28/08/2026 (editor, RONDE 150) — mirror van DexcomG6StatusScreen.kt's
     // batteryText-opbouw hierboven, zie klasse-kdoc onderaan dit bestand
@@ -340,6 +342,7 @@ fun DexcomG7StatusScreen(
                     InfoRow("Address", deviceAddress ?: "—")
                     InfoRow("Pairing code", pairingCode ?: "—")
                     InfoRow("Last connected", lastConnectedText)
+                    InfoRow("Activated (sensor clock)", activatedText)
                     // 29/08/2026 (editor, RONDE 158/159) — "Sensor status"
                     // komt uit DexcomG7Driver.kt's handleGlucoseResult() (zie
                     // AppSettings.kt's kdoc bij setDexcomG7SensorStatus) —

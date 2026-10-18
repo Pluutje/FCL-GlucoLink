@@ -1,0 +1,1 @@
+Updates: de app haalt nieuwe versies voortaan van GitHub op in plaats van van Google Drive. Je hoeft zelf niets te doen: de update-knop en de lijst met wijzigingen werken zoals voorheen.

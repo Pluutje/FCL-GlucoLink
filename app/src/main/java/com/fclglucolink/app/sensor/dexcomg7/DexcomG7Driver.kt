@@ -471,7 +471,6 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
          *  afwijkend" gelden — zie handleGlucoseResult()'s kdoc. Zelf
          *  genoemde richtlijn van de gebruiker. */
         private const val RUNTIME_CLOCK_DISCREPANCY_MS = 30L * 60 * 1000
-        private const val RUNTIME_NEW_SENSOR_MS = 24L * 60 * 60 * 1000
 
         /** 28/08/2026 (editor, RONDE 152) — xDrip+'s eigen
          *  `requiredNextFirmwareDetailsType()`-prioriteitsvolgorde voor een
@@ -2524,44 +2523,16 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
                 if (clockEstimate != null) {
                     settings.setDexcomG7ClockEstimatedStartedAtMs(slot, clockEstimate)
                     val storedStartedAtMs = settings.dexcomG7SessionStartedAtMs(slot).first()
-                    // RONDE 224 — een sensor die nog opwarmt is per definitie net gestart (klok < 30 min).
-                    // Een lokaal bewaarde looptijd van een vorige sensor is dan fout: overschrijven.
-                    // Ook na het opwarmen: wijst de sensorklok op een sensor die meer dan een dag
-                    // JONGER is dan de lokaal bewaarde start, dan is dit een nieuwe sensor.
-                    val warmingUpNow = calibrationState.warmingUp() && rx.clock in 0L until G7_WARMUP_SECONDS
-                    val storedFarTooOld = storedStartedAtMs != null &&
-                            clockEstimate - storedStartedAtMs > RUNTIME_NEW_SENSOR_MS
-                    if (warmingUpNow || storedFarTooOld) {
-                        if (storedStartedAtMs == null || abs(storedStartedAtMs - clockEstimate) > RUNTIME_CLOCK_DISCREPANCY_MS) {
-                            settings.setDexcomG7SessionStartedAtMs(slot, clockEstimate)
-                            DiagnosticFileLogger.log("DexcomG7: looptijd gezet op de sensorklok (klok ${rx.clock}s) — de oude waarde was van een vorige sensor (RONDE 224)")
-                        }
-                    }
-                    // Twee gevallen waarin de klok-schatting het lokaal
-                    // bijgehouden startmoment overschrijft:
-                    //  (a) nog GEEN lokale historie op dit toestel — een
-                    //      echte eerste koppeling hier (bv. de hoofdtelefoon,
-                    //      terwijl de sensor al dagen op een ander toestel
-                    //      liep) — de klok-schatting is dan meteen het beste
-                    //      beschikbare signaal, niets om tegen af te wegen.
-                    //  (b) de klok wijst op een SIGNIFICANT LANGERE looptijd
-                    //      dan lokaal bekend (bv. Ronde 185's serienummer-
-                    //      correctie kreeg deze keer geen kans, doordat de
-                    //      eerstvolgende firmware-uitvraag toevallig faalde)
-                    //      — bewust ALLEEN in deze richting automatisch
-                    //      corrigeren: een lokaal bekende waarde die LANGER
-                    //      geleden ligt dan de klok aangeeft, wordt bewust
-                    //      met rust gelaten (zie DexcomG7StatusScreen.kt: dat
-                    //      geval wordt naast de looptijd getoond in plaats
-                    //      van stilzwijgend overschreven, want minder zeker
-                    //      — kan bv. ruis in de eerste metingen na het
-                    //      opstarten zijn).
-                    val significantlyLonger = storedStartedAtMs != null &&
-                            clockEstimate < storedStartedAtMs - RUNTIME_CLOCK_DISCREPANCY_MS
-                    if (storedStartedAtMs == null || significantlyLonger) {
+                    // RONDE 228 — de sensor meldt zelf hoeveel seconden hij actief is
+                    // (rx.clock). Die klok is het enige betrouwbare signaal en wint altijd
+                    // van een lokaal bewaarde waarde, in BEIDE richtingen: een lokale
+                    // waarde kan van een vorige sensor zijn of bij een koppeling verkeerd
+                    // gezet zijn (gezien: 10d13h lokaal tegen 9d19h volgens de sensor).
+                    // De grens van 30 min houdt kleine meetverschillen buiten beeld.
+                    if (storedStartedAtMs == null || abs(storedStartedAtMs - clockEstimate) > RUNTIME_CLOCK_DISCREPANCY_MS) {
                         settings.setDexcomG7SessionStartedAtMs(slot, clockEstimate)
                         if (storedStartedAtMs != null) {
-                            DiagnosticFileLogger.log("DexcomG7: sensor-klok wijst op een significant langere looptijd dan lokaal bekend — looptijd gecorrigeerd (RONDE 186)")
+                            DiagnosticFileLogger.log("DexcomG7: looptijd gezet op de sensorklok (klok ${rx.clock}s), lokaal stond ${(clockEstimate - storedStartedAtMs) / 60_000} min anders (RONDE 228)")
                         }
                     }
                 }

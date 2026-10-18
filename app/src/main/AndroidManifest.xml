@@ -144,7 +144,7 @@
          melding [...] als er een update beschikbaar is [...] via mijn
          google drive [...] op verzoek kan updaten") — de EERSTE keer dat
          deze app iets over het netwerk doet: periodiek de gedeelde
-         Drive-map uitlezen (bestandsnamen, geen grote downloads, zie
+         GitHub Releases uitlezen (RONDE 240, geen grote downloads, zie
          update/UpdateChecker.kt) en, alleen als de gebruiker zelf op
          "Update nu" tikt, de nieuwe APK ophalen. Nooit automatisch/stil op
          de achtergrond geïnstalleerd. -->

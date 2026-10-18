@@ -54,6 +54,10 @@ val localProperties = Properties().apply {
 // gebruiken.
 val buildTimeString = SimpleDateFormat("dd-MM-yyyy HH:mm").format(Date())
 
+// RONDE 240 — het versienummer van een uitgave (tag `v<nummer>` op GitHub). Dit is wat de app
+// vergelijkt om een update te herkennen. Dit getal gaat bij elke uitgave omhoog.
+val releaseNumber = 228
+
 android {
     namespace = "com.fclglucolink.app"
     compileSdk = 36
@@ -62,8 +66,13 @@ android {
         applicationId = "com.fclglucolink.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 224
-        versionName = "0.10.24-g7-koppeling"
+        // RONDE 240 — Android's versionCode blijft VAST (niet meer ophogen). Android weigert alleen
+        // een LAGER versionCode over een hoger heen te zetten; bij een gelijk versionCode mag een
+        // oudere of nieuwere uitgave er gewoon overheen (zelfde handtekening nodig). Zo kan een
+        // gebruiker via de update-knop ook terug naar een eerdere versie. Het uitgavenummer staat
+        // in `releaseNumber` hierboven en komt in de app als BuildConfig.RELEASE_NUMBER.
+        versionCode = 227
+        versionName = "0.10.28-terugzetten"
 
         // 01/08/2026 (editor) — alleen arm64-v8a: libCALCULATION.so (in
         // app/src/main/jniLibs/arm64-v8a/) is alleen voor die ABI
@@ -76,18 +85,12 @@ android {
             abiFilters += "arm64-v8a"
         }
 
-        // Optionele lokale instellingen, standaard leeg.
-        buildConfigField(
-            "String",
-            "DRIVE_UPDATE_FOLDER_ID",
-            "\"${localProperties.getProperty("driveUpdateFolderId", "")}\""
-        )
-        buildConfigField(
-            "String",
-            "DRIVE_UPDATE_API_KEY",
-            "\"${localProperties.getProperty("driveUpdateApiKey", "")}\""
-        )
+        buildConfigField("int", "RELEASE_NUMBER", "$releaseNumber")
+        // RONDE 240 — de knop "Andere versies" (terug naar een eerdere uitgave). Uit in 227, aan
+        // vanaf 228.
+        buildConfigField("boolean", "VERSION_PICKER", "true")
 
+        // Optionele lokale instellingen, standaard leeg.
         buildConfigField(
             "String",
             "DRIVE_LOG_UPLOAD_URL",

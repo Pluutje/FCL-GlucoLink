@@ -1,0 +1,3 @@
+Dexcom G7 / ONE+: de looptijd van de sensor is nu altijd juist. De app gebruikt de eigen klok van de sensor en corrigeert een afwijkende, lokaal bewaarde starttijd automatisch. Eerder kon de looptijd ongeveer een halve dag te lang blijven staan.
+
+Dexcom G7 / ONE+: op het statusscherm staat een nieuwe regel "Activated (sensor clock)" met het moment waarop de sensor is gestart.

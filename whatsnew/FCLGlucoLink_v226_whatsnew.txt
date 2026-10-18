@@ -1,0 +1,1 @@
+Filtering van nieuwe en bijna versleten sensoren: de extra demping in de eerste en laatste dagen hangt nu af van de ruis die de sensor echt laat zien. Een ruisige sensor (zoals een Dexcom G7 de eerste uren) wordt zoals eerder extra gladgestreken, een rustige sensor blijft snel en reageert dus niet trager op een stijging of daling.

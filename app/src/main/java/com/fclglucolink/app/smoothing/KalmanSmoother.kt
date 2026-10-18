@@ -227,6 +227,16 @@ import kotlin.math.sqrt
  * R-demping/hogere trigger-drempel, niet de daaropvolgende bevestigende
  * metingen) terwijl een geïsoleerde ruis-uitschieter naar beneden tijdens
  * het inloop-/uitloop-venster wél gedempt wordt, net als bij stijgingen.
+ *
+ * RONDE 239 — ruispoort. Gemeten op echte logs (G7 en CareSens) en met een nagebouwd filter in
+ * simulatie: de tijdgebonden inloop-/uitloop-demping kost op een SCHONE sensor ongeveer 4 minuten
+ * vertraging bij een stijging voor weinig ruiswinst, en helpt een RUISIGE sensor (G7, eerste uren)
+ * wel. De demping wordt daarom vermenigvuldigd met een poort (0..1) uit de gemeten ruis: de mediaan
+ * van de absolute tweede verschillen van de laatste ~2 uur ruwe metingen (robuust tegen echte
+ * stijgingen), onder 2 mg/dL ruis geen extra demping, vanaf 4 mg/dL volledig. De drempels komen uit
+ * één G7 en één CareSens en moeten met meer sensoren worden nagelopen. De poort geldt voor
+ * inloop én uitloop. De tijdfactor blijft de bovengrens. Bij minder dan 8 bruikbare drietallen
+ * (net begonnen of veel gaten) staat de poort open, dus het oude gedrag.
  */
 enum class SmoothingStrength(val qScale: Double, val displayLabel: String) {
     WEAK(1.8, "Weak"),
@@ -281,6 +291,13 @@ class KalmanSmoother {
     private val breakInExtraRMgdlSq = 80.0     // extra meetruis-variantie (mg/dL²) bovenop de normale rEff.
     private val breakInThresholdBoost = 2.0    // onmiddellijke-trigger-drempel wordt tot ×3 (1 + 2×1.0) hoger.
 
+    // ---- RONDE 239: ruispoort voor de inloop-/uitloop-demping — zie klasse-kdoc. ----
+    private val noiseWindowSamples = 24        // ≈ 2 uur bij 5-minutentakt.
+    private val noiseMinTriples = 8            // minder dan dit: geen betrouwbare schatting → poort volledig open.
+    private val noiseGateLowMgdl = 2.0         // onder deze ruis (mg/dL, sd) geen extra demping.
+    private val noiseGateHighMgdl = 4.0        // vanaf deze ruis de volle demping.
+    private val recentMeasurements = ArrayDeque<Pair<Long, Double>>()
+
     private fun rateDamp(dtMinutes: Double): Double = exp(-dtMinutes / rateDecayTauMinutes)
 
     // ---- Toestand. ----
@@ -301,7 +318,11 @@ class KalmanSmoother {
     data class SmoothingOutput(
         val glucoseMgdl: Double,
         val rateMgdlPerMin: Double,
-        val wasOutlier: Boolean
+        val wasOutlier: Boolean,
+        /** RONDE 239 — gemeten ruis (sd, mg/dL) over de laatste ~2 uur; NaN = nog te weinig metingen. */
+        val noiseMgdl: Double = Double.NaN,
+        /** RONDE 239 — ruispoort 0..1 waarmee de inloop-/uitloop-demping is vermenigvuldigd. */
+        val noiseGate: Double = 1.0
     )
 
     /** Zie klasse-kdoc — aangeroepen door BleConnectionService.kt bij een
@@ -319,6 +340,28 @@ class KalmanSmoother {
         rawInnovationsSq.clear()
         predVarHistory.clear()
         recentSigns.clear()
+        recentMeasurements.clear()
+    }
+
+    /**
+     * RONDE 239 — schat de meetruis (sd, mg/dL) uit de ruwe metingen van de laatste ~2 uur: de
+     * mediaan van de absolute tweede verschillen (robuust tegen echte stijgingen en uitschieters),
+     * omgerekend met 1,4826 / √6. Alleen opeenvolgende metingen met ongeveer 5 minuten ertussen
+     * tellen mee. `NaN` bij te weinig bruikbare drietallen.
+     */
+    private fun estimateNoiseMgdl(): Double {
+        val w = recentMeasurements.toList()
+        val diffs = ArrayList<Double>()
+        for (i in 0 until w.size - 2) {
+            val gap1 = w[i + 1].first - w[i].first
+            val gap2 = w[i + 2].first - w[i + 1].first
+            if (abs(gap1 - 300_000L) < 45_000L && abs(gap2 - 300_000L) < 45_000L) {
+                diffs.add(abs(w[i].second - 2.0 * w[i + 1].second + w[i + 2].second))
+            }
+        }
+        if (diffs.size < noiseMinTriples) return Double.NaN
+        diffs.sort()
+        return 1.4826 * diffs[diffs.size / 2] / sqrt(6.0)
     }
 
     /**
@@ -354,6 +397,8 @@ class KalmanSmoother {
     ): SmoothingOutput {
         val effQGlucose = qGlucose * strength.qScale
         val effQRate = qRate * strength.qScale
+        recentMeasurements.addLast(timestampMs to measurementMgdl)
+        while (recentMeasurements.size > noiseWindowSamples + 2) recentMeasurements.removeFirst()
         if (!initialized) {
             glucose = measurementMgdl
             rate = 0.0
@@ -371,6 +416,7 @@ class KalmanSmoother {
             // voorspelbaar traject meer, vers beginnen bij deze meting i.p.v.
             // een oude, inmiddels betekenisloze toestand te extrapoleren.
             reset()
+            recentMeasurements.addLast(timestampMs to measurementMgdl)
             glucose = measurementMgdl
             initialized = true
             lastTimestampMs = timestampMs
@@ -424,7 +470,13 @@ class KalmanSmoother {
         // RONDE 125 — inloop- en uitloop-demping delen dezelfde sterkte-
         // schaal: het maximum van beide (nooit opgeteld, ze horen bij
         // niet-overlappende delen van de looptijd — zie klasse-kdoc).
-        val edgeStrength = max(breakInDecayFactor, breakOutDecayFactor).coerceIn(0.0, 1.0)
+        // RONDE 239 — ruispoort: de tijdgebonden sterkte telt alleen mee voor zover de sensor
+        // ook echt ruisig is. Een schone sensor behoudt zo zijn snelheid, een ruisige krijgt de
+        // volle demping. Te weinig metingen voor een schatting → poort open (oude gedrag).
+        val noiseMgdl = estimateNoiseMgdl()
+        val noiseGate = if (noiseMgdl.isNaN()) 1.0
+        else ((noiseMgdl - noiseGateLowMgdl) / (noiseGateHighMgdl - noiseGateLowMgdl)).coerceIn(0.0, 1.0)
+        val edgeStrength = (max(breakInDecayFactor, breakOutDecayFactor) * noiseGate).coerceIn(0.0, 1.0)
 
         // RONDE 109 — onmiddellijke trigger: één enkele meting die al meer
         // dan [immediateTriggerThreshold] afwijkt hoeft niet op de 2-van-3-
@@ -507,7 +559,7 @@ class KalmanSmoother {
         }
 
         val wasOutlier = mahalanobisSq > chiSquaredThreshold || abs(innovation) > outlierAbsoluteMgdl
-        return SmoothingOutput(glucose, rate, wasOutlier)
+        return SmoothingOutput(glucose, rate, wasOutlier, noiseMgdl, noiseGate)
     }
 
     private data class PredictResult(

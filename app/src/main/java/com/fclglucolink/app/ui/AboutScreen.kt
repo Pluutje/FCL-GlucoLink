@@ -120,7 +120,59 @@ fun AboutScreen(onBack: () -> Unit) {
     var whatsNewEntries by remember { mutableStateOf<List<WhatsNewChecker.Entry>>(emptyList()) }
     var whatsNewMessage by remember { mutableStateOf<String?>(null) }
 
-    val updateAvailable = availableVersionCode > BuildConfig.VERSION_CODE && availableFileId.isNotBlank()
+    // RONDE 240 — keuze uit alle uitgaven op GitHub.
+    var showVersions by remember { mutableStateOf(false) }
+    var isLoadingVersions by remember { mutableStateOf(false) }
+    var versionOptions by remember { mutableStateOf<List<UpdateChecker.VersionOption>>(emptyList()) }
+    var versionsMessage by remember { mutableStateOf<String?>(null) }
+    var pendingVersion by remember { mutableStateOf<UpdateChecker.VersionOption?>(null) }
+
+    // RONDE 240 — de installatie is hier uit de "Update now"-knop gehaald, zodat ook de lijst met
+    // andere versies hem kan gebruiken. Gedrag voor "Update now" is ongewijzigd.
+    fun startInstall(downloadUrl: String) {
+        // 27/09/2026 (editor, op verzoek — zelfde patroon als FCLvNext's FclTrustedBuild-check bij
+        // de "Installeren"-knop) — "Check now" en "What's new" blijven altijd werken, ook op een
+        // zelfgebouwde apk; alleen het daadwerkelijk installeren wordt geblokkeerd, met een
+        // duidelijke melding i.p.v. de download te starten en dan pas op een cryptische
+        // Android-installatiefout te stuiten (zie TrustedBuild.kt's kdoc).
+        if (!TrustedBuild.isTrustedBuild(context)) {
+            statusMessage = trNow(
+                "wrong keystore — this build isn't signed with the official keystore and can't auto-update",
+                "verkeerde keystore — deze build is niet ondertekend met de officiële keystore en kan niet automatisch updaten"
+            )
+            return
+        }
+        isInstalling = true
+        statusMessage = null
+        scope.launch {
+            when (val result = UpdateInstaller.downloadAndLaunchInstall(context, downloadUrl)) {
+                is UpdateInstaller.InstallLaunchResult.Launched ->
+                    statusMessage = null
+                is UpdateInstaller.InstallLaunchResult.Failed ->
+                    statusMessage = trNow("Couldn't install the update: ${result.message}", "Kon de update niet installeren: ${result.message}")
+                is UpdateInstaller.InstallLaunchResult.DowngradeBlocked ->
+                    statusMessage = trNow(
+                        "This version can't be installed over the current one (its database is older). Going back is only possible after uninstalling the app, which removes your data.",
+                        "Deze versie kan niet over de huidige heen (de database is ouder). Terug kan alleen na het deïnstalleren van de app, en dan gaan je gegevens verloren."
+                    )
+                is UpdateInstaller.InstallLaunchResult.NeedsInstallPermission -> {
+                    statusMessage = trNow(
+                        "Allow \"Install unknown apps\" for FCLGlucoLink, then try again.",
+                        "Sta \"Install unknown apps\" toe voor FCLGlucoLink, en probeer het dan opnieuw."
+                    )
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                            data = Uri.parse("package:${context.packageName}")
+                        }
+                        context.startActivity(intent)
+                    }
+                }
+            }
+            isInstalling = false
+        }
+    }
+
+    val updateAvailable = availableVersionCode > BuildConfig.RELEASE_NUMBER && availableFileId.isNotBlank()
 
     Scaffold(
         topBar = {
@@ -305,7 +357,7 @@ fun AboutScreen(onBack: () -> Unit) {
                                     whatsNewEntries = emptyList()
                                     showWhatsNew = true
                                     scope.launch {
-                                        when (val result = WhatsNewChecker.fetchSince(context, BuildConfig.VERSION_CODE)) {
+                                        when (val result = WhatsNewChecker.fetchSince(context, BuildConfig.RELEASE_NUMBER)) {
                                             is WhatsNewChecker.WhatsNewResult.Success -> {
                                                 whatsNewEntries = result.entries
                                                 if (result.entries.isEmpty()) {
@@ -333,44 +385,7 @@ fun AboutScreen(onBack: () -> Unit) {
                                 modifier = Modifier.weight(1f),
                                 enabled = !isChecking && !isInstalling,
                                 onClick = {
-                                    // 27/09/2026 (editor, op verzoek — zelfde patroon als
-                                    // FCLvNext's FclTrustedBuild-check bij de "Installeren"-
-                                    // knop) — "Check now" en "What's new" hierboven blijven
-                                    // altijd werken, ook op een zelfgebouwde apk; alleen het
-                                    // daadwerkelijk installeren wordt hier geblokkeerd, met een
-                                    // duidelijke melding i.p.v. de download te starten en dan
-                                    // pas op een cryptische Android-installatiefout te stuiten
-                                    // (zie TrustedBuild.kt's kdoc).
-                                    if (!TrustedBuild.isTrustedBuild(context)) {
-                                        statusMessage = trNow(
-                                            "wrong keystore — this build isn't signed with the official keystore and can't auto-update",
-                                            "verkeerde keystore — deze build is niet ondertekend met de officiële keystore en kan niet automatisch updaten"
-                                        )
-                                        return@Button
-                                    }
-                                    isInstalling = true
-                                    statusMessage = null
-                                    scope.launch {
-                                        when (val result = UpdateInstaller.downloadAndLaunchInstall(context, availableFileId)) {
-                                            is UpdateInstaller.InstallLaunchResult.Launched ->
-                                                statusMessage = null
-                                            is UpdateInstaller.InstallLaunchResult.Failed ->
-                                                statusMessage = trNow("Couldn't install the update: ${result.message}", "Kon de update niet installeren: ${result.message}")
-                                            is UpdateInstaller.InstallLaunchResult.NeedsInstallPermission -> {
-                                                statusMessage = trNow(
-                                                    "Allow \"Install unknown apps\" for FCLGlucoLink, then try again.",
-                                                    "Sta \"Install unknown apps\" toe voor FCLGlucoLink, en probeer het dan opnieuw."
-                                                )
-                                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                                    val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
-                                                        data = Uri.parse("package:${context.packageName}")
-                                                    }
-                                                    context.startActivity(intent)
-                                                }
-                                            }
-                                        }
-                                        isInstalling = false
-                                    }
+                                    startInstall(availableFileId)
                                 }
                             ) {
                                 if (isInstalling) {
@@ -380,9 +395,129 @@ fun AboutScreen(onBack: () -> Unit) {
                             }
                         }
                     }
+
+                    if (BuildConfig.VERSION_PICKER) {
+                        // RONDE 240 — andere versie kiezen (ook een oudere, zie UpdateChecker.VersionOption).
+                        OutlinedButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isChecking && !isInstalling && !isLoadingVersions,
+                            onClick = {
+                                isLoadingVersions = true
+                                versionsMessage = null
+                                versionOptions = emptyList()
+                                showVersions = true
+                                scope.launch {
+                                    when (val result = UpdateChecker.listVersions()) {
+                                        is UpdateChecker.VersionListResult.Success -> {
+                                            versionOptions = result.versions
+                                            if (result.versions.isEmpty()) {
+                                                versionsMessage = trNow("No versions found on GitHub.", "Geen versies gevonden op GitHub.")
+                                            }
+                                        }
+                                        is UpdateChecker.VersionListResult.Error ->
+                                            versionsMessage = trNow("Couldn't load the versions: ${result.message}", "Kon de versies niet laden: ${result.message}")
+                                    }
+                                    isLoadingVersions = false
+                                }
+                            }
+                        ) {
+                            if (isLoadingVersions) {
+                                CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp))
+                            }
+                            Text(tr("Other versions", "Andere versies"))
+                        }
+                    }
                 }
             }
         }
+    }
+
+    // RONDE 240 — lijst met alle uitgaven; tikken op "Install" vraagt eerst om bevestiging.
+    if (showVersions) {
+        AlertDialog(
+            onDismissRequest = { showVersions = false },
+            confirmButton = {
+                TextButton(onClick = { showVersions = false }) { Text(tr("Close", "Sluiten")) }
+            },
+            title = { Text(tr("Other versions", "Andere versies")) },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 460.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    if (isLoadingVersions) {
+                        CircularProgressIndicator()
+                    }
+                    versionsMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                    versionOptions.forEach { option ->
+                        val isCurrent = option.releaseNumber == BuildConfig.RELEASE_NUMBER
+                        val blocked = option.blockedByAndroid(BuildConfig.VERSION_CODE)
+                        val relation = when {
+                            isCurrent -> tr("installed", "geïnstalleerd")
+                            option.releaseNumber > BuildConfig.RELEASE_NUMBER -> tr("newer", "nieuwer")
+                            else -> tr("older", "ouder")
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                tr("Version", "Versie") + " ${option.releaseNumber} ($relation)" +
+                                    (if (option.prerelease) " — pre-release" else "") +
+                                    (if (option.published.isNotBlank()) " — ${option.published}" else ""),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            if (option.notes.isNotBlank()) {
+                                Text(option.notes, style = MaterialTheme.typography.bodySmall)
+                            }
+                            if (blocked) {
+                                Text(
+                                    tr(
+                                        "Can't be installed over the current version (older database). Only possible after uninstalling, which removes your data.",
+                                        "Kan niet over de huidige versie heen (oudere database). Alleen na deïnstalleren, en dan gaan je gegevens verloren."
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            } else if (!isCurrent) {
+                                TextButton(
+                                    enabled = !isInstalling,
+                                    onClick = { pendingVersion = option }
+                                ) { Text(tr("Install this version", "Deze versie installeren")) }
+                            }
+                        }
+                    }
+                }
+            }
+        )
+    }
+
+    pendingVersion?.let { option ->
+        AlertDialog(
+            onDismissRequest = { pendingVersion = null },
+            title = { Text(tr("Install version", "Versie installeren") + " ${option.releaseNumber}?") },
+            text = {
+                Text(
+                    if (option.releaseNumber < BuildConfig.RELEASE_NUMBER)
+                        tr(
+                            "This is an older version. Your settings are kept, but features of newer versions disappear. Continue?",
+                            "Dit is een oudere versie. Je instellingen blijven bewaard, maar functies van nieuwere versies verdwijnen. Doorgaan?"
+                        )
+                    else
+                        tr("Install this version over the current one?", "Deze versie over de huidige heen installeren?")
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingVersion = null
+                    showVersions = false
+                    startInstall(option.downloadUrl)
+                }) { Text(tr("Install", "Installeren")) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingVersion = null }) { Text(tr("Cancel", "Annuleren")) }
+            }
+        )
     }
 
     // 05/09/2026 (editor, RONDE 170) — zie de kdoc bovenaan dit bestand:

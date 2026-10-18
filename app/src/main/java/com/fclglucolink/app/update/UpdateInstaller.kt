@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import androidx.core.content.FileProvider
+import androidx.core.content.pm.PackageInfoCompat
 import com.fclglucolink.app.BuildConfig
 import com.fclglucolink.app.logging.DiagnosticFileLogger
 import kotlinx.coroutines.Dispatchers
@@ -12,7 +13,6 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
-import java.net.URLEncoder
 
 /**
  * ============================================================================
@@ -29,12 +29,9 @@ import java.net.URLEncoder
  * nogmaals op "Install" tikt) — nooit een install die zonder die twee
  * expliciete gebruikersacties gebeurt.
  *
- * Download via de Drive API's media-endpoint (`?alt=media`), NIET de
- * publieke `uc?export=download`-link — zie UpdateChecker.kt's kdoc punt (1):
- * die publieke link toont voor een bestand van deze grootte een "kan niet
- * scannen op virussen"-tussenpagina (HTML, geen APK-bytes) i.p.v. het
- * bestand zelf. Het media-endpoint met een API-key geeft altijd de ruwe
- * bytes terug, ongeacht bestandsgrootte.
+ * RONDE 240: de APK komt nu van een GitHub Release (zie GitHubApi.kt). Er wordt
+ * alleen gedownload van `GitHubApi.DOWNLOAD_PREFIX`. Android controleert bij het
+ * installeren zelf nog eens of de handtekening gelijk is aan die van de geïnstalleerde app.
  */
 object UpdateInstaller {
 
@@ -49,6 +46,14 @@ object UpdateInstaller {
          * doen zonder duidelijke reden zichtbaar in de UI).
          */
         data object NeedsInstallPermission : InstallLaunchResult()
+
+        /**
+         * RONDE 240 — de gedownloade APK heeft een LAGER Android-versionCode dan de geïnstalleerde
+         * app (de Room-database werd in een nieuwere versie aangepast). Android weigert dat; de
+         * enige weg terug is deïnstalleren, en dan gaan de gegevens van de app verloren. Er wordt
+         * dus niets gestart.
+         */
+        data class DowngradeBlocked(val installed: Long, val target: Long) : InstallLaunchResult()
     }
 
     /**
@@ -59,16 +64,16 @@ object UpdateInstaller {
      * nodig: dit is een kort, eenmalig, door de gebruiker zelf getriggerd
      * verzoek, geen lang lopende taak zoals BleConnectionService.
      */
-    suspend fun downloadAndLaunchInstall(context: Context, fileId: String): InstallLaunchResult {
+    suspend fun downloadAndLaunchInstall(context: Context, fileId: String /* RONDE 240: de downloadlink */): InstallLaunchResult {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
             !context.packageManager.canRequestPackageInstalls()
         ) {
             return InstallLaunchResult.NeedsInstallPermission
         }
 
-        val apiKey = BuildConfig.DRIVE_UPDATE_API_KEY
-        if (apiKey.isBlank()) {
-            return InstallLaunchResult.Failed("Update check is not configured (missing Drive API key)")
+        // RONDE 240 — alleen een APK van de eigen GitHub-repo wordt gedownload en geïnstalleerd.
+        if (!fileId.startsWith(GitHubApi.DOWNLOAD_PREFIX)) {
+            return InstallLaunchResult.Failed("Download link is not from the official GitHub releases")
         }
 
         // 04/09/2026 (editor, RONDE 167, na live-melding: "Download failed"
@@ -93,11 +98,27 @@ object UpdateInstaller {
         // hetzelfde patroon als UpdateChecker.kt's `checkForUpdate()` (die
         // dit WEL al goed deed, zie daar) had hier ook moeten staan.
         val apkFile = withContext(Dispatchers.IO) {
-            runCatching { downloadApk(context, fileId, apiKey) }
+            runCatching { downloadApk(context, fileId) }
         }.getOrElse { e ->
             val detail = "${e.javaClass.simpleName}: ${e.message ?: "(no message)"}"
             DiagnosticFileLogger.log("UpdateInstaller: download failed — $detail")
             return InstallLaunchResult.Failed(detail)
+        }
+
+        // RONDE 240 — controleer de gedownloade APK zelf: het moet onze app zijn, en Android moet
+        // hem over de geïnstalleerde heen willen zetten (versionCode niet lager).
+        val archive = context.packageManager.getPackageArchiveInfo(apkFile.path, 0)
+        if (archive == null || archive.packageName != context.packageName) {
+            apkFile.delete()
+            return InstallLaunchResult.Failed("The downloaded file is not a FCLGlucoLink APK")
+        }
+        val installedCode = PackageInfoCompat.getLongVersionCode(
+            context.packageManager.getPackageInfo(context.packageName, 0)
+        )
+        val targetCode = PackageInfoCompat.getLongVersionCode(archive)
+        if (targetCode < installedCode) {
+            apkFile.delete()
+            return InstallLaunchResult.DowngradeBlocked(installedCode, targetCode)
         }
 
         return runCatching {
@@ -118,12 +139,11 @@ object UpdateInstaller {
         }
     }
 
-    private fun downloadApk(context: Context, fileId: String, apiKey: String): File {
-        val urlStr = "https://www.googleapis.com/drive/v3/files/" +
-            URLEncoder.encode(fileId, "UTF-8") +
-            "?alt=media&key=" + URLEncoder.encode(apiKey, "UTF-8")
-
-        val connection = URL(urlStr).openConnection() as HttpURLConnection
+    private fun downloadApk(context: Context, downloadUrl: String): File {
+        // GitHub stuurt de downloadlink door (redirect) naar zijn bestandsopslag; HttpURLConnection
+        // volgt dat zelf.
+        val connection = URL(downloadUrl).openConnection() as HttpURLConnection
+        connection.setRequestProperty("User-Agent", "FCLGlucoLink")
         try {
             connection.requestMethod = "GET"
             connection.connectTimeout = 15_000
@@ -143,7 +163,7 @@ object UpdateInstaller {
                     connection.errorStream?.bufferedReader()?.use { it.readText() }
                 }.getOrNull()
                 throw IllegalStateException(
-                    "Drive download returned HTTP $responseCode" +
+                    "GitHub download returned HTTP $responseCode" +
                         (errorBody?.let { ": $it" } ?: "")
                 )
             }

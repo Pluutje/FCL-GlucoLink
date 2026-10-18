@@ -933,6 +933,14 @@ class BleConnectionService : Service() {
         val breakOutDecayFactor = computeBreakOutDecayFactor(reading.timestampMs, slot, sensorType)
         val strength = settings.getSmoothingStrengthOnce()
         val output = smoother.smooth(reading.glucoseMgdl, reading.timestampMs, breakInDecayFactor, breakOutDecayFactor, strength)
+        // RONDE 239 — zodat achteraf te zien is wat de ruispoort deed (alleen tijdens inloop/uitloop).
+        if (breakInDecayFactor > 0.01 || breakOutDecayFactor > 0.01) {
+            DiagnosticFileLogger.log(
+                "Smoothing slot=$slot ruw=${"%.0f".format(reading.glucoseMgdl)} gefilterd=${"%.1f".format(output.glucoseMgdl)} " +
+                    "ruis=${"%.1f".format(output.noiseMgdl)} poort=${"%.2f".format(output.noiseGate)} " +
+                    "inloop=${"%.2f".format(breakInDecayFactor)} uitloop=${"%.2f".format(breakOutDecayFactor)} (RONDE 239)"
+            )
+        }
         return reading.copy(glucoseMgdl = output.glucoseMgdl)
     }
 
