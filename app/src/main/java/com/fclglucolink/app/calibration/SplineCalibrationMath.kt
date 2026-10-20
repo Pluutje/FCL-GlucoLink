@@ -1,66 +1,44 @@
 package com.fclglucolink.app.calibration
 
-import kotlin.math.abs
-import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.sqrt
 
 /**
  * ============================================================================
- * FCLGlucoLink — spline-kalibratie-wiskunde (ronde 43, 110)
+ * FCLGlucoLink — spline-kalibratie-wiskunde (ronde 43, 110, 241)
  * ============================================================================
  *
- * 05/08/2026 (editor, RONDE 43) — LETTERLIJKE poort van de aangeleverde
- * AAPS-broncode `SplineCalibrationMath.kt` (monotone cubic Hermite-spline
- * met laag/hoog-segmentsplitsing). AAPS's `CAL`-model vervangen door de
- * lokale `CalibrationEntry`, verder ongewijzigd inclusief alle constantes
- * en de veiligheidsvloer-blend bij extrapolatie.
+ * 05/08/2026 (editor, RONDE 43) — poort van AAPS's `SplineCalibrationMath.kt`
+ * (cubic Hermite-overgang tussen een laag en een hoog segment, met
+ * veiligheidsvloer-blend bij extrapolatie boven het hoge segment).
  *
- * 16/08/2026 (editor, RONDE 110, na een melding dat de spline-kalibratie-
- * curve bij sommige combinaties rond de 5-7 mmol een rare buiging kreeg,
- * terwijl het onder- en bovenstuk eigenlijk lineair zouden moeten zijn met
- * één vloeiende overgang ertussen) — de originele opzet hierboven IS
- * conceptueel al precies dit (lineair onder
- * [cx_low], lineair boven [cx_high], één Hermite-stuk ertussen), maar
- * [cx_low]/[cx_high] waren tot deze ronde de RUWE, datazwevende gewogen
- * centroids van elk segment — als een gebruiker's lage en hoge
- * kalibratiepunten toevallig ver uit elkaar liggen (bv. rond 4 en 10 mmol),
- * spant het Hermite-stuk zich over die HELE, soms zeer brede afstand, en
- * een cubic Hermite tussen twee ver-uit-elkaar-liggende punten met
- * verschillende raaklijnen buigt zichtbaar door t.o.v. de rechte
- * verbindingslijn (wiskundig: afwijking op het midden ≈ (breedte ×
- * raaklijnverschil) / 8 — schaalt dus lineair mee met hoe ver de centroids
- * uit elkaar liggen). Doorgerekend (20.000 willekeurige, binnen de
- * toegestane grenzen legale segment-combinaties): gemiddelde afwijking
- * t.o.v. een rechte lijn op het splitspunt was 4,5 mg/dL, met uitschieters
- * tot 30+ mg/dL bij ver-uit-elkaar-liggende centroids — precies zo'n geval
- * geeft de "rare buiging" rond 5-7 mmol/L (het splitspunt, 108 mg/dL = 6
- * mmol/L, ligt daar middenin).
+ * 16/08/2026 (editor, RONDE 110) — de overgangsband rond [SPLINE_SPLIT_MGDL]
+ * werd vastgeklemd en de Fritsch-Carlson-straal verkleind, omdat de Hermite-
+ * overgang bij ver uit elkaar liggende centroids zichtbaar doorboog.
  *
- * Twee wijzigingen om dit te verhelpen zonder de betrouwbaarheid te
- * verlagen (zie [pickTransitionAnchors]/[rescaleTangents]):
- * 1. De overgangsband rond [SPLINE_SPLIT_MGDL] wordt vastgeklemd op
- *    maximaal [TRANSITION_CAP_MGDL] aan elke kant — als een centroid verder
- *    weg ligt, wordt het bijbehorende segment z'n EIGEN rechte lijn (zelfde
- *    richtingscoëfficiënt, gewoon geëvalueerd dichter bij het splitspunt)
- *    als ankerpunt gebruikt i.p.v. de verre centroid zelf. Dit begrenst de
- *    breedte waarover de Hermite-kromming kan optreden, ongeacht hoe ver de
- *    daadwerkelijke meetpunten uit elkaar liggen.
- * 2. Binnen die vastgeklemde band worden de raaklijnen bovendien met de
- *    standaard Fritsch-Carlson-formule teruggeschaald (niet simpelweg
- *    afgewezen) naar een STRAKKERE grens dan de klassieke "net-nog-
- *    monotone" cirkel (straal 1,5 i.p.v. 3,0) — dat houdt de curve dichter
- *    bij de koorderichting, dus dichter bij "gewoon een rechte lijn met een
- *    vloeiende overgang" i.p.v. een kromming die de volle (losse) toegestane
- *    ruimte opzoekt.
- * Als het vastklemmen de twee segmenten zou laten "kruisen" (zeldzaam — de
- * doorrekening zag dit in 0% van de gevallen na de val terug hieronder),
- * valt de code terug op de volledige, natuurlijke centroid-afstand met de
- * KLASSIEKE straal (3,0) — exact het gedrag van vóór deze ronde, dus de
- * betrouwbaarheid (fit lukt/mislukt) verandert niet. Doorgerekend resultaat
- * met deze twee wijzigingen: gemiddelde afwijking op het splitspunt daalde
- * van 4,5 naar ~2,0 mg/dL (p90 van 10,5 naar ~4,5 mg/dL), zonder dat de
- * fit-mislukt-kans toenam.
+ * 20/10/2026 (editor, RONDE 241, na de melding dat de curve rond het buigpunt
+ * soms een rare knik kreeg, en dat het aan- of uitzetten van één oud punt de
+ * twee lineaire delen liet verspringen) — de opzet is omgedraaid:
+ *
+ * 1. Eerst wordt de gewone lineaire fit over ALLE punten berekend (helling a,
+ *    offset b, zie [fitLinearCalibration]). Dat is het anker.
+ * 2. Het onderstuk (punten tot [SPLINE_SPLIT_MGDL]) en het bovenstuk (daarboven)
+ *    zijn die lijn met een KLEINE eigen afwijking:
+ *      - offset: hoogstens [MAX_SEGMENT_OFFSET_MGDL] (0,5 mmol/L) van de lijn;
+ *      - helling: hoogstens [MAX_SEGMENT_SLOPE_DEVIATION] van a.
+ *    De afwijking wordt uit de resten van de punten van dat stuk geschat en bij
+ *    weinig of dicht bij elkaar liggende punten richting nul getrokken (zie
+ *    [fitSegmentLine]). Een stuk zonder punten volgt gewoon de lineaire lijn.
+ *    Daardoor kan een segment met 2 punten de curve niet meer wild laten
+ *    kantelen (voorheen kon de helling van elk stuk los tussen 0,55 en 1,6
+ *    liggen, uit twee punten met minstens 1 mmol/L spreiding).
+ * 3. Tussen de twee stukken loopt, over [TRANSITION_HALF_WIDTH_MGDL] aan elke
+ *    kant van het splitspunt, één vloeiende Hermite-overgang. Omdat beide
+ *    stukken dicht bij dezelfde lijn blijven, is die overgang klein.
+ *
+ * Gevolg: de spline faalt niet meer op "te weinig punten in het lage/hoge
+ * bereik" of "helling buiten bereik". Alleen bij minder dan
+ * [MIN_ENTRIES_FOR_SPLINE] punten, of als de overgang niet stijgend zou zijn,
+ * valt de kalibratie terug op de gewone lijn.
  */
 
 const val MIN_ENTRIES_FOR_SPLINE = 4
@@ -68,10 +46,27 @@ const val MIN_ENTRIES_FOR_SPLINE = 4
 /** Splitspunt laag/hoog segment: 6 mmol/L = 108 mg/dL. */
 const val SPLINE_SPLIT_MGDL = 108.0
 
-const val MIN_POINTS_PER_SEGMENT = 2
+/** De overgangsband loopt van splitspunt − dit tot splitspunt + dit (1,5 mmol/L). */
+private const val TRANSITION_HALF_WIDTH_MGDL = 27.0
 
-/** Minimale spreiding van sensorwaarden per segment (mg/dL); 18 mg/dL = 1 mmol. */
-const val MIN_SEGMENT_RANGE_MGDL = 18.0
+/** Maximale afwijking van de lineaire lijn per segment (0,5 mmol/L). */
+private const val MAX_SEGMENT_OFFSET_MGDL = 9.0
+
+/** Maximale afwijking van de lineaire helling per segment. */
+private const val MAX_SEGMENT_SLOPE_DEVIATION = 0.15
+
+/** Gewichtsmaat waarmee de offset-afwijking naar nul getrokken wordt: weinig gewicht = klein effect. */
+private const val OFFSET_SHRINK_WEIGHT = 2.0
+
+/**
+ * De helling-afwijking wordt teruggetrokken alsof er [SLOPE_SHRINK_WEIGHT] extra
+ * punten (gewicht) op [SLOPE_SHRINK_SPREAD_MGDL] van het midden lagen die géén
+ * afwijking laten zien. Weinig spreiding of weinig punten = bijna geen afwijking.
+ */
+private const val SLOPE_SHRINK_WEIGHT = 2.0
+private const val SLOPE_SHRINK_SPREAD_MGDL = 36.0
+
+private const val TIGHT_FC_RADIUS = 1.5
 
 data class SplineFit(
     val knotX: Double,
@@ -116,10 +111,6 @@ private const val BLEND_WIDTH_MGDL = 36.0
 
 enum class SplineFailureReason {
     TOO_FEW_ENTRIES,
-    TOO_FEW_LOW_SEGMENT,
-    TOO_FEW_HIGH_SEGMENT,
-    SLOPE_OUT_OF_RANGE,
-    SEGMENTS_TOO_CLOSE,
     NOT_MONOTONE
 }
 
@@ -137,119 +128,88 @@ fun fitSplineCalibration(entries: List<CalibrationEntry>, now: Long): SplineFitR
 
     val low = entries.filter { it.sensorMgdlAtPairing <= SPLINE_SPLIT_MGDL }
     val high = entries.filter { it.sensorMgdlAtPairing > SPLINE_SPLIT_MGDL }
+    val lowLine = fitSegmentLine(low, linear, now)
+    val highLine = fitSegmentLine(high, linear, now)
 
-    if (low.size < MIN_POINTS_PER_SEGMENT)
-        return SplineFitResult(null, SplineFailureReason.TOO_FEW_LOW_SEGMENT)
-    if (high.size < MIN_POINTS_PER_SEGMENT)
-        return SplineFitResult(null, SplineFailureReason.TOO_FEW_HIGH_SEGMENT)
+    val cxLow = SPLINE_SPLIT_MGDL - TRANSITION_HALF_WIDTH_MGDL
+    val cxHigh = SPLINE_SPLIT_MGDL + TRANSITION_HALF_WIDTH_MGDL
+    val cyLow = lowLine.valueAt(cxLow, linear)
+    val cyHigh = highLine.valueAt(cxHigh, linear)
 
-    return fitSegmentSpline(low, high, linear, now)
-}
+    val delta = (cyHigh - cyLow) / (cxHigh - cxLow)
+    if (delta <= 0.0) return SplineFitResult(null, SplineFailureReason.NOT_MONOTONE)
 
-private fun fitSegmentSpline(
-    low: List<CalibrationEntry>,
-    high: List<CalibrationEntry>,
-    linear: CalibrationFit,
-    now: Long
-): SplineFitResult {
-    val (rawCxLow, rawCyLow) = weightedCentroid(low, now)
-    val (rawCxHigh, rawCyHigh) = weightedCentroid(high, now)
-
-    val slopeLow = segmentSlope(low, now) ?: linear.slope
-    val slopeHigh = segmentSlope(high, now) ?: linear.slope
-
-    if (slopeLow < SLOPE_MIN || slopeLow > SLOPE_MAX)
-        return SplineFitResult(null, SplineFailureReason.SLOPE_OUT_OF_RANGE)
-    if (slopeHigh < SLOPE_MIN || slopeHigh > SLOPE_MAX)
-        return SplineFitResult(null, SplineFailureReason.SLOPE_OUT_OF_RANGE)
-
-    // Blijft de datazwevende RUWE centroid-afstand gebruiken — dit bewaakt
-    // of er daadwerkelijk genoeg spreiding in de eigen meetpunten zit om de
-    // segment-slopes te vertrouwen, los van de vastgeklemde weergavebreedte
-    // hieronder.
-    val rawSpan = rawCxHigh - rawCxLow
-    if (rawSpan < MIN_SEGMENT_RANGE_MGDL)
-        return SplineFitResult(null, SplineFailureReason.SEGMENTS_TOO_CLOSE)
-
-    val anchors = pickTransitionAnchors(rawCxLow, rawCyLow, slopeLow, rawCxHigh, rawCyHigh, slopeHigh)
-        ?: return SplineFitResult(null, SplineFailureReason.NOT_MONOTONE)
-
-    // RONDE 110: binnen de vastgeklemde band een strakkere Fritsch-Carlson-
-    // straal (zie klasse-kdoc); bij terugval op de natuurlijke centroid-
-    // afstand de klassieke straal (identiek aan het gedrag van vóór deze
-    // ronde).
-    val radius = if (anchors.capped) TIGHT_FC_RADIUS else STANDARD_FC_RADIUS
-    val (slope_low, slope_high) = rescaleTangents(slopeLow, slopeHigh, anchors.delta, radius)
-    val cx_low = anchors.x0
-    val cy_low = anchors.y0
-    val cx_high = anchors.x1
-    val cy_high = anchors.y1
+    val (slopeLow, slopeHigh) = rescaleTangents(
+        linear.slope + lowLine.slopeDeviation,
+        linear.slope + highLine.slopeDeviation,
+        delta,
+        TIGHT_FC_RADIUS
+    )
 
     val knotX = SPLINE_SPLIT_MGDL
-    val knotY = when {
-        knotX <= cx_low -> cy_low + slope_low * (knotX - cx_low)
-        knotX >= cx_high -> cy_high + slope_high * (knotX - cx_high)
-        else -> hermite(knotX, cx_low, cy_low, slope_low, cx_high, cy_high, slope_high)
-    }
+    val knotY = hermite(knotX, cxLow, cyLow, slopeLow, cxHigh, cyHigh, slopeHigh)
 
     return SplineFitResult(
         SplineFit(
             knotX = knotX, knotY = knotY,
-            cx_low = cx_low, cy_low = cy_low, slope_low = slope_low,
-            cx_high = cx_high, cy_high = cy_high, slope_high = slope_high,
+            cx_low = cxLow, cy_low = cyLow, slope_low = slopeLow,
+            cx_high = cxHigh, cy_high = cyHigh, slope_high = slopeHigh,
             linearFallback = linear
         ),
         reason = null
     )
 }
 
-private const val TRANSITION_CAP_MGDL = 27.0
-private const val STANDARD_FC_RADIUS = 3.0
-private const val TIGHT_FC_RADIUS = 1.5
+/** De lineaire lijn plus de kleine afwijking van één segment (zie klasse-kdoc, punt 2). */
+private data class SegmentLine(
+    val offset: Double,
+    val slopeDeviation: Double,
+    val centerX: Double
+) {
+    fun valueAt(x: Double, linear: CalibrationFit): Double =
+        linear.slope * x + linear.offset + offset + slopeDeviation * (x - centerX)
+}
 
-private data class TransitionAnchors(
-    val x0: Double, val y0: Double,
-    val x1: Double, val y1: Double,
-    val delta: Double,
-    val capped: Boolean
-)
+private fun fitSegmentLine(segment: List<CalibrationEntry>, linear: CalibrationFit, now: Long): SegmentLine {
+    if (segment.isEmpty()) return SegmentLine(0.0, 0.0, SPLINE_SPLIT_MGDL)
 
-/**
- * Kiest de (x,y)-ankerpunten waartussen de Hermite-overgang loopt (zie
- * klasse-kdoc, RONDE 110). Probeert eerst de band vastgeklemd op
- * [TRANSITION_CAP_MGDL] aan elke kant van [SPLINE_SPLIT_MGDL] — een
- * ankerpunt buiten die band wordt vervangen door hetzelfde segment z'n EIGEN
- * rechte lijn, gewoon dichter bij het splitspunt geëvalueerd (géén nieuwe
- * meetgegevens nodig, puur dezelfde al-gefitte lijn op een ander punt
- * afgelezen). Valt terug op de volledige, natuurlijke centroid-afstand als
- * het vastklemmen de twee segmenten zou laten "kruisen" (delta ≤ 0) —
- * geeft `null` alleen als zelfs dát niet oplevert (zeldzaam, echt
- * inconsistente data).
- */
-private fun pickTransitionAnchors(
-    rawCxLow: Double, rawCyLow: Double, slopeLow: Double,
-    rawCxHigh: Double, rawCyHigh: Double, slopeHigh: Double
-): TransitionAnchors? {
-    val cappedLowX = max(rawCxLow, SPLINE_SPLIT_MGDL - TRANSITION_CAP_MGDL)
-    val cappedHighX = min(rawCxHigh, SPLINE_SPLIT_MGDL + TRANSITION_CAP_MGDL)
-    val cappedLowY = rawCyLow + slopeLow * (cappedLowX - rawCxLow)
-    val cappedHighY = rawCyHigh + slopeHigh * (cappedHighX - rawCxHigh)
-    val cappedDelta = (cappedHighY - cappedLowY) / (cappedHighX - cappedLowX)
-    if (cappedDelta > 0.0) {
-        return TransitionAnchors(cappedLowX, cappedLowY, cappedHighX, cappedHighY, cappedDelta, capped = true)
+    var sumW = 0.0
+    var sumWX = 0.0
+    var sumWR = 0.0
+    for (e in segment) {
+        val w = weightFor(e.timestampMs, now)
+        val r = e.fingerstickMgdl - (linear.slope * e.sensorMgdlAtPairing + linear.offset)
+        sumW += w
+        sumWX += w * e.sensorMgdlAtPairing
+        sumWR += w * r
     }
+    if (sumW == 0.0) return SegmentLine(0.0, 0.0, SPLINE_SPLIT_MGDL)
+    val centerX = sumWX / sumW
+    val meanResidual = sumWR / sumW
 
-    val naturalDelta = (rawCyHigh - rawCyLow) / (rawCxHigh - rawCxLow)
-    if (naturalDelta <= 0.0) return null
-    return TransitionAnchors(rawCxLow, rawCyLow, rawCxHigh, rawCyHigh, naturalDelta, capped = false)
+    val offset = (meanResidual * sumW / (sumW + OFFSET_SHRINK_WEIGHT))
+        .coerceIn(-MAX_SEGMENT_OFFSET_MGDL, MAX_SEGMENT_OFFSET_MGDL)
+
+    var sumXX = 0.0
+    var sumXR = 0.0
+    for (e in segment) {
+        val w = weightFor(e.timestampMs, now)
+        val dx = e.sensorMgdlAtPairing - centerX
+        val r = e.fingerstickMgdl - (linear.slope * e.sensorMgdlAtPairing + linear.offset)
+        sumXX += w * dx * dx
+        sumXR += w * dx * (r - meanResidual)
+    }
+    val shrink = SLOPE_SHRINK_WEIGHT * SLOPE_SHRINK_SPREAD_MGDL * SLOPE_SHRINK_SPREAD_MGDL
+    val slopeDeviation = (sumXR / (sumXX + shrink))
+        .coerceIn(-MAX_SEGMENT_SLOPE_DEVIATION, MAX_SEGMENT_SLOPE_DEVIATION)
+
+    return SegmentLine(offset, slopeDeviation, centerX)
 }
 
 /**
  * Standaard Fritsch-Carlson-raaklijncorrectie: SCHAALT [slopeLow]/[slopeHigh]
  * terug i.p.v. de hele fit af te wijzen zodra ze te ver van de
- * koorderichting [delta] afwijken (cirkel met straal [radius] — zie
- * klasse-kdoc voor waarom RONDE 110 hier een strakkere straal gebruikt dan
- * de klassieke 3,0).
+ * koorderichting [delta] afwijken (cirkel met straal [radius]).
  */
 private fun rescaleTangents(slopeLow: Double, slopeHigh: Double, delta: Double, radius: Double): Pair<Double, Double> {
     val alpha = slopeLow / delta
@@ -258,23 +218,6 @@ private fun rescaleTangents(slopeLow: Double, slopeHigh: Double, delta: Double, 
     if (s <= radius * radius) return slopeLow to slopeHigh
     val tau = radius / sqrt(s)
     return (tau * alpha * delta) to (tau * beta * delta)
-}
-
-private fun segmentSlope(entries: List<CalibrationEntry>, now: Long): Double? {
-    val sensorRange = entries.maxOf { it.sensorMgdlAtPairing } - entries.minOf { it.sensorMgdlAtPairing }
-    if (sensorRange < MIN_SEGMENT_RANGE_MGDL) return null
-
-    var sumW = 0.0; var sumWX = 0.0; var sumWY = 0.0
-    var sumWXX = 0.0; var sumWXY = 0.0
-    for (e in entries) {
-        val w = weightFor(e.timestampMs, now)
-        val x = e.sensorMgdlAtPairing
-        val y = e.fingerstickMgdl
-        sumW += w; sumWX += w * x; sumWY += w * y; sumWXX += w * x * x; sumWXY += w * x * y
-    }
-    val denom = sumW * sumWXX - sumWX * sumWX
-    if (abs(denom) < 1e-9) return null
-    return (sumW * sumWXY - sumWX * sumWY) / denom
 }
 
 private fun hermite(
@@ -292,14 +235,4 @@ private fun hermite(
     val h01 = -2 * t3 + 3 * t2
     val h11 = t3 - t2
     return h00 * y0 + h10 * h * m0 + h01 * y1 + h11 * h * m1
-}
-
-private fun weightedCentroid(entries: List<CalibrationEntry>, now: Long): Pair<Double, Double> {
-    var sumW = 0.0; var sumWX = 0.0; var sumWY = 0.0
-    for (e in entries) {
-        val w = weightFor(e.timestampMs, now)
-        sumW += w; sumWX += w * e.sensorMgdlAtPairing; sumWY += w * e.fingerstickMgdl
-    }
-    return if (sumW == 0.0) entries[0].sensorMgdlAtPairing to entries[0].fingerstickMgdl
-    else (sumWX / sumW) to (sumWY / sumW)
 }

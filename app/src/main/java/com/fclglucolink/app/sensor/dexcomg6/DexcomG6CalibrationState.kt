@@ -125,6 +125,10 @@ enum class DexcomG6CalibrationState(val value: Int) {
         SensorExpired -> "Sensor expired"
         Ended -> "Sensor ended"
         Stopped, SensorStopped, SensorStopped2 -> "Sensor stopped"
+        // RONDE 242 — de transmitter meldt zelf "Sensor Errors" (xDrip+ geeft
+        // dit dezelfde naam en gebruikt de waarde dan ook niet). Geen metingen
+        // zolang dit duurt; blijft het, dan is de sensor waarschijnlijk stuk.
+        Errors -> "Sensor reports errors — no readings (replace the sensor if this stays)"
         else -> if (sensorFailed()) "Sensor failed — replace sensor" else null
     }
 }

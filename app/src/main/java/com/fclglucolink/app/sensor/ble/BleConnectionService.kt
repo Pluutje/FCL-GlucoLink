@@ -880,7 +880,7 @@ class BleConnectionService : Service() {
         val manualOffsetMgdl = settings.getCalibrationManualOffsetMmolOnce(slot).mmolToMgdl()
         val result = computeCalibration(
             sensorMgdl = reading.glucoseMgdl,
-            entries = entries,
+            allEntries = entries,
             mode = mode,
             manualOffsetMgdl = manualOffsetMgdl,
             now = reading.timestampMs

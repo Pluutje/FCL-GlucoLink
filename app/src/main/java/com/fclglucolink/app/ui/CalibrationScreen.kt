@@ -48,6 +48,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -70,6 +71,8 @@ import com.fclglucolink.app.calibration.SplineFit
 import com.fclglucolink.app.calibration.evaluateNewCalibrationEntry
 import com.fclglucolink.app.calibration.fitLinearCalibration
 import com.fclglucolink.app.calibration.fitSplineCalibration
+import com.fclglucolink.app.calibration.selectUsableEntries
+import com.fclglucolink.app.calibration.AutoSkipReason
 import com.fclglucolink.app.calibration.weightFor
 import com.fclglucolink.app.data.AppSettings
 import com.fclglucolink.app.data.GlucoseReadingStore
@@ -255,9 +258,15 @@ fun CalibrationScreen(onBack: () -> Unit, slot: SensorSlot = SensorSlot.A) {
     }
 
     val now = System.currentTimeMillis()
-    val linearFit = remember(entries, now) { fitLinearCalibration(entries, now) }
-    val splineResult = remember(entries, now, mode) {
-        if (mode == CalibrationMode.SPLINE) fitSplineCalibration(entries, now) else null
+    // RONDE 241 — afwijkende punten worden automatisch overgeslagen (niet
+    // opgeslagen, bij elke berekening opnieuw bepaald), zie
+    // CalibrationEntrySelection.kt. De fits gebruiken alleen [usedEntries];
+    // de rijlijst toont ook de overgeslagen punten, met de reden.
+    val selection = remember(entries, now) { selectUsableEntries(entries, now) }
+    val usedEntries = selection.used
+    val linearFit = remember(usedEntries, now) { fitLinearCalibration(usedEntries, now) }
+    val splineResult = remember(usedEntries, now, mode) {
+        if (mode == CalibrationMode.SPLINE) fitSplineCalibration(usedEntries, now) else null
     }
     val splineFit = splineResult?.fit
 
@@ -383,6 +392,7 @@ fun CalibrationScreen(onBack: () -> Unit, slot: SensorSlot = SensorSlot.A) {
                         entry = entry,
                         calibratedMgdl = calibratedMgdl,
                         selected = entry.id == selectedEntryId,
+                        autoSkipReason = if (entry.checked) selection.skipped[entry.id] else null,
                         unit = displayUnit,
                         onSelect = { selectedEntryId = entry.id },
                         onToggleChecked = { checked ->
@@ -560,10 +570,6 @@ private fun StatusCard(
 @Composable
 private fun reasonText(reason: com.fclglucolink.app.calibration.SplineFailureReason): String = when (reason) {
     com.fclglucolink.app.calibration.SplineFailureReason.TOO_FEW_ENTRIES -> tr("need at least 4 entries", "minstens 4 waarden nodig")
-    com.fclglucolink.app.calibration.SplineFailureReason.TOO_FEW_LOW_SEGMENT -> tr("need more low-range entries", "meer waarden nodig in het lage bereik")
-    com.fclglucolink.app.calibration.SplineFailureReason.TOO_FEW_HIGH_SEGMENT -> tr("need more high-range entries", "meer waarden nodig in het hoge bereik")
-    com.fclglucolink.app.calibration.SplineFailureReason.SLOPE_OUT_OF_RANGE -> tr("segment slope out of range", "segment-helling buiten bereik")
-    com.fclglucolink.app.calibration.SplineFailureReason.SEGMENTS_TOO_CLOSE -> tr("entries too close together", "waarden liggen te dicht bij elkaar")
     com.fclglucolink.app.calibration.SplineFailureReason.NOT_MONOTONE -> tr("curve would not be monotone", "curve zou niet monotoon zijn")
 }
 
@@ -654,6 +660,9 @@ private fun CalibrationEntryRow(
     entry: FingerstickListEntry,
     calibratedMgdl: Double,
     selected: Boolean,
+    // RONDE 241 — null = de waarde telt mee; anders de reden dat ze automatisch
+    // wordt overgeslagen (het vinkje van de gebruiker blijft ongemoeid).
+    autoSkipReason: AutoSkipReason?,
     // 13/08/2026 (editor, RONDE 104) — zie ui/Units.kt's [GlucoseUnit]-kdoc.
     unit: GlucoseUnit,
     onSelect: () -> Unit,
@@ -678,7 +687,12 @@ private fun CalibrationEntryRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Checkbox(checked = entry.checked, onCheckedChange = onToggleChecked)
-            Column(modifier = Modifier.weight(1f).padding(start = 4.dp)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 4.dp)
+                    .alpha(if (autoSkipReason != null) 0.5f else 1f)
+            ) {
                 Text(
                     timeFormat.format(Date(entry.timestampMs)) + if (entry.enteredOnThisSensor) "" else tr("  (also seen on other sensor)", "  (ook gezien op andere sensor)"),
                     style = MaterialTheme.typography.bodySmall,
@@ -690,6 +704,16 @@ private fun CalibrationEntryRow(
                         "cal ${calibratedMgdl.formatForDisplay(unit)}",
                     style = MaterialTheme.typography.bodyMedium
                 )
+                if (autoSkipReason != null) {
+                    Text(
+                        when (autoSkipReason) {
+                            AutoSkipReason.OUTLIER -> tr("Skipped automatically: does not fit the other values", "Automatisch overgeslagen: past niet bij de andere waarden")
+                            AutoSkipReason.BEFORE_SHIFT -> tr("Skipped automatically: sensor changed after this value", "Automatisch overgeslagen: sensor is daarna veranderd")
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             }
             IconButton(onClick = onDelete) {
                 Icon(Icons.Filled.Delete, contentDescription = tr("Delete", "Verwijderen"))

@@ -43,11 +43,15 @@ data class CalibrationResult(
  */
 fun computeCalibration(
     sensorMgdl: Double,
-    entries: List<CalibrationEntry>,
+    allEntries: List<CalibrationEntry>,
     mode: CalibrationMode,
     manualOffsetMgdl: Double,
     now: Long
 ): CalibrationResult {
+    // RONDE 241 — afwijkende punten automatisch overslaan, zie
+    // CalibrationEntrySelection.kt (zelfde selectie als de kalibratie-
+    // schermen, zodat grafiek en echte waarden niet uit elkaar lopen).
+    val entries = selectUsableEntries(allEntries, now).used
     if (entries.isEmpty()) {
         return CalibrationResult(
             calibratedMgdl = sensorMgdl + manualOffsetMgdl,

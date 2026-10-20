@@ -274,6 +274,18 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
         // (60 000L) — 300 000-60 000=240 000, dus dezelfde marge als net
         // ingesteld, nu binnen een zelf-corrigerende formule.
         private const val SENSOR_PERIOD_MS = 300_000L // 5 min — Dexcom G6's eigen meetcadans.
+
+        /** 20/10/2026 (editor, RONDE 242) — zelfde fix als DexcomG7Driver.kt's
+         *  RONDE 187 (zie daar de volledige analyse). Een meting die een
+         *  fractie VROEGER binnenkomt dan haar 5-minuten-vak (in de log van
+         *  20-10 maar 29 ms) werd door `Math.floor()` naar het VORIGE vak
+         *  afgerond; de voorspelde volgende meting lag dan al in het verleden,
+         *  `cooldownMs` werd 0 en de app maakte direct een tweede verbinding
+         *  (herhaald elke 5 minuten). Bij echte metingen kan dat dezelfde
+         *  sequence dubbel uitlezen. De marge hieronder vangt normale
+         *  klok-/BLE-jitter op, en is veel te klein om het oude probleem
+         *  (een structurele vertraging per cyclus) terug te halen. */
+        private const val EARLY_ARRIVAL_TOLERANCE_MS = 10_000L
         private const val SCAN_START_MARGIN_MS = 60_000L // marge vóór het verwachte rasterpunt.
 
         // 08/08/2026 (editor, RONDE 56, op verzoek) — de spanning van de
@@ -538,8 +550,21 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
      */
     private fun computeReconnectCooldownMs(): Long {
         val lastReadingAtMs = lastSuccessfulConnectionAtMs ?: return SENSOR_PERIOD_MS - SCAN_START_MARGIN_MS
-        val anchor = cadenceAnchorAtMs ?: lastReadingAtMs
-        val periodsElapsed = Math.floor((lastReadingAtMs - anchor) / SENSOR_PERIOD_MS.toDouble()).toLong()
+        var anchor = cadenceAnchorAtMs ?: lastReadingAtMs
+        var periodsElapsed = Math.floor(
+            (lastReadingAtMs - anchor + EARLY_ARRIVAL_TOLERANCE_MS) / SENSOR_PERIOD_MS.toDouble()
+        ).toLong()
+        if (periodsElapsed <= 0 && lastReadingAtMs > anchor) {
+            // RONDE 242 — zie DexcomG7Driver.kt: deze meting is niet degene die
+            // het anker zette, maar valt toch in vak 0 (het anker liep een
+            // fractie voor). Opnieuw ankeren op déze meting.
+            anchor = lastReadingAtMs
+            cadenceAnchorAtMs = anchor
+            periodsElapsed = 0
+            DiagnosticFileLogger.log(
+                "DexcomG6: computeReconnectCooldownMs: anker liep vóór op sensor se fase — her-ankerd op lastReadingAt=$lastReadingAtMs (RONDE 242)"
+            )
+        }
         val gridReadingAtMs = anchor + periodsElapsed * SENSOR_PERIOD_MS
         val predictedNextReadingAtMs = gridReadingAtMs + SENSOR_PERIOD_MS
         // 12/08/2026 (editor, RONDE 100) — onvoorwaardelijk publiceren, zie
