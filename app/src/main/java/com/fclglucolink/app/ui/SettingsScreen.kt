@@ -99,6 +99,8 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit, onOpenAbout: ()
     // 20/08/2026 (editor, RONDE 115) — zie XDripBroadcaster.kt's kdoc bij
     // sourceInfo().
     val xdripUniversalSourceCodeEnabled by settings.xdripUniversalSourceCodeEnabled.collectAsState(initial = false)
+    // RONDE 243 — see broadcast/WatchdripBridge.kt.
+    val watchdripEnabled by settings.watchdripEnabled.collectAsState(initial = false)
     // 13/08/2026 (editor, RONDE 104, Fase 1) — zie ui/Units.kt's
     // [GlucoseUnit]-kdoc.
     val displayUnit by settings.displayUnit.collectAsState(initial = GlucoseUnit.MMOL)
@@ -274,6 +276,45 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit, onOpenAbout: ()
                             checked = xdripUniversalSourceCodeEnabled,
                             onCheckedChange = { enabled ->
                                 scope.launch { settings.setXdripUniversalSourceCodeEnabled(enabled) }
+                            }
+                        )
+                    }
+                }
+            }
+
+            // RONDE 243 — WatchDrip+ feed for Mi Band / Amazfit watches. Own card with
+            // one switch. Default off. Does not change what AAPS receives.
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(tr("WatchDrip+ (Mi Band / Amazfit)", "WatchDrip+ (Mi Band / Amazfit)"), style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        tr(
+                            "Send glucose values to the WatchDrip+ app, which shows them on " +
+                                "Mi Band, Amazfit and Zepp OS watches. In WatchDrip+ keep " +
+                                "xDrip+ as the source. The values come from the same slot " +
+                                "that sends to AAPS (or from every slot if that is set to Off). " +
+                                "This does not change what AAPS receives.",
+                            "Stuur glucosewaarden naar de WatchDrip+-app, die ze toont op " +
+                                "Mi Band-, Amazfit- en Zepp OS-horloges. Laat in WatchDrip+ " +
+                                "xDrip+ als bron staan. De waarden komen van dezelfde slot " +
+                                "die naar AAPS stuurt (of van elke slot als dat op Uit staat). " +
+                                "Dit verandert niets aan wat AAPS ontvangt."
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        Switch(
+                            checked = watchdripEnabled,
+                            onCheckedChange = { enabled ->
+                                scope.launch { settings.setWatchdripEnabled(enabled) }
                             }
                         )
                     }

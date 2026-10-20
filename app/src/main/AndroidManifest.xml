@@ -25,6 +25,10 @@
         <intent>
             <action android:name="com.eveningoutpost.dexdrip.BgEstimate" />
         </intent>
+        <!-- RONDE 243: lets us find WatchDrip+ (see broadcast/WatchdripBridge.kt). -->
+        <intent>
+            <action android:name="com.eveningoutpost.dexdrip.watch.wearintegration.BROADCAST_SERVICE_SENDER" />
+        </intent>
     </queries>
 
     <!-- 30/07/2026 (editor) — neverForLocation: bevestigt aan Android (API>=31)

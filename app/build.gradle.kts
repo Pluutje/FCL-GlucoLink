@@ -56,7 +56,7 @@ val buildTimeString = SimpleDateFormat("dd-MM-yyyy HH:mm").format(Date())
 
 // RONDE 240 — het versienummer van een uitgave (tag `v<nummer>` op GitHub). Dit is wat de app
 // vergelijkt om een update te herkennen. Dit getal gaat bij elke uitgave omhoog.
-val releaseNumber = 232
+val releaseNumber = 233
 
 android {
     namespace = "com.fclglucolink.app"

@@ -1,0 +1,5 @@
+Nieuw: WatchDrip+ koppeling voor Mi Band, Amazfit en Zepp OS horloges. Zet in Instellingen de schakelaar "WatchDrip+" aan en kies in WatchDrip+ xDrip+ als bron. De waarden gaan naar het horloge via WatchDrip+. Wat AAPS ontvangt verandert niet.
+De waarschuwing "sensor lijkt bevroren" komt nu pas bij 4 gelijke metingen op rij (was 3), en de bevestiging bij 6 (was 5). Dit is alleen een melding op het scherm, de waarden blijven altijd naar AAPS gaan.
+---EN---
+New: WatchDrip+ link for Mi Band, Amazfit and Zepp OS watches. Turn on the "WatchDrip+" switch in Settings and choose xDrip+ as the source in WatchDrip+. The values reach the watch through WatchDrip+. What AAPS receives does not change.
+The "sensor looks frozen" warning now appears after 4 identical readings in a row (was 3), and the confirmation after 6 (was 5). This is only a message on the screen, values always keep going to AAPS.

@@ -203,6 +203,10 @@ class AppSettings(private val context: Context) {
         // sensor die naar AAPS zendt.
         val XDRIP_UNIVERSAL_SOURCE_CODE_ENABLED = booleanPreferencesKey("xdrip_universal_source_code_enabled")
 
+        // 20/10/2026 (RONDE 243) — switch for the WatchDrip+ feed (Mi Band / Amazfit
+        // watches), see broadcast/WatchdripBridge.kt. Global, default OFF.
+        val WATCHDRIP_ENABLED = booleanPreferencesKey("watchdrip_enabled")
+
         // 10/08/2026 (editor, RONDE 79) — bewaakt dat migrateLegacySingleSlotDataOnce()
         // precies één keer draait, zie die functie's kdoc.
         val MIGRATION_DUAL_SLOT_DONE = booleanPreferencesKey("migration_dual_slot_done")
@@ -323,6 +327,15 @@ class AppSettings(private val context: Context) {
 
     suspend fun isXdripUniversalSourceCodeEnabledOnce(): Boolean =
         context.dataStore.data.first()[Keys.XDRIP_UNIVERSAL_SOURCE_CODE_ENABLED] ?: false
+
+    /** RONDE 243 — see [Keys.WATCHDRIP_ENABLED] and broadcast/WatchdripBridge.kt. Default OFF. */
+    val watchdripEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.WATCHDRIP_ENABLED] ?: false
+    }
+
+    suspend fun setWatchdripEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[Keys.WATCHDRIP_ENABLED] = enabled }
+    }
 
     // ============================================================
     // Niet-slot-gebonden (app-breed, ongewijzigd t.o.v. vóór RONDE 79)

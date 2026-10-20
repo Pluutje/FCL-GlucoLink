@@ -47,8 +47,12 @@ sealed class SensorStability {
     data class FrozenConfirmed(val streak: Int, val sinceMs: Long, val valueMgdl: Double) : SensorStability()
 }
 
-private const val FROZEN_WARNING_STREAK = 3
-private const val FROZEN_CONFIRMED_STREAK = 5
+// 20/10/2026 (editor, RONDE 243) — van 3/5 naar 4/6. Een nieuwe G6-sensor gaf na de
+// opwarmtijd drie keer 113 op rij (gehele mg/dL-waarden) en kreeg onterecht de
+// melding "looks frozen". Dit is alleen een weergave in de statusschermen: de
+// metingen gaan altijd gewoon door naar AAPS.
+private const val FROZEN_WARNING_STREAK = 4
+private const val FROZEN_CONFIRMED_STREAK = 6
 
 // ~1 uur aan metingen bij de gangbare 5-minuten-cadans van elk ondersteund
 // sensortype — ruim genoeg voor zowel de bevroren-reeks-detectie als de
@@ -70,7 +74,7 @@ private const val NOISY_JUMP_COUNT_THRESHOLD = 2
  *   zinnigs te zeggen (bv. net na het koppelen van een nieuwe sensor).
  */
 fun computeSensorStability(readingsChronological: List<GlucoseReading>): SensorStability? {
-    if (readingsChronological.size < FROZEN_WARNING_STREAK) return null
+    if (readingsChronological.size < 3) return null
     val recent = readingsChronological.takeLast(STABILITY_WINDOW_READINGS)
 
     var streak = 1

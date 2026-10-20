@@ -18,6 +18,8 @@ import com.fclglucolink.app.MainActivity
 import com.fclglucolink.app.alarm.AlarmMonitor
 import com.fclglucolink.app.update.UpdateChecker
 import com.fclglucolink.app.alarm.AlarmSoundPlayer
+import com.fclglucolink.app.alarm.AlarmType
+import com.fclglucolink.app.broadcast.WatchdripBridge
 import com.fclglucolink.app.broadcast.XDripBroadcaster
 import com.fclglucolink.app.calibration.CalibrationStore
 import com.fclglucolink.app.calibration.computeCalibration
@@ -283,6 +285,20 @@ class BleConnectionService : Service() {
             settings.aapsActiveSlot.collect { slot ->
                 notificationAapsSlot = slot
                 if (slotRuntimes.values.any { it.latestBgArrowText != null }) refreshNotification()
+            }
+        }
+
+        // RONDE 243 — WatchDrip+ feed (Mi Band / Amazfit): follows the switch in Settings, so
+        // no restart of the service is needed. See broadcast/WatchdripBridge.kt.
+        scope.launch {
+            settings.watchdripEnabled.collect { enabled ->
+                if (enabled) {
+                    WatchdripBridge.start(this@BleConnectionService, scope) { hours ->
+                        buildWatchSnapshot(settings.getAapsActiveSlotOnce(), hours)
+                    }
+                } else {
+                    WatchdripBridge.stop(this@BleConnectionService)
+                }
             }
         }
 
@@ -702,6 +718,17 @@ class BleConnectionService : Service() {
                             previousReadingForBroadcast
                         )
                     }
+                    // RONDE 243 — WatchDrip+ feed. Follows the AAPS slot; when AAPS is set
+                    // to "Off", every slot is shown. Never touches the AAPS broadcast above.
+                    if (WatchdripBridge.isActive()) {
+                        val watchSlot = settings.getAapsActiveSlotOnce()
+                        if (watchSlot == null || watchSlot == slot) {
+                            runCatching {
+                                buildWatchSnapshot(watchSlot ?: slot, WatchdripBridge.hoursNeeded())
+                                    ?.let { WatchdripBridge.publish(this@BleConnectionService, it) }
+                            }.onFailure { DiagnosticFileLogger.log("WatchDrip+: versturen mislukt: ${it.message}") }
+                        }
+                    }
                     // 06/08/2026 (editor, RONDE 53) — zie
                     // refreshNotification()'s kdoc verderop: laat de
                     // notificatie voortaan de laatste BG-waarde tonen
@@ -761,7 +788,24 @@ class BleConnectionService : Service() {
         }
     }
 
+    /**
+     * RONDE 243 — the data for one WatchDrip+ answer: the stored readings of the last [hours]
+     * hours (oldest first), the display unit and the alarm limits. Null when there is nothing.
+     * [slot] null means all slots.
+     */
+    private suspend fun buildWatchSnapshot(slot: SensorSlot?, hours: Long): WatchdripBridge.WatchSnapshot? {
+        val readings = readingStore.recentReadings(hours, slot).first()
+        if (readings.isEmpty()) return null
+        return WatchdripBridge.WatchSnapshot(
+            readings = readings.sortedBy { it.timestampMs },
+            doMgdl = settings.getDisplayUnitOnce() == GlucoseUnit.MGDL,
+            lowMgdl = settings.getAlarmThresholdMgdlOnce(AlarmType.LOW),
+            highMgdl = settings.getAlarmThresholdMgdlOnce(AlarmType.HIGH)
+        )
+    }
+
     override fun onDestroy() {
+        WatchdripBridge.stop(this)
         for (runtime in slotRuntimes.values) {
             runtime.connectionJob?.cancel()
             runtime.driver?.disconnect()

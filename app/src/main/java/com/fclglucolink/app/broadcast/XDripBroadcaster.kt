@@ -146,7 +146,7 @@ object XDripBroadcaster {
      *  op zijn eigen "onbekende richting"-weergave ("??"). De drempels zelf
      *  (mg/dL per minuut) zijn ongewijzigd, alleen de geëxporteerde strings
      *  zijn nu de juiste PascalCase-namen. */
-    private fun trendName(mgdlPerMin: Float): String = when {
+    internal fun trendName(mgdlPerMin: Float): String = when {
         mgdlPerMin <= -3f -> "DoubleDown"
         mgdlPerMin <= -2f -> "SingleDown"
         mgdlPerMin <= -1f -> "FortyFiveDown"
