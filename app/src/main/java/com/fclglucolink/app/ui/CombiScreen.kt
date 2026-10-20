@@ -527,8 +527,8 @@ private fun CombiTabContent(
             labelB = selectedSensorB?.displayName ?: SensorSlot.B.displayLabel,
             colorA = colorA,
             colorB = colorB,
-            bgTextA = latestA?.let { it.glucoseMgdl.formatForDisplayWithUnit(displayUnit) } ?: "—",
-            bgTextB = latestB?.let { it.glucoseMgdl.formatForDisplayWithUnit(displayUnit) } ?: "—",
+            bgTextA = latestA?.takeIf { System.currentTimeMillis() - it.timestampMs <= 15 * 60_000L }?.let { it.glucoseMgdl.formatForDisplayWithUnit(displayUnit) } ?: "—",
+            bgTextB = latestB?.takeIf { System.currentTimeMillis() - it.timestampMs <= 15 * 60_000L }?.let { it.glucoseMgdl.formatForDisplayWithUnit(displayUnit) } ?: "—",
             isSendingA = aapsActiveSlot == SensorSlot.A,
             isSendingB = aapsActiveSlot == SensorSlot.B
         )

@@ -411,7 +411,9 @@ fun SlotStatusContent(
         // (zoals de net verwijderde raw-indicator in BgRingDisplay deed) —
         // zie PipelineValuesRow's kdoc.
         if (smoothingEnabled && showFilteredPipelineOnMainScreen) {
-            latest?.let { reading ->
+            // RONDE 243 — alleen bij een verse meting: na een storing of bij een
+            // nieuwe sensor zou de rij anders waarden van de oude meting tonen.
+            latest?.takeIf { nowTickMs - it.timestampMs <= STALE_READING_DISPLAY_MS }?.let { reading ->
                 PipelineValuesRow(
                     reading = reading,
                     calibrationEnabled = calibrationEnabled,
@@ -569,8 +571,17 @@ private fun BgRingDisplay(
         return
     }
 
-    val ringColor = bgRangeColor(latest.glucoseMgdl)
-    val deltaMgdl = previousMgdl?.let { latest.glucoseMgdl - it }
+    // RONDE 243 — een meting ouder dan STALE_READING_DISPLAY_MS (bv. na een
+    // sensorstoring of tijdens het opwarmen van een nieuwe sensor) wordt niet
+    // meer als huidige waarde getoond: grijze ring, een streepje, geen delta
+    // en geen trendpijl. De "Xm ago"-regel blijft staan.
+    val isStale = nowMs - latest.timestampMs > STALE_READING_DISPLAY_MS
+    val ringColor = if (isStale) {
+        MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f)
+    } else {
+        bgRangeColor(latest.glucoseMgdl)
+    }
+    val deltaMgdl = if (isStale) null else previousMgdl?.let { latest.glucoseMgdl - it }
     // 30/07/2026 (editor, na feedback: delta en tijd wit, net als in AAPS) —
     // alleen de grote BG-waarde blijft in de bereikskleur (groen/amber/
     // rood); delta en "Xm ago" gebruiken nu allebei dezelfde neutrale
@@ -615,7 +626,7 @@ private fun BgRingDisplay(
                     color = neutralTextColor
                 )
                 Text(
-                    latest.glucoseMgdl.formatForDisplay(unit),
+                    if (isStale) "—" else latest.glucoseMgdl.formatForDisplay(unit),
                     fontSize = 40.sp,
                     fontWeight = FontWeight.Bold,
                     color = ringColor
@@ -659,14 +670,19 @@ private fun BgRingDisplay(
         // deltaMgdl (in mmol) gebruikt die ook de teksts hierboven bepaalt,
         // met nieuwe, in mmol gekalibreerde drempels — zie kdoc bij
         // TrendChevronCanvas.
-        TrendChevronCanvas(
-            deltaMmol = deltaMgdl?.mgdlToMmol()?.toFloat() ?: 0f,
-            tint = ringColor,
-            ringSize = ringSize,
-            modifier = Modifier.matchParentSize()
-        )
+        if (!isStale) {
+            TrendChevronCanvas(
+                deltaMmol = deltaMgdl?.mgdlToMmol()?.toFloat() ?: 0f,
+                tint = ringColor,
+                ringSize = ringSize,
+                modifier = Modifier.matchParentSize()
+            )
+        }
     }
 }
+
+/** RONDE 243 — zie [BgRingDisplay]: 15 minuten = drie sensor-cycli. */
+private const val STALE_READING_DISPLAY_MS = 15 * 60_000L
 
 /**
  * 18/08/2026 (editor, RONDE 113) — losse, generieke (sensor-onafhankelijke)

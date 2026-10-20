@@ -123,6 +123,14 @@ object AlarmEvaluator {
     // ~12,6 mg/dL/min nodig zijn geweest, ruim boven deze grens).
     private const val PLAUSIBLE_TREND_CLAMP_MGDL_PER_MIN = 8f
 
+    /** 20/10/2026 (editor, RONDE 243, na een melding dat een lage-waarde-alarm
+     *  bleef afgaan op een meting van 145 minuten oud, ook tijdens het opwarmen
+     *  van een nieuwe sensor) — de waarde-alarmen (laag/hoog/urgent/predictief)
+     *  kijken alleen naar een VERSE meting. Een oudere meting zegt niets meer
+     *  over nu; daarvoor is het aparte "geen data"-alarm ([AlarmType.STALE_DATA]).
+     *  15 minuten = drie sensor-cycli van 5 minuten. */
+    private const val MAX_READING_AGE_MS = 15 * 60_000L
+
     /** Meest urgent eerst — AlarmMonitor.kt gebruikt dit om, als er
      *  toevallig meerdere tegelijk zouden vuren, er maar ÉÉN daadwerkelijk
      *  te laten klinken (geen twee alarmgeluiden/full-screen-schermen door
@@ -150,17 +158,21 @@ object AlarmEvaluator {
         previousReading: GlucoseReading? = null
     ): List<AlarmType> {
         val firing = mutableListOf<AlarmType>()
+        // RONDE 243 — zie MAX_READING_AGE_MS. [latestReading] zelf blijft voor
+        // STALE_DATA ongefilterd; alle andere alarmen zien alleen een verse meting.
+        val freshReading = latestReading?.takeIf { nowMs - it.timestampMs <= MAX_READING_AGE_MS }
+        val freshPrevious = if (freshReading != null) previousReading else null
         for (config in configs.values) {
             if (!config.enabled) continue
             val fires = when (config.type.category) {
                 AlarmCategory.THRESHOLD_LOW ->
-                    latestReading != null && latestReading.glucoseMgdl < config.thresholdMgdl
+                    freshReading != null && freshReading.glucoseMgdl < config.thresholdMgdl
                 AlarmCategory.THRESHOLD_HIGH ->
-                    latestReading != null && latestReading.glucoseMgdl > config.thresholdMgdl
+                    freshReading != null && freshReading.glucoseMgdl > config.thresholdMgdl
                 AlarmCategory.PREDICTIVE_LOW ->
-                    predictiveLowFires(latestReading, previousReading, config)
+                    predictiveLowFires(freshReading, freshPrevious, config)
                 AlarmCategory.PREDICTIVE_HIGH ->
-                    predictiveHighFires(latestReading, previousReading, config)
+                    predictiveHighFires(freshReading, freshPrevious, config)
                 AlarmCategory.STALE_DATA ->
                     latestReading == null || (nowMs - latestReading.timestampMs) >= config.staleMinutes * 60_000L
             }
