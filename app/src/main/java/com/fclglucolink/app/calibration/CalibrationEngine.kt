@@ -46,12 +46,15 @@ fun computeCalibration(
     allEntries: List<CalibrationEntry>,
     mode: CalibrationMode,
     manualOffsetMgdl: Double,
-    now: Long
+    now: Long,
+    // RONDE 243 — zie CalibrationEntrySelection.kt: door de gebruiker zelf
+    // aangevinkte punten die nooit automatisch overgeslagen worden.
+    forcedEntryIds: Set<Long> = emptySet()
 ): CalibrationResult {
     // RONDE 241 — afwijkende punten automatisch overslaan, zie
     // CalibrationEntrySelection.kt (zelfde selectie als de kalibratie-
     // schermen, zodat grafiek en echte waarden niet uit elkaar lopen).
-    val entries = selectUsableEntries(allEntries, now).used
+    val entries = selectUsableEntries(allEntries, now, forcedEntryIds).used
     if (entries.isEmpty()) {
         return CalibrationResult(
             calibratedMgdl = sensorMgdl + manualOffsetMgdl,

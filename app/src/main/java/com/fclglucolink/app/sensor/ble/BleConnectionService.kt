@@ -883,7 +883,8 @@ class BleConnectionService : Service() {
             allEntries = entries,
             mode = mode,
             manualOffsetMgdl = manualOffsetMgdl,
-            now = reading.timestampMs
+            now = reading.timestampMs,
+            forcedEntryIds = settings.getCalibrationForcedEntryIdsOnce()
         )
         return reading.copy(
             glucoseMgdl = result.calibratedMgdl,

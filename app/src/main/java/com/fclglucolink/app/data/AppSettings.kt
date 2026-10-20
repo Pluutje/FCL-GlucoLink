@@ -160,6 +160,7 @@ class AppSettings(private val context: Context) {
         // als DISPLAY_UNIT hierboven: dit is een voorkeur van de gebruiker,
         // geen eigenschap van een fysieke sensor.
         val APP_LANGUAGE = stringPreferencesKey("app_language")
+        val CALIBRATION_FORCED_ENTRY_IDS = stringPreferencesKey("calibration_forced_entry_ids")
 
         // 13/08/2026 (editor, RONDE 106, Fase 2 stap 1) — één overall-knop om
         // in één keer alle alarmen aan/uit te zetten — hoofdschakelaar
@@ -367,6 +368,28 @@ class AppSettings(private val context: Context) {
     suspend fun setAppLanguage(language: AppLanguage) {
         context.dataStore.edit { prefs -> prefs[Keys.APP_LANGUAGE] = language.name }
     }
+
+    // RONDE 243 — vingerprikken die de automatische selectie zou overslaan maar
+    // die de gebruiker zelf wil meetellen (zie CalibrationEntrySelection.kt).
+    // Per entry-id (die is uniek over alle sloten), kommagescheiden opgeslagen.
+    // Het aan/uit-vinkje in de database blijft hier los van.
+    val calibrationForcedEntryIds: Flow<Set<Long>> = context.dataStore.data.map { prefs ->
+        parseForcedIds(prefs[Keys.CALIBRATION_FORCED_ENTRY_IDS])
+    }
+
+    suspend fun getCalibrationForcedEntryIdsOnce(): Set<Long> =
+        parseForcedIds(context.dataStore.data.first()[Keys.CALIBRATION_FORCED_ENTRY_IDS])
+
+    suspend fun setCalibrationEntryForced(entryId: Long, forced: Boolean) {
+        context.dataStore.edit { prefs ->
+            val current = parseForcedIds(prefs[Keys.CALIBRATION_FORCED_ENTRY_IDS])
+            val updated = if (forced) current + entryId else current - entryId
+            prefs[Keys.CALIBRATION_FORCED_ENTRY_IDS] = updated.joinToString(",")
+        }
+    }
+
+    private fun parseForcedIds(raw: String?): Set<Long> =
+        raw?.split(",")?.mapNotNull { it.trim().toLongOrNull() }?.toSet() ?: emptySet()
 
     suspend fun getAppLanguageOnce(): AppLanguage =
         parseAppLanguage(context.dataStore.data.first()[Keys.APP_LANGUAGE])

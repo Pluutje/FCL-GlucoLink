@@ -262,7 +262,8 @@ fun CalibrationScreen(onBack: () -> Unit, slot: SensorSlot = SensorSlot.A) {
     // opgeslagen, bij elke berekening opnieuw bepaald), zie
     // CalibrationEntrySelection.kt. De fits gebruiken alleen [usedEntries];
     // de rijlijst toont ook de overgeslagen punten, met de reden.
-    val selection = remember(entries, now) { selectUsableEntries(entries, now) }
+    val forcedIds by settings.calibrationForcedEntryIds.collectAsState(initial = emptySet())
+    val selection = remember(entries, now, forcedIds) { selectUsableEntries(entries, now, forcedIds) }
     val usedEntries = selection.used
     val linearFit = remember(usedEntries, now) { fitLinearCalibration(usedEntries, now) }
     val splineResult = remember(usedEntries, now, mode) {
@@ -397,7 +398,15 @@ fun CalibrationScreen(onBack: () -> Unit, slot: SensorSlot = SensorSlot.A) {
                         onSelect = { selectedEntryId = entry.id },
                         onToggleChecked = { checked ->
                             scope.launch {
-                                calibrationStore.setIncluded(entry.id, isOrigin = entry.enteredOnThisSensor, included = checked)
+                                if (checked && entry.checked) {
+                                    // RONDE 243 — het punt staat in de database al aan
+                                    // maar wordt automatisch overgeslagen (het vinkje
+                                    // werd daarom leeg getoond): nu verplicht meetellen.
+                                    settings.setCalibrationEntryForced(entry.id, true)
+                                } else {
+                                    if (!checked) settings.setCalibrationEntryForced(entry.id, false)
+                                    calibrationStore.setIncluded(entry.id, isOrigin = entry.enteredOnThisSensor, included = checked)
+                                }
                             }
                         },
                         onDelete = { scope.launch { calibrationStore.delete(entry.id) } }
@@ -686,7 +695,9 @@ private fun CalibrationEntryRow(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Checkbox(checked = entry.checked, onCheckedChange = onToggleChecked)
+            // RONDE 243 — een automatisch overgeslagen punt toont een leeg vinkje (het telt immers niet mee);
+            // aanvinken dwingt het er toch in.
+            Checkbox(checked = entry.checked && autoSkipReason == null, onCheckedChange = onToggleChecked)
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -707,8 +718,8 @@ private fun CalibrationEntryRow(
                 if (autoSkipReason != null) {
                     Text(
                         when (autoSkipReason) {
-                            AutoSkipReason.OUTLIER -> tr("Skipped automatically: does not fit the other values", "Automatisch overgeslagen: past niet bij de andere waarden")
-                            AutoSkipReason.BEFORE_SHIFT -> tr("Skipped automatically: sensor changed after this value", "Automatisch overgeslagen: sensor is daarna veranderd")
+                            AutoSkipReason.OUTLIER -> tr("Skipped automatically: does not fit the other values (tick to include anyway)", "Automatisch overgeslagen: past niet bij de andere waarden (vink aan om toch mee te nemen)")
+                            AutoSkipReason.BEFORE_SHIFT -> tr("Skipped automatically: newer values show a different curve (tick to include anyway)", "Automatisch overgeslagen: nieuwere waarden wijzen op een andere curve (vink aan om toch mee te nemen)")
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error

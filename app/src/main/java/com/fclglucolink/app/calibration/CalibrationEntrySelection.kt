@@ -30,9 +30,11 @@ import kotlin.math.abs
  * punt komt vanzelf terug als de rest er later toch bij past. Dat betekent ook
  * dat er geen wijziging in de database nodig is.
  *
- * Grenzen: 1 mmol/L (18 mg/dL) is de minimale marge, 30 mg/dL de maximale (de
- * marge schaalt met de spreiding van de punten, maar kan niet onbeperkt
- * oplopen door een uitschieter). Er worden hoogstens een kwart van de punten
+ * Grenzen: de marge schaalt met de spreiding van de punten (tussen 1 en 1,7
+ * mmol/L, zodat een uitschieter haar niet onbeperkt kan oprekken) maar is nooit
+ * kleiner dan 15% van de glucosewaarde (bij 12 mmol/L is 1,8 mmol/L verschil
+ * normaal). Een verschuiving van de sensor wordt pas aangenomen bij minstens
+ * 2 mmol/L. Er worden hoogstens een kwart van de punten
  * overgeslagen en er blijven er minstens 3 over.
  */
 
@@ -56,16 +58,29 @@ data class EntrySelection(
 private const val MIN_ENTRIES_FOR_SELECTION = 4
 private const val MIN_DEVIATION_MGDL = 18.0
 private const val MAX_DEVIATION_MGDL = 30.0
+
+/** Een vingerprik mag ook ruim afwijken van de lijn zolang dat binnen de gewone
+ *  meetnauwkeurigheid van sensor en meter valt (ruwweg 15%) — bij 12 mmol/L is
+ *  1,2 mmol/L verschil dus normaal. */
+private const val RELATIVE_DEVIATION = 0.15
+
+/** Een verschuiving van de sensor wordt pas aangenomen bij minstens 2 mmol/L. */
+private const val MIN_SHIFT_MGDL = 36.0
 private const val SIGMA_FACTOR = 2.5
 private const val EDGE_MARGIN_MGDL = 18.0
 private const val MIN_ENTRIES_KEPT = 3
 private const val MAD_TO_SIGMA = 1.4826
 
-fun selectUsableEntries(entries: List<CalibrationEntry>, now: Long): EntrySelection {
+fun selectUsableEntries(
+    entries: List<CalibrationEntry>,
+    now: Long,
+    // Entry-ids die de gebruiker zelf wil meetellen: nooit overslaan.
+    forcedIds: Set<Long> = emptySet()
+): EntrySelection {
     val sorted = entries.sortedBy { it.timestampMs }
     if (sorted.size < MIN_ENTRIES_FOR_SELECTION) return EntrySelection(sorted, emptyMap())
-    detectShift(sorted, now)?.let { return it }
-    return dropOutliers(sorted, now)
+    detectShift(sorted, now, forcedIds)?.let { return it }
+    return dropOutliers(sorted, now, forcedIds)
 }
 
 private fun residual(entry: CalibrationEntry, fit: CalibrationFit): Double =
@@ -79,16 +94,19 @@ private fun robustSigma(residuals: List<Double>): Double {
     return MAD_TO_SIGMA * median
 }
 
-private fun threshold(sigma: Double): Double =
-    (SIGMA_FACTOR * sigma).coerceIn(MIN_DEVIATION_MGDL, MAX_DEVIATION_MGDL)
+/** Toegestane afwijking bij glucosewaarde [levelMgdl]: de spreiding van de punten
+ *  (begrensd tussen 1 en 1,7 mmol/L), maar nooit minder dan 15% van de waarde. */
+private fun threshold(sigma: Double, levelMgdl: Double): Double =
+    maxOf((SIGMA_FACTOR * sigma).coerceIn(MIN_DEVIATION_MGDL, MAX_DEVIATION_MGDL), RELATIVE_DEVIATION * levelMgdl)
 
 /** Zie punt 2 in de klasse-kdoc. Geeft null als er geen verschuiving is. */
-private fun detectShift(sorted: List<CalibrationEntry>, now: Long): EntrySelection? {
+private fun detectShift(sorted: List<CalibrationEntry>, now: Long, forcedIds: Set<Long>): EntrySelection? {
     val old = sorted.dropLast(2)
     val second = sorted[sorted.size - 2]
     val newest = sorted.last()
     val fitOld = fitLinearCalibration(old, now) ?: return null
-    val limit = threshold(robustSigma(old.map { residual(it, fitOld) }))
+    val level = (newest.fingerstickMgdl + second.fingerstickMgdl) / 2.0
+    val limit = maxOf(MIN_SHIFT_MGDL, threshold(robustSigma(old.map { residual(it, fitOld) }), level))
 
     val rNewest = residual(newest, fitOld)
     val rSecond = residual(second, fitOld)
@@ -111,14 +129,15 @@ private fun detectShift(sorted: List<CalibrationEntry>, now: Long): EntrySelecti
         run.add(0, candidate)
         rest = base
     }
+    val (keptByUser, dropped) = rest.partition { it.id in forcedIds }
     return EntrySelection(
-        used = run,
-        skipped = rest.associate { it.id to AutoSkipReason.BEFORE_SHIFT }
+        used = (keptByUser + run).sortedBy { it.timestampMs },
+        skipped = dropped.associate { it.id to AutoSkipReason.BEFORE_SHIFT }
     )
 }
 
 /** Zie punt 3 in de klasse-kdoc. */
-private fun dropOutliers(sorted: List<CalibrationEntry>, now: Long): EntrySelection {
+private fun dropOutliers(sorted: List<CalibrationEntry>, now: Long, forcedIds: Set<Long>): EntrySelection {
     val current = sorted.toMutableList()
     val skipped = LinkedHashMap<Long, AutoSkipReason>()
     val maxSkips = sorted.size / 4
@@ -129,22 +148,31 @@ private fun dropOutliers(sorted: List<CalibrationEntry>, now: Long): EntrySelect
         val judged = current.dropLast(1)
         val residuals = ArrayList<Double>(judged.size)
         var worstIndex = -1
-        var worstResidual = 0.0
+        var worstRatio = 0.0
+        val fits = HashMap<Int, Double>()
         for (i in judged.indices) {
             val rest = judged.filterIndexed { index, _ -> index != i }
             val fit = fitLinearCalibration(rest, now) ?: continue
             val r = residual(judged[i], fit)
             residuals.add(r)
+            fits[i] = r
+        }
+        val sigma = robustSigma(residuals)
+        for ((i, r) in fits) {
+            val rest = judged.filterIndexed { index, _ -> index != i }
             val x = judged[i].sensorMgdlAtPairing
             val low = rest.minOf { it.sensorMgdlAtPairing } - EDGE_MARGIN_MGDL
             val high = rest.maxOf { it.sensorMgdlAtPairing } + EDGE_MARGIN_MGDL
-            if (x in low..high && abs(r) > abs(worstResidual)) {
+            if (x !in low..high) continue
+            if (judged[i].id in forcedIds) continue
+            val ratio = abs(r) / threshold(sigma, judged[i].fingerstickMgdl)
+            if (ratio > worstRatio) {
                 worstIndex = i
-                worstResidual = r
+                worstRatio = ratio
             }
         }
         if (worstIndex < 0) break
-        if (abs(worstResidual) <= threshold(robustSigma(residuals))) break
+        if (worstRatio <= 1.0) break
         val removed = judged[worstIndex]
         skipped[removed.id] = AutoSkipReason.OUTLIER
         current.remove(removed)

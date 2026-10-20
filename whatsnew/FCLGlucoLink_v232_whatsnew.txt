@@ -1,0 +1,5 @@
+Kalibratie: het automatisch overslaan van vingerprikken is voorzichtiger geworden. Een prik wordt pas overgeslagen als hij duidelijk buiten de gewone meetnauwkeurigheid valt (minstens 15% van de waarde), en een verschuiving van de sensor wordt pas aangenomen bij minstens 2 mmol/L verschil.
+Kalibratie: een vingerprik die automatisch is overgeslagen toont nu een leeg vinkje (hij telt immers niet mee). Vink je hem aan, dan wordt hij toch meegenomen en blijft hij dat.
+---EN---
+Calibration: automatically skipping fingersticks is more careful now. A value is only skipped when it is clearly outside the normal measurement accuracy (at least 15% of the value), and a shift of the sensor is only assumed at a difference of at least 2 mmol/L.
+Calibration: a fingerstick that was skipped automatically now shows an empty checkbox (it does not count). If you tick it, it is included anyway and stays included.
