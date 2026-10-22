@@ -1,0 +1,3 @@
+Sensorleeftijd in AAPS: bij een nieuwe CareSens Air-, G6- of G7-sensor stuurt GlucoLink nu de echte starttijd van die nieuwe sensor mee. AAPS maakt daarmee zelf een "sensorwissel" aan en de teller voor de sensorleeftijd begint opnieuw. Voorheen bleef de oude starttijd staan en telde AAPS door. Zet in AAPS bij de xDrip-bron de optie voor het automatisch aanmaken van sensorwissels aan.
+---EN---
+Sensor age in AAPS: with a new CareSens Air, G6 or G7 sensor, GlucoLink now sends the real start time of the new sensor. AAPS uses it to create a "sensor change" by itself and the sensor age counter starts again. Before, the old start time stayed and AAPS kept counting. In AAPS, turn on the option to create sensor changes automatically for the xDrip source.

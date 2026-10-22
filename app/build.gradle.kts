@@ -56,7 +56,7 @@ val buildTimeString = SimpleDateFormat("dd-MM-yyyy HH:mm").format(Date())
 
 // RONDE 240 — het versienummer van een uitgave (tag `v<nummer>` op GitHub). Dit is wat de app
 // vergelijkt om een update te herkennen. Dit getal gaat bij elke uitgave omhoog.
-val releaseNumber = 233
+val releaseNumber = 234
 
 android {
     namespace = "com.fclglucolink.app"
@@ -125,16 +125,12 @@ android {
     }
 
 
-
-
-
             externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
             version = "3.22.1"
         }
     }
-
 
 
             // 01/08/2026 (editor, na live-test — "Couldn't load the CareSens Air

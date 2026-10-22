@@ -528,7 +528,13 @@ class BleConnectionService : Service() {
             var firstReadingThisSession = true
             launch {
                 driver.readings.collect { reading ->
-                    val startedAtMs = settings.getOrInitSensorStartedAtMs(slot)
+                    // RONDE 244 — use the start time of the CURRENT physical sensor (CareSens
+                    // Air / G6 / G7), not the generic per-slot time that is set only once.
+                    // AAPS makes a "sensor change" event from this value, and it skips a
+                    // start time that is equal to or older than its last event. With the
+                    // generic time, AAPS never saw a new sensor of the same type. Simulator and
+                    // SmartGuide have no own session start and still use the generic time.
+                    val startedAtMs = settings.effectiveSensorSessionStartedAtMs(slot, sensorType)
                     val stableReading = reading.copy(sensorStartedAtMs = startedAtMs)
                     if (firstReadingThisSession) {
                         firstReadingThisSession = false
