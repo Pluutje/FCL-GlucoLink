@@ -213,6 +213,10 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
     // nu voor de nieuwe stop-voor-start- en versie2-uitwisselingen — zie
     // runControlSequence()'s kdoc.
     private var pendingSessionStopDeferred: CompletableDeferred<DexcomG6Protocol.SessionStopRx?>? = null
+    // RONDE 245 — telt achter elkaar uitgevoerde auto-stops waarna de transmitter
+    // nog steeds een lopende sessie meldt. Bij MAX_AUTO_STOP_ATTEMPTS stoppen we
+    // met stoppen en proberen we de start, zodat de fout zichtbaar wordt.
+    private var consecutiveAutoStops = 0
     private var pendingVersionRequest2Deferred: CompletableDeferred<DexcomG6Protocol.VersionRequest2Rx?>? = null
     // 22/08/2026 (editor, RONDE 121) — zelfde patroon, voor de nieuwe
     // TransmitterTime-aanvraag (opcode 0x24/0x25) — zie
@@ -323,6 +327,7 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
         // triviaal, kort antwoord (net als VersionRequest2), dus dezelfde
         // 10s-marge.
         private const val TRANSMITTER_TIME_TIMEOUT_MS = 10_000L
+        private const val MAX_AUTO_STOP_ATTEMPTS = 3
         // 09/08/2026 (editor, RONDE 66, VERKORT IN RONDE 68) — als een
         // transmitter/firmware dit verzoek simpelweg niet beantwoordt, moet
         // dat niet elke ~5 minuten opnieuw geprobeerd worden. Was 8 uur
@@ -1125,6 +1130,20 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
             }
         }
 
+        /** RONDE 245 — vraagt de huidige transmittertijd op (opcode 0x24/0x25).
+         *  Nodig als stoptijd voor de sessie-stop. `null` bij geen antwoord. */
+        private suspend fun requestTransmitterTime(
+            gatt: BluetoothGatt,
+            controlChar: BluetoothGattCharacteristic
+        ): DexcomG6Protocol.TransmitterTimeRx? {
+            val timeDeferred = CompletableDeferred<DexcomG6Protocol.TransmitterTimeRx?>()
+            pendingTransmitterTimeDeferred = timeDeferred
+            writeCharacteristic(gatt, controlChar, DexcomG6Protocol.buildTransmitterTimeRequest())
+            val rx = withTimeoutOrNull(TRANSMITTER_TIME_TIMEOUT_MS) { timeDeferred.await() }
+            pendingTransmitterTimeDeferred = null
+            return rx
+        }
+
         /** 08/08/2026 (editor, RONDE 56) — de kern van de correctie: eerst
          *  (optioneel) een nieuwe sessie starten met een klaarstaande
          *  sensor-code, dan (optioneel, ~elke 8u) de batterij opvragen, dan
@@ -1149,7 +1168,12 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
             if (settings.consumeDexcomG6PendingStopSensorOnly(slot)) {
                 val stopDeferred = CompletableDeferred<DexcomG6Protocol.SessionStopRx?>()
                 pendingSessionStopDeferred = stopDeferred
-                writeCharacteristic(gatt, controlChar, DexcomG6Protocol.buildSessionStop(0))
+                // RONDE 245 — stoptijd 0 liet de transmitter de sessie NIET stoppen
+                // (antwoord was wel "ok"). xDrip+ stuurt de huidige transmittertijd.
+                val stopTimeRx = requestTransmitterTime(gatt, controlChar)
+                val stopTime = stopTimeRx?.currentTime ?: 0
+                DiagnosticFileLogger.log("DexcomG6: standalone stop-sensor stoptijd=$stopTime")
+                writeCharacteristic(gatt, controlChar, DexcomG6Protocol.buildSessionStop(stopTime))
                 val stopResult = withTimeoutOrNull(SESSION_STOP_TIMEOUT_MS) { stopDeferred.await() }
                 pendingSessionStopDeferred = null
                 DiagnosticFileLogger.log("DexcomG6: standalone stop-sensor result=$stopResult")
@@ -1241,14 +1265,20 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
                 }
             }
 
-            if (pendingCode != null && txTime != null && txTime.sessionInProgress) {
+            if (pendingCode == null || txTime == null || !txTime.sessionInProgress) consecutiveAutoStops = 0
+            if (pendingCode != null && txTime != null && txTime.sessionInProgress && consecutiveAutoStops >= MAX_AUTO_STOP_ATTEMPTS) {
+                DiagnosticFileLogger.log("DexcomG6: stop heeft ${consecutiveAutoStops}x niet gewerkt (transmitter meldt nog steeds een sessie) — geen nieuwe stop, start wordt direct geprobeerd")
+            }
+            if (pendingCode != null && txTime != null && txTime.sessionInProgress && consecutiveAutoStops < MAX_AUTO_STOP_ATTEMPTS) {
+                consecutiveAutoStops++
                 val stopDeferred = CompletableDeferred<DexcomG6Protocol.SessionStopRx?>()
                 pendingSessionStopDeferred = stopDeferred
                 // dexTime=0: zelfde bewuste vereenvoudiging als de
                 // sessie-start hieronder (die ook al langer met dexTime=0
                 // werkt) — een striktere, transmitter-relatieve dex-tijd
                 // wordt hier evenmin apart bijgehouden.
-                writeCharacteristic(gatt, controlChar, DexcomG6Protocol.buildSessionStop(0))
+                // RONDE 245 — stoptijd = huidige transmittertijd (0 werkte niet).
+                writeCharacteristic(gatt, controlChar, DexcomG6Protocol.buildSessionStop(txTime.currentTime))
                 val stopResult = withTimeoutOrNull(SESSION_STOP_TIMEOUT_MS) { stopDeferred.await() }
                 pendingSessionStopDeferred = null
                 DiagnosticFileLogger.log("DexcomG6: new-sensor auto-stop-active-session result=$stopResult")
