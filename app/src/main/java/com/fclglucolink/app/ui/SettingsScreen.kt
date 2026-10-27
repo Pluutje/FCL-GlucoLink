@@ -553,13 +553,19 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit, onOpenAbout: ()
                                 "values (linear offset or spline fit). When on, a " +
                                 "\"Calibration\" button appears on the home screen. " +
                                 "Calibration data is cleared automatically whenever " +
-                                "you start a new sensor.",
+                                "you start a new sensor. Works independently of " +
+                                "smoothing. You can leave calibration on: as long " +
+                                "as you have not entered 2 or more fingerstick " +
+                                "values, the reading is not changed.",
                             "Past sensormetingen aan met je eigen vingerprik-" +
                                 "waarden (lineaire offset of spline-fit). Als dit " +
                                 "aan staat, verschijnt een \"Kalibratie\"-knop op " +
                                 "het hoofdscherm. Kalibratiegegevens worden " +
                                 "automatisch gewist zodra je een nieuwe sensor " +
-                                "start."
+                                "start. Werkt los van filtering. Je kunt " +
+                                "kalibratie altijd aan laten staan: zolang je " +
+                                "geen 2 of meer vingerprikwaarden invoert, " +
+                                "verandert er niets aan de meting."
                         ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.secondary
@@ -620,12 +626,16 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit, onOpenAbout: ()
                     Text(
                         tr(
                             "Smooths out sensor noise and single-reading spikes " +
-                                "using a Kalman filter, applied after calibration. " +
-                                "Improves stability for looping without meaningfully " +
+                                "using a Kalman filter. Works independently of " +
+                                "calibration. If calibration is on, the " +
+                                "calibrated value is smoothed, otherwise the raw " +
+                                "sensor value. Improves stability for looping without meaningfully " +
                                 "delaying real trend changes.",
                             "Vlakt sensorruis en losse-meting-uitschieters af " +
-                                "met een Kalman-filter, toegepast na kalibratie. " +
-                                "Verbetert de stabiliteit voor looping zonder " +
+                                "met een Kalman-filter. Werkt los van " +
+                                "kalibratie. Is kalibratie aan, dan wordt de " +
+                                "gekalibreerde waarde gefilterd, anders de ruwe " +
+                                "sensorwaarde. Verbetert de stabiliteit voor looping zonder " +
                                 "echte trendveranderingen merkbaar te vertragen."
                         ),
                         style = MaterialTheme.typography.bodySmall,

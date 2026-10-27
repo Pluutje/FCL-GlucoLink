@@ -1030,14 +1030,23 @@ enum class ManualTopic(
                     "blijven worden."
             ),
             ManualSection(
-                headingEn = "Runs after calibration",
-                headingNl = "Werkt na kalibratie",
-                bodyEn = "Smoothing always runs AFTER calibration, so it works on " +
-                    "the already-corrected value — the two features are " +
-                    "designed to be used together, in that order.",
-                bodyNl = "Filtering werkt altijd NA kalibratie, dus op de al " +
-                    "gecorrigeerde waarde — de twee functies zijn ontworpen " +
-                    "om samen, in die volgorde, gebruikt te worden."
+                headingEn = "Calibration and smoothing work independently",
+                headingNl = "Kalibratie en filtering werken los van elkaar",
+                bodyEn = "Calibration and smoothing are independent. You can use " +
+                    "both, either one, or neither. Smoothing also works when " +
+                    "calibration is off, or when you have not entered any " +
+                    "fingerstick values yet. When both are on, the reading " +
+                    "first goes through calibration (corrects offset) and " +
+                    "then through smoothing (reduces noise). The main screen " +
+                    "then shows three values: raw, calibrated and smoothed.",
+                bodyNl = "Kalibratie en filtering staan los van elkaar. Je kunt " +
+                    "ze allebei, één van de twee, of geen van beide gebruiken. " +
+                    "Filtering werkt ook als kalibratie uit staat of als je " +
+                    "nog geen vingerprikwaarden hebt ingevoerd. Staan beide " +
+                    "aan, dan gaat de meting eerst door de kalibratie " +
+                    "(correctie van afwijking) en daarna door de filtering " +
+                    "(ruis afvlakken). Op het hoofdscherm zie je dan drie " +
+                    "waarden: ruw, gekalibreerd en gefilterd."
             ),
             ManualSection(
                 headingEn = "Break-in filter for new sensors",

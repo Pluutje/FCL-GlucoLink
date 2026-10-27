@@ -1,0 +1,3 @@
+Uitleg verbeterd: handleiding en instellingen leggen nu duidelijk uit dat kalibratie en filtering los van elkaar werken. Filtering werkt dus ook als kalibratie uit staat of als je nog geen vingerprikwaarden hebt ingevoerd. Kalibratie kun je gerust aan laten staan: zonder 2 vingerprikwaarden verandert er niets.
+---EN---
+Better explanation: the manual and settings now clearly explain that calibration and smoothing work independently. Smoothing also works when calibration is off or when you have not entered any fingerstick values yet. You can leave calibration on: nothing changes until you enter 2 fingersticks.
