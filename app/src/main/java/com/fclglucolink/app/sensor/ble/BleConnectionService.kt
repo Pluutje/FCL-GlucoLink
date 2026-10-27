@@ -927,11 +927,13 @@ class BleConnectionService : Service() {
         val sinceMs = settings.effectiveSensorSessionStartedAtMs(slot, sensorType)
         val entries = calibrationStore.entriesOnce(sensorType, sinceMs)
         val mode = settings.getCalibrationModeOnce(slot)
-        val manualOffsetMgdl = settings.getCalibrationManualOffsetMmolOnce(slot).mmolToMgdl()
+        val manual = settings.getCalibrationManualOnce(slot, sinceMs)
+        val manualOffsetMgdl = manual.offsetMmol.mmolToMgdl()
         val result = computeCalibration(
             sensorMgdl = reading.glucoseMgdl,
             allEntries = entries,
             mode = mode,
+            manual = manual,
             manualOffsetMgdl = manualOffsetMgdl,
             now = reading.timestampMs,
             forcedEntryIds = settings.getCalibrationForcedEntryIdsOnce()

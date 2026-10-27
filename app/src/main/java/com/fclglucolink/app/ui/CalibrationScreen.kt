@@ -35,6 +35,16 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.fclglucolink.app.calibration.MANUAL_OFFSET_MAX_MMOL
+import com.fclglucolink.app.calibration.MANUAL_SLOPE_MAX
+import com.fclglucolink.app.calibration.MANUAL_SLOPE_MIN
+import com.fclglucolink.app.calibration.MANUAL_SLOPE_PIVOT_MGDL
+import com.fclglucolink.app.calibration.ManualCalibration
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -85,7 +95,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.ceil
-import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /**
@@ -184,7 +193,10 @@ fun CalibrationScreen(onBack: () -> Unit, slot: SensorSlot = SensorSlot.A) {
     // nu per-slot (zie AppSettings.kt's kdoc), i.p.v. de oude globale
     // settings.calibrationMode/calibrationManualOffsetMmol properties.
     val mode by settings.calibrationMode(slot).collectAsState(initial = CalibrationMode.SPLINE)
-    val manualOffsetMmol by settings.calibrationManualOffsetMmol(slot).collectAsState(initial = 0.0)
+    val manualFlow = remember(settings, slot, sinceMs) { settings.calibrationManual(slot, sinceMs) }
+    val manual by manualFlow.collectAsState(initial = ManualCalibration())
+    val manualOffsetMmol = manual.offsetMmol
+    var manualTab by rememberSaveable { mutableStateOf(0) }
     // 13/08/2026 (editor, RONDE 104, Fase 1) — zie ui/Units.kt's
     // [GlucoseUnit]-kdoc. In Ronde 104 alleen gebruikt voor het invoerveld/
     // de rijlijst (AddCalibrationDialog/CalibrationEntryRow); in RONDE 105
@@ -313,18 +325,9 @@ fun CalibrationScreen(onBack: () -> Unit, slot: SensorSlot = SensorSlot.A) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            StatusCard(
-                mode = mode,
-                entries = entries,
-                linearFit = linearFit,
-                splineFit = splineFit,
-                unit = displayUnit,
-                splineFailureReason = splineResult?.reason
-            )
-
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 SegmentedButton(
                     selected = mode == CalibrationMode.LINEAR,
@@ -337,6 +340,16 @@ fun CalibrationScreen(onBack: () -> Unit, slot: SensorSlot = SensorSlot.A) {
                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
                 ) { Text("Spline") }
             }
+
+            // RONDE 245 — status is nu één regel i.p.v. een eigen kaart (meer ruimte voor de lijst).
+            StatusLine(
+                mode = mode,
+                entries = entries,
+                linearFit = linearFit,
+                splineFit = splineFit,
+                unit = displayUnit,
+                splineFailureReason = splineResult?.reason
+            )
 
             // 06/08/2026 (editor, RONDE 44, op verzoek om de grafiek iets
             // kleiner te maken zodat de lijst met waarden eronder iets groter
@@ -353,6 +366,9 @@ fun CalibrationScreen(onBack: () -> Unit, slot: SensorSlot = SensorSlot.A) {
                 linearFit = linearFit,
                 splineFit = splineFit,
                 manualOffsetMgdl = manualOffsetMmol.mmolToMgdl(),
+                manual = manual,
+                inactive = listEntries.filter { !it.checked },
+                skippedIds = selection.skipped.keys,
                 now = now,
                 unit = displayUnit,
                 modifier = Modifier
@@ -360,16 +376,30 @@ fun CalibrationScreen(onBack: () -> Unit, slot: SensorSlot = SensorSlot.A) {
                     .height(190.dp)
             )
 
-            OffsetSlider(
-                manualOffsetMmol = manualOffsetMmol,
-                unit = displayUnit,
-                onChange = { value -> scope.launch { settings.setCalibrationManualOffsetMmol(slot, value) } }
-            )
+            // RONDE 245 — twee tabbladen onder de grafiek: de vingerprikken
+            // (automatisch) en de handmatige correcties bovenop die fit.
+            TabRow(selectedTabIndex = manualTab) {
+                Tab(
+                    selected = manualTab == 0,
+                    onClick = { manualTab = 0 },
+                    text = { Text(tr("Automatic (${listEntries.size})", "Automatisch (${listEntries.size})")) }
+                )
+                Tab(
+                    selected = manualTab == 1,
+                    onClick = { manualTab = 1 },
+                    text = { Text(tr("Manual", "Handmatig")) }
+                )
+            }
 
-            // 11/08/2026 (editor, RONDE 90) — telt nu ALLE relevante rijen
-            // (aangevinkt of niet), zie [listEntries]'s kdoc.
-            Text(tr("Fingerstick entries (${listEntries.size})", "Vingerprikwaarden (${listEntries.size})"), style = MaterialTheme.typography.titleMedium)
-
+            if (manualTab == 1) {
+                ManualCorrectionPanel(
+                    mode = mode,
+                    manual = manual,
+                    unit = displayUnit,
+                    onChange = { value -> scope.launch { settings.setCalibrationManual(slot, sinceMs, value) } },
+                    modifier = Modifier.weight(1f)
+                )
+            } else {
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -387,7 +417,8 @@ fun CalibrationScreen(onBack: () -> Unit, slot: SensorSlot = SensorSlot.A) {
                         mode = mode,
                         linearFit = linearFit,
                         splineFit = splineFit,
-                        manualOffsetMgdl = manualOffsetMmol.mmolToMgdl()
+                        manualOffsetMgdl = manualOffsetMmol.mmolToMgdl(),
+                        manual = manual
                     )
                     CalibrationEntryRow(
                         entry = entry,
@@ -412,6 +443,7 @@ fun CalibrationScreen(onBack: () -> Unit, slot: SensorSlot = SensorSlot.A) {
                         onDelete = { scope.launch { calibrationStore.delete(entry.id) } }
                     )
                 }
+            }
             }
         }
     }
@@ -522,7 +554,7 @@ fun CalibrationScreen(onBack: () -> Unit, slot: SensorSlot = SensorSlot.A) {
 }
 
 @Composable
-private fun StatusCard(
+private fun StatusLine(
     mode: CalibrationMode,
     entries: List<CalibrationEntry>,
     linearFit: com.fclglucolink.app.calibration.CalibrationFit?,
@@ -538,44 +570,31 @@ private fun StatusCard(
     // de tekst zet 'm nu om naar mg/dL indien gekozen.
     unit: GlucoseUnit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            val splineKnotMmol = 6.0
-            val statusText = when {
-                entries.isEmpty() -> tr(
-                    "No calibration entries yet — only the manual offset (if any) is applied.",
-                    "Nog geen kalibratiewaarden — alleen de handmatige offset (indien ingesteld) wordt toegepast."
-                )
-                mode == CalibrationMode.SPLINE && splineFit != null ->
-                    tr(
-                        "Spline calibration applied (knot at ${splineKnotMmol.mmolToMgdl().formatForDisplayWithUnit(unit)}).",
-                        "Spline-kalibratie toegepast (knikpunt bij ${splineKnotMmol.mmolToMgdl().formatForDisplayWithUnit(unit)})."
-                    )
-                mode == CalibrationMode.SPLINE && splineFit == null ->
-                    tr(
-                        "Spline not available yet (${splineFailureReason?.let { reasonText(it) } ?: "not enough data"}) — using linear.",
-                        "Spline nog niet beschikbaar (${splineFailureReason?.let { reasonText(it) } ?: "onvoldoende data"}) — lineair wordt gebruikt."
-                    )
-                linearFit != null && linearFit.isApplicable -> tr("Linear calibration applied.", "Lineaire kalibratie toegepast.")
-                else -> tr(
-                    "Not enough data for a reliable fit yet — using the manual offset only.",
-                    "Nog onvoldoende data voor een betrouwbare curve — alleen de handmatige offset wordt gebruikt."
-                )
-            }
-            Text(tr("Status", "Status"), style = MaterialTheme.typography.titleMedium)
-            Text(statusText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
-        }
+    val splineKnotMmol = 6.0
+    val statusText = when {
+        entries.isEmpty() -> tr(
+            "No calibration entries yet — only the manual offset (if any) is applied.",
+            "Nog geen kalibratiewaarden — alleen de handmatige offset (indien ingesteld) wordt toegepast."
+        )
+        mode == CalibrationMode.SPLINE && splineFit != null ->
+            tr(
+                "Spline calibration applied (knot at ${splineKnotMmol.mmolToMgdl().formatForDisplayWithUnit(unit)}).",
+                "Spline-kalibratie toegepast (knikpunt bij ${splineKnotMmol.mmolToMgdl().formatForDisplayWithUnit(unit)})."
+            )
+        mode == CalibrationMode.SPLINE && splineFit == null ->
+            tr(
+                "Spline not available yet (${splineFailureReason?.let { reasonText(it) } ?: "not enough data"}) — using linear.",
+                "Spline nog niet beschikbaar (${splineFailureReason?.let { reasonText(it) } ?: "onvoldoende data"}) — lineair wordt gebruikt."
+            )
+        linearFit != null && linearFit.isApplicable -> tr("Linear calibration applied.", "Lineaire kalibratie toegepast.")
+        else -> tr(
+            "Not enough data for a reliable fit yet — using the manual offset only.",
+            "Nog onvoldoende data voor een betrouwbare curve — alleen de handmatige offset wordt gebruikt."
+        )
     }
+    Text(statusText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
 }
 
-// 26/09/2026 (editor, RONDE 189) — @Composable gemaakt (was een gewone
-// functie) zodat [tr] hier rechtstreeks aangeroepen kan worden — de enige
-// aanroepplek (StatusCard hierboven) is zelf al @Composable, dus dat is
-// hier geen enkel probleem.
 @Composable
 private fun reasonText(reason: com.fclglucolink.app.calibration.SplineFailureReason): String = when (reason) {
     com.fclglucolink.app.calibration.SplineFailureReason.TOO_FEW_ENTRIES -> tr("need at least 4 entries", "minstens 4 waarden nodig")
@@ -599,54 +618,102 @@ private fun formatOffsetLabel(manualOffsetMmol: Double, unit: GlucoseUnit): Stri
 }
 
 @Composable
-private fun OffsetSlider(manualOffsetMmol: Double, unit: GlucoseUnit, onChange: (Double) -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+private fun ManualCorrectionPanel(
+    mode: CalibrationMode,
+    manual: ManualCalibration,
+    unit: GlucoseUnit,
+    onChange: (ManualCalibration) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(tr("Manual offset", "Handmatige offset"), style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    formatOffsetLabel(manualOffsetMmol, unit),
-                    style = MaterialTheme.typography.bodyMedium
-                )
+        val rangeMmol = MANUAL_OFFSET_MAX_MMOL
+        val rangeDisplay = if (unit == GlucoseUnit.MGDL) rangeMmol.mmolToMgdl().toFloat() else rangeMmol.toFloat()
+        val stepDisplay = if (unit == GlucoseUnit.MGDL) 1.0f else 0.05f
+        val offsetDisplay = if (unit == GlucoseUnit.MGDL) manual.offsetMmol.mmolToMgdl().toFloat() else manual.offsetMmol.toFloat()
+        ManualSliderRow(
+            label = tr("Offset (shift)", "Offset (verschuiving)"),
+            valueText = formatOffsetLabel(manual.offsetMmol, unit),
+            value = offsetDisplay,
+            range = -rangeDisplay..rangeDisplay,
+            steps = (((2f * rangeDisplay) / stepDisplay).roundToInt() - 1),
+            onChange = { newDisplay ->
+                val newMmol = if (unit == GlucoseUnit.MGDL) newDisplay.toDouble().mgdlToMmol() else newDisplay.toDouble()
+                onChange(manual.copy(offsetMmol = newMmol))
             }
-            // Bereik/stapgrootte in de weergave-eenheid: ±1,5 mmol/L
-            // (ongewijzigd) resp. het mg/dL-equivalent daarvan (≈±27 mg/dL),
-            // met een stapgrootte van 0,05 mmol/L resp. 1 mg/dL — vergelijkbare
-            // fijnheid, geen wijziging in het aantal bruikbare Slider-posities.
-            val rangeMmol = 1.5
-            val rangeDisplay = if (unit == GlucoseUnit.MGDL) rangeMmol.mmolToMgdl().toFloat() else rangeMmol.toFloat()
-            val stepDisplay = if (unit == GlucoseUnit.MGDL) 1.0f else 0.05f
-            val valueDisplay = if (unit == GlucoseUnit.MGDL) {
-                manualOffsetMmol.mmolToMgdl().toFloat()
-            } else {
-                manualOffsetMmol.toFloat()
-            }
-            Slider(
-                value = valueDisplay,
-                onValueChange = { newDisplay ->
-                    val newMmol = if (unit == GlucoseUnit.MGDL) {
-                        newDisplay.toDouble().mgdlToMmol()
-                    } else {
-                        newDisplay.toDouble()
-                    }
-                    onChange(newMmol)
-                },
-                valueRange = -rangeDisplay..rangeDisplay,
-                steps = (((2f * rangeDisplay) / stepDisplay).roundToInt() - 1)
+        )
+        if (mode == CalibrationMode.LINEAR) {
+            ManualSliderRow(
+                label = tr("Slope", "Helling"),
+                valueText = formatSlope(manual.slope),
+                value = manual.slope.toFloat(),
+                range = MANUAL_SLOPE_MIN.toFloat()..MANUAL_SLOPE_MAX.toFloat(),
+                steps = 39,
+                onChange = { onChange(manual.copy(slope = it.toDouble())) }
             )
-            Text(
-                tr(
-                    "Works on its own even without any fingerstick entries — a plain shift of the sensor curve.",
-                    "Werkt ook zonder vingerprikwaarden — een simpele verschuiving van de sensorcurve."
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.secondary
+        } else {
+            ManualSliderRow(
+                label = tr("Slope, low part", "Helling, laag deel"),
+                valueText = formatSlope(manual.slopeLow),
+                value = manual.slopeLow.toFloat(),
+                range = MANUAL_SLOPE_MIN.toFloat()..MANUAL_SLOPE_MAX.toFloat(),
+                steps = 39,
+                onChange = { onChange(manual.copy(slopeLow = it.toDouble())) }
+            )
+            ManualSliderRow(
+                label = tr("Slope, high part", "Helling, hoog deel"),
+                valueText = formatSlope(manual.slopeHigh),
+                value = manual.slopeHigh.toFloat(),
+                range = MANUAL_SLOPE_MIN.toFloat()..MANUAL_SLOPE_MAX.toFloat(),
+                steps = 39,
+                onChange = { onChange(manual.copy(slopeHigh = it.toDouble())) }
             )
         }
+        Text(
+            if (mode == CalibrationMode.LINEAR) {
+                tr(
+                    "Applied on top of the fingerstick fit, also without fingersticks. The slope turns around 100 mg/dL. Everything resets when a new sensor starts.",
+                    "Komt bovenop de vingerprik-fit, ook zonder vingerprikken. De helling draait om 5,6 mmol/L (100 mg/dL). Alles wordt gereset bij een nieuwe sensor."
+                )
+            } else {
+                tr(
+                    "Applied on top of the fingerstick fit, also without fingersticks. Low and high slope turn around the knot of the curve. Everything resets when a new sensor starts.",
+                    "Komt bovenop de vingerprik-fit, ook zonder vingerprikken. Lage en hoge helling draaien om het knikpunt van de curve. Alles wordt gereset bij een nieuwe sensor."
+                )
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.secondary
+        )
+        TextButton(onClick = { onChange(ManualCalibration()) }) { Text(tr("Reset all", "Alles terugzetten")) }
+    }
+}
+
+private fun formatSlope(slope: Double): String = "%.2f×".format(slope)
+
+@Composable
+private fun ManualSliderRow(
+    label: String,
+    valueText: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    steps: Int,
+    onChange: (Float) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(label, style = MaterialTheme.typography.bodyMedium)
+            Text(valueText, style = MaterialTheme.typography.bodyMedium)
+        }
+        Slider(
+            value = value.coerceIn(range.start, range.endInclusive),
+            onValueChange = onChange,
+            valueRange = range,
+            steps = steps
+        )
     }
 }
 
@@ -841,11 +908,17 @@ private fun activeCalibratedMgdl(
     mode: CalibrationMode,
     linearFit: CalibrationFit?,
     splineFit: SplineFit?,
-    manualOffsetMgdl: Double
-): Double = when {
-    mode == CalibrationMode.SPLINE && splineFit != null -> splineFit.apply(sensorMgdl, manualOffsetMgdl)
-    linearFit != null && linearFit.isApplicable -> linearFit.slope * sensorMgdl + linearFit.offset + manualOffsetMgdl
-    else -> sensorMgdl + manualOffsetMgdl
+    manualOffsetMgdl: Double,
+    manual: ManualCalibration
+): Double {
+    val base = when {
+        mode == CalibrationMode.SPLINE && splineFit != null -> splineFit.apply(sensorMgdl, manualOffsetMgdl)
+        linearFit != null && linearFit.isApplicable -> linearFit.slope * sensorMgdl + linearFit.offset + manualOffsetMgdl
+        else -> sensorMgdl + manualOffsetMgdl
+    }
+    // RONDE 245 — zelfde stap als CalibrationEngine.computeCalibration().
+    val pivot = if (mode == CalibrationMode.SPLINE) splineFit?.knotY ?: MANUAL_SLOPE_PIVOT_MGDL else MANUAL_SLOPE_PIVOT_MGDL
+    return manual.applySlopes(base, mode, pivot)
 }
 
 /**
@@ -889,6 +962,9 @@ private fun CalibrationScatterChart(
     linearFit: CalibrationFit?,
     splineFit: SplineFit?,
     manualOffsetMgdl: Double,
+    manual: ManualCalibration,
+    inactive: List<FingerstickListEntry>,
+    skippedIds: Set<Long>,
     now: Long,
     // 13/08/2026 (editor, RONDE 105) — zelfde "plot altijd in mg/dL, alleen
     // de as-TEKST zet om" patroon als GlucoseChart.kt's yAxisValueFormatter:
@@ -924,9 +1000,13 @@ private fun CalibrationScatterChart(
     // blijft — zie de klasse-kdoc hierboven voor waarom dat NIET
     // genormaliseerd wordt op de min/max-leeftijd binnen de huidige set.
     val pointBaseColor = MaterialTheme.colorScheme.onSurface
-    val pointMinAlpha = 0.12f
-    val pointMaxAlpha = 0.85f
+    // RONDE 245 — punten waren nauwelijks te zien (alpha 0,12 en macht 4).
+    val pointMinAlpha = 0.6f
+    val pointMaxAlpha = 1.0f
     val selectedColor = MaterialTheme.colorScheme.primary
+    val pointRingColor = MaterialTheme.colorScheme.surface
+    val inactiveColor = Color(0xFFD0D3D9).copy(alpha = 0.8f)
+    val inactiveSelectedRing = Color(0xFFE6E8EC)
     val curveColor = MaterialTheme.colorScheme.primary
     val refLineColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
 
@@ -948,7 +1028,8 @@ private fun CalibrationScatterChart(
             val plotWidth = (plotRight - plotLeft).coerceAtLeast(1f)
             val plotHeight = (plotBottom - plotTop).coerceAtLeast(1f)
 
-            val allValues = (entries.flatMap { listOf(it.sensorMgdlAtPairing, it.fingerstickMgdl) })
+            val allValues = (entries.flatMap { listOf(it.sensorMgdlAtPairing, it.fingerstickMgdl) } +
+                inactive.flatMap { listOf(it.sensorMgdlAtPairing, it.fingerstickMgdl) })
                 .ifEmpty { listOf(72.0, 216.0) } // 4.0 - 12.0 mmol default venster
             val loMgdl = (allValues.min() - 36.0).coerceAtLeast(36.0)
             val hiMgdl = allValues.max() + 36.0
@@ -1028,7 +1109,7 @@ private fun CalibrationScatterChart(
             var prev: Offset? = null
             for (i in 0..steps) {
                 val x = loMgdl + span * i / steps
-                val y = activeCalibratedMgdl(x, mode, linearFit, splineFit, manualOffsetMgdl)
+                val y = activeCalibratedMgdl(x, mode, linearFit, splineFit, manualOffsetMgdl, manual)
                 val point = Offset(xPx(x), yPx(y))
                 if (prev != null) {
                     drawLine(curveColor, prev, point, strokeWidth = 4f, cap = StrokeCap.Round)
@@ -1040,26 +1121,40 @@ private fun CalibrationScatterChart(
             // basiskleur ([pointBaseColor]); alleen de TRANSPARANTIE
             // verandert met het tijd-vervalgewicht (weightFor(), zie kdoc
             // hierboven), niet hun relatieve positie in de huidige lijst.
-            for (entry in entries) {
+            // Het geselecteerde punt als laatste, zodat het bovenop ligt.
+            // RONDE 245 — uitgevinkte en automatisch overgeslagen punten ook tonen, in grijs
+            // (ze tellen niet mee in de curve). Volgorde: grijs, actief, geselecteerde als laatste.
+            val greyPoints = inactive.map { it.id to (it.sensorMgdlAtPairing to it.fingerstickMgdl) } +
+                entries.filter { it.id in skippedIds }.map { it.id to (it.sensorMgdlAtPairing to it.fingerstickMgdl) }
+            val activePoints = entries.filter { it.id !in skippedIds }
+            for ((id, xy) in greyPoints.sortedBy { it.first == selectedEntryId }) {
+                val isSelected = id == selectedEntryId
+                val center = Offset(xPx(xy.first), yPx(xy.second))
+                // Een kruisje (×) i.p.v. een stip: de vorm valt op, ook als de kleur op wit lijkt.
+                val half = if (isSelected) 13f else 8f
+                val width = if (isSelected) 4f else 3f
+                if (isSelected) {
+                    drawCircle(color = inactiveSelectedRing, radius = half + 5f, center = center, style = Stroke(width = 2f))
+                }
+                drawLine(inactiveColor, Offset(center.x - half, center.y - half), Offset(center.x + half, center.y + half), strokeWidth = width, cap = StrokeCap.Round)
+                drawLine(inactiveColor, Offset(center.x - half, center.y + half), Offset(center.x + half, center.y - half), strokeWidth = width, cap = StrokeCap.Round)
+            }
+            for (entry in activePoints.sortedBy { it.id == selectedEntryId }) {
                 val isSelected = entry.id == selectedEntryId
                 val color = if (isSelected) {
                     selectedColor
                 } else {
                     val weight = weightFor(entry.timestampMs, now)
                     val normalized = ((weight - 0.10) / 0.90).coerceIn(0.0, 1.0)
-                    // Vierde macht — zie kdoc hierboven: versterkt het
-                    // zichtbare verschil tussen bv. "2 uur oud" en "14 uur
-                    // oud", die met een lineaire mapping bij τ=2 dagen bijna
-                    // niet uit elkaar te houden waren.
-                    val amplified = normalized.pow(4)
-                    val alpha = (pointMinAlpha + (pointMaxAlpha - pointMinAlpha) * amplified).toFloat()
+                    val alpha = (pointMinAlpha + (pointMaxAlpha - pointMinAlpha) * normalized).toFloat()
                     pointBaseColor.copy(alpha = alpha)
                 }
-                drawCircle(
-                    color = color,
-                    radius = if (isSelected) 10f else 6f,
-                    center = Offset(xPx(entry.sensorMgdlAtPairing), yPx(entry.fingerstickMgdl))
-                )
+                val center = Offset(xPx(entry.sensorMgdlAtPairing), yPx(entry.fingerstickMgdl))
+                drawCircle(color = color, radius = if (isSelected) 13f else 9f, center = center)
+                if (!isSelected) {
+                    // Dunne rand in de achtergrondkleur, zodat punten ook op de lijn of het raster te zien zijn.
+                    drawCircle(color = pointRingColor, radius = 9f, center = center, style = Stroke(width = 2f))
+                }
             }
         }
     }

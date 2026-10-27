@@ -41,7 +41,7 @@ data class CalibrationResult(
  * `manualOffsetMgdl` wordt ALTIJD als laatste stap opgeteld, ook als er geen
  * fit beschikbaar is (zie klasse-kdoc hierboven).
  */
-fun computeCalibration(
+private fun computeCalibrationBase(
     sensorMgdl: Double,
     allEntries: List<CalibrationEntry>,
     mode: CalibrationMode,
@@ -126,4 +126,26 @@ fun computeCalibration(
             splineFailureReason = splineResult.reason
         )
     }
+}
+
+/**
+ * RONDE 245 — zelfde als de berekening hierboven, met daarna de handmatige
+ * hellingen ([ManualCalibration.slope] enz.). De offset zit al in
+ * [manualOffsetMgdl]. Bij een neutrale instelling is het resultaat identiek.
+ * De hellingen draaien om het knikpunt van de spline (of 100 mg/dL), dus er
+ * is geen sprong in de uitkomst.
+ */
+fun computeCalibration(
+    sensorMgdl: Double,
+    allEntries: List<CalibrationEntry>,
+    mode: CalibrationMode,
+    manual: ManualCalibration,
+    manualOffsetMgdl: Double,
+    now: Long,
+    forcedEntryIds: Set<Long> = emptySet()
+): CalibrationResult {
+    val base = computeCalibrationBase(sensorMgdl, allEntries, mode, manualOffsetMgdl, now, forcedEntryIds)
+    if (manual.slopesNeutral) return base
+    val pivot = if (mode == CalibrationMode.SPLINE) base.splineFit?.knotY ?: MANUAL_SLOPE_PIVOT_MGDL else MANUAL_SLOPE_PIVOT_MGDL
+    return base.copy(calibratedMgdl = manual.applySlopes(base.calibratedMgdl, mode, pivot))
 }

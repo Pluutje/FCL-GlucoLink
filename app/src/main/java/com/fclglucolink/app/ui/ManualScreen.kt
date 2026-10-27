@@ -1263,6 +1263,29 @@ enum class ManualTopic(
                     "vaste offset."
             ),
             ManualSection(
+                headingEn = "Manual correction",
+                headingNl = "Handmatige correctie",
+                bodyEn = "Under the chart, the Calibration screen has two tabs. " +
+                    "\"Automatic\" shows your fingerstick entries. \"Manual\" " +
+                    "has sliders that work on top of the fingerstick fit, " +
+                    "also when you have no fingersticks: an offset (shift) " +
+                    "and a slope. With Linear there is one slope. With Spline " +
+                    "there is one slope for the low part and one for the high " +
+                    "part, both around the knot of the curve. The slope is " +
+                    "limited to 0.80 - 1.20. Everything on this tab is reset " +
+                    "when a new sensor starts.",
+                bodyNl = "Onder de grafiek heeft het Kalibratie-scherm twee " +
+                    "tabbladen. \"Automatisch\" toont je vingerprikwaarden. " +
+                    "\"Handmatig\" heeft schuiven die bovenop de fit van de " +
+                    "vingerprikken werken, ook als je geen vingerprikken hebt: " +
+                    "een offset (verschuiving) en een helling. Bij Lineair is " +
+                    "er één helling. Bij Spline is er een helling voor het " +
+                    "lage deel en een voor het hoge deel, allebei rond het " +
+                    "knikpunt van de curve. De helling is beperkt tot " +
+                    "0,80 - 1,20. Alles op dit tabblad wordt gereset zodra " +
+                    "een nieuwe sensor start."
+            ),
+            ManualSection(
                 headingEn = "Smoothing",
                 headingNl = "Filtering",
                 bodyEn = "Leave it on for day-to-day looping; only turn it off " +

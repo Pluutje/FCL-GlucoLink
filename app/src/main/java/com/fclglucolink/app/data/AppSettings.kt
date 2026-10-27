@@ -14,6 +14,8 @@ import com.fclglucolink.app.alarm.AlarmAlertMode
 import com.fclglucolink.app.alarm.AlarmEscalation
 import com.fclglucolink.app.alarm.AlarmType
 import com.fclglucolink.app.calibration.CalibrationMode
+import com.fclglucolink.app.calibration.ManualCalibration
+import com.fclglucolink.app.calibration.manualCalibrationStillValid
 import com.fclglucolink.app.sensor.SensorSlot
 import com.fclglucolink.app.sensor.SensorType
 import com.fclglucolink.app.sensor.caresensair.CareSensAirScanResult
@@ -438,16 +440,37 @@ class AppSettings(private val context: Context) {
     private fun parseCalibrationMode(raw: String?): CalibrationMode =
         runCatching { raw?.let { CalibrationMode.valueOf(it) } }.getOrNull() ?: CalibrationMode.SPLINE
 
-    fun calibrationManualOffsetMmol(slot: SensorSlot): Flow<Double> = context.dataStore.data.map { prefs ->
-        prefs[slotDouble("calibration_manual_offset_mmol", slot)] ?: 0.0
+    // RONDE 245 — handmatige correctie (offset + hellingen) per slot. De opslag
+    // draagt de sensorstarttijd mee waarmee hij is ingesteld: hoort de huidige
+    // sensor daar niet meer bij (nieuwe sensor), dan telt alles weer als neutraal.
+    private fun readManualCalibration(prefs: Preferences, slot: SensorSlot, sessionStartMs: Long): ManualCalibration {
+        if (!manualCalibrationStillValid(prefs[slotLong("calibration_manual_session_ms", slot)], sessionStartMs)) {
+            return ManualCalibration()
+        }
+        return ManualCalibration(
+            offsetMmol = prefs[slotDouble("calibration_manual_offset_mmol", slot)] ?: 0.0,
+            slope = prefs[slotDouble("calibration_manual_slope", slot)] ?: 1.0,
+            slopeLow = prefs[slotDouble("calibration_manual_slope_low", slot)] ?: 1.0,
+            slopeHigh = prefs[slotDouble("calibration_manual_slope_high", slot)] ?: 1.0
+        )
     }
 
-    suspend fun setCalibrationManualOffsetMmol(slot: SensorSlot, value: Double) {
-        context.dataStore.edit { prefs -> prefs[slotDouble("calibration_manual_offset_mmol", slot)] = value }
-    }
+    fun calibrationManual(slot: SensorSlot, sessionStartMs: Long): Flow<ManualCalibration> =
+        context.dataStore.data.map { prefs -> readManualCalibration(prefs, slot, sessionStartMs) }
 
-    suspend fun getCalibrationManualOffsetMmolOnce(slot: SensorSlot): Double =
-        context.dataStore.data.first()[slotDouble("calibration_manual_offset_mmol", slot)] ?: 0.0
+    suspend fun getCalibrationManualOnce(slot: SensorSlot, sessionStartMs: Long): ManualCalibration =
+        readManualCalibration(context.dataStore.data.first(), slot, sessionStartMs)
+
+    suspend fun setCalibrationManual(slot: SensorSlot, sessionStartMs: Long, value: ManualCalibration) {
+        context.dataStore.edit { prefs ->
+            prefs[slotDouble("calibration_manual_offset_mmol", slot)] = value.offsetMmol
+            prefs[slotDouble("calibration_manual_slope", slot)] = value.slope
+            prefs[slotDouble("calibration_manual_slope_low", slot)] = value.slopeLow
+            prefs[slotDouble("calibration_manual_slope_high", slot)] = value.slopeHigh
+            if (sessionStartMs > 0L) prefs[slotLong("calibration_manual_session_ms", slot)] = sessionStartMs
+            else prefs.remove(slotLong("calibration_manual_session_ms", slot))
+        }
+    }
 
     val smoothingEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[Keys.SMOOTHING_ENABLED] ?: false
