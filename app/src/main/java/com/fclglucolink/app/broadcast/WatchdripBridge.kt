@@ -180,7 +180,18 @@ object WatchdripBridge {
                 } else {
                     buildBgBundle(context, snapshot, registration)
                 }
-                send(context, CMD_UPDATE_BG, pkg, bundle)
+                // RONDE 246 — het antwoord op update_bg_force moet zelf ook "update_bg_force" heten.
+                // WatchDrip+ stopt alleen dan zijn 10-seconden-timer; met "update_bg" kwam de
+                // waarde wel aan, maar verscheen "No response from xdrip app" en ging er niets
+                // door naar de band (zie xDripReceiver in WatchDrip+).
+                send(context, CMD_UPDATE_BG_FORCE, pkg, bundle)
+                DiagnosticFileLogger.log(
+                    "$TAG: antwoord $CMD_UPDATE_BG_FORCE gestuurd naar $pkg " +
+                        if (bundle.containsKey("bg.valueMgdl")) {
+                            "(waarde ${"%.0f".format(bundle.getDouble("bg.valueMgdl"))} mg/dL, " +
+                                "${snapshot?.readings?.size ?: 0} metingen)"
+                        } else "(geen metingen beschikbaar, lege waarde)"
+                )
             }
         }
     }

@@ -1,0 +1,3 @@
+WatchDrip+: de melding "No response from xdrip app" is opgelost. WatchDrip+ vroeg om een waarde en kreeg die wel, maar het antwoord had de verkeerde naam, dus WatchDrip+ dacht dat er niets kwam en stuurde niets door naar de Mi Band. Nu klopt het antwoord. De communicatie met WatchDrip+ staat ook uitgebreider in het logbestand.
+---EN---
+WatchDrip+: the "No response from xdrip app" message is fixed. WatchDrip+ asked for a value and got it, but the reply had the wrong name, so WatchDrip+ thought nothing arrived and sent nothing to the Mi Band. The reply is now correct. The communication with WatchDrip+ is also logged in more detail.
