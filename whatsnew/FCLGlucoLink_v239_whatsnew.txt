@@ -1,0 +1,3 @@
+WatchDrip+: het bericht aan WatchDrip+ bevat nu ook het veld pumpJSON (leeg), zoals xDrip dat doet.
+---EN---
+WatchDrip+: the message to WatchDrip+ now also includes the pumpJSON field (empty), like xDrip does.

@@ -228,6 +228,10 @@ object WatchdripBridge {
             putLong("bg.timeStamp", latest.timestampMs)
             putBoolean("bg.isStale", now - latest.timestampMs > STALE_AFTER_MS)
             putString("bg.plugin", "FCLGlucoLink")
+            // RONDE 247 — WatchDrip+ leest pumpJSON zonder te controleren of het er is: ontbreekt het,
+            // dan stopt het maken van het wijzerplaatje met een fout en blijft de band op de oude
+            // waarde staan. Een lege JSON is veilig (alle velden worden dan overgeslagen).
+            putString("pumpJSON", "{}")
             putDouble("bg.deltaValueMgdl", deltaPer5Min)
             if (registration.displayGraph) addGraph(this, snapshot, registration, now)
         }
