@@ -242,6 +242,12 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
     // en of de transmitter ooit antwoordde op het inlogverzoek).
     @Volatile private var connectedAtElapsedMs: Long = 0L
     @Volatile private var authReplyReceived = false
+    // RONDE 248 — in het log van een gebruiker kwam de login-uitdaging (opcode 3) en de
+    // login-status (opcode 5) twee keer binnen, waardoor het inloggen en de control-reeks
+    // dubbel liepen en de transmitter de verbinding afbrak (status 257). Per verbinding
+    // behandelen we elke stap daarom maar één keer.
+    private var authChallengeHandled = false
+    private var authReady = false
 
     companion object {
         // 10/08/2026 (editor, RONDE 85 — op verzoek, na live-log-analyse dat
@@ -479,6 +485,8 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
     private fun resetAuthState() {
         myAuthToken = null
         authenticated = false
+        authChallengeHandled = false
+        authReady = false
         bonded = false
         pendingSessionStartDeferred?.complete(null)
         pendingBatteryDeferred?.complete(null)
@@ -898,6 +906,8 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
                 BluetoothProfile.STATE_CONNECTED -> {
                     connectedAtElapsedMs = SystemClock.elapsedRealtime()
                     authReplyReceived = false
+                    authChallengeHandled = false
+                    authReady = false
                     DiagnosticFileLogger.log(
                         "DexcomG6: verbonden, bondState=${bondStateName(gatt.device.bondState)}"
                     )
@@ -1085,6 +1095,11 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
             )
             when (opcode) {
                 0x03 -> {
+                    if (authChallengeHandled) {
+                        DiagnosticFileLogger.log("DexcomG6: tweede login-uitdaging genegeerd (al beantwoord)")
+                        return
+                    }
+                    authChallengeHandled = true
                     val challenge = DexcomG6Protocol.parseAuthChallenge(value) ?: return
                     val key = DexcomG6Crypto.deriveKey(transmitterId)
                     val hash = DexcomG6Crypto.calculateChallengeHash(challenge.challenge, key)
@@ -1093,6 +1108,10 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
                 }
                 0x05 -> {
                     val status = DexcomG6Protocol.parseAuthStatus(value) ?: return
+                    if (authReady) {
+                        DiagnosticFileLogger.log("DexcomG6: tweede login-status genegeerd (al ingelogd, authenticated=${status.authenticated})")
+                        return
+                    }
                     authenticated = status.authenticated
                     bonded = status.bonded
                     DiagnosticFileLogger.log("DexcomG6: auth status authenticated=$authenticated bonded=$bonded")
@@ -1108,6 +1127,7 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
                         pendingAfterBond = { onAuthAndBondReady(gatt) }
                         runCatching { gatt.device.createBond() }
                     } else {
+                        authReady = true
                         onAuthAndBondReady(gatt)
                     }
                 }

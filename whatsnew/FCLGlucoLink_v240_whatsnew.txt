@@ -1,0 +1,3 @@
+Dexcom G6: een tweede login-uitdaging of login-status binnen dezelfde verbinding wordt nu genegeerd, zodat het inloggen niet dubbel loopt.
+---EN---
+Dexcom G6: a second login challenge or login status within the same connection is now ignored, so the login does not run twice.
