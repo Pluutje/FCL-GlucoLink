@@ -75,7 +75,9 @@ internal object GitHubApi {
             val responseCode = connection.responseCode
             if (responseCode != HttpURLConnection.HTTP_OK) {
                 val errorBody = connection.errorStream?.bufferedReader()?.use { it.readText() }
-                throw IllegalStateException("GitHub returned HTTP $responseCode: ${errorBody ?: "no body"}")
+                // Bij een storing geeft GitHub een volledige HTML-pagina terug; die tonen we niet.
+                val detail = errorBody?.takeIf { !it.trimStart().startsWith("<") }?.take(200)
+                throw IllegalStateException("GitHub returned HTTP $responseCode" + (detail?.let { ": $it" } ?: ""))
             }
 
             val array = org.json.JSONArray(connection.inputStream.bufferedReader().use { it.readText() })

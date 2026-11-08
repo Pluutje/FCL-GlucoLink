@@ -1,0 +1,3 @@
+Instelling "Automatisch opnieuw koppelen" verwijderd. Nieuw: als er lang geen meting binnenkomt, controleert de app of een andere app (bv. xDrip+, Juggluco, Dexcom, CareSens) de sensor kan vasthouden en meldt dat. Foutmelding "Andere versies" toont bij een GitHub-storing geen HTML meer.
+---EN---
+"Automatic re-pair" setting removed. New: when no reading arrives for a while, the app checks whether another app (e.g. xDrip+, Juggluco, Dexcom, CareSens) may be holding the sensor and says so. The "Other versions" error no longer shows HTML on a GitHub outage.
