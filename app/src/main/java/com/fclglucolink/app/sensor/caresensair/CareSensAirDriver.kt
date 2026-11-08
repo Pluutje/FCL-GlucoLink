@@ -29,7 +29,6 @@ import com.fclglucolink.app.sensor.SensorSlot
 import com.fclglucolink.app.sensor.SensorType
 import com.fclglucolink.app.sensor.ble.AapsSlotSchedule
 import com.fclglucolink.app.sensor.ble.ActiveWorkWakeLock
-import com.fclglucolink.app.sensor.ble.BondLossRecovery
 import com.fclglucolink.app.sensor.ble.PredictiveReconnectAlarm
 import com.fclglucolink.app.sensor.ble.ScanRateLimiter
 import kotlinx.coroutines.CoroutineScope
@@ -423,12 +422,6 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
     // bluetoothGatt al bestaat.
     private var pendingAfterBondForConnect: (() -> Unit)? = null
 
-    /** 08/08/2026 (editor, RONDE 57) — zie BondLossRecovery.kt's kdoc en
-     *  AppSettings.bondLossAutoRecoveryEnabled's kdoc: eenmalig gelezen in
-     *  connect(), gebruikt in startConnectScan()'s scan-resultaat vlak vóór
-     *  connectGatt(). Blijft false zolang er nog nooit eerder succesvol
-     *  verbonden is met dit toestel — zie de voorwaarde daar. */
-    private var bondLossAutoRecoveryEnabled: Boolean = false
 
     private fun bluetoothAdapter(context: Context): BluetoothAdapter? =
         (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
@@ -491,13 +484,6 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
         // nodig op de synchrone BLE-callback-thread zelf.
         scope.launch {
             sensorStartedAtMsUnknown = settings.careSensAirSensorStartedAtMs(slot).first() == null
-            // 08/08/2026 (editor, RONDE 57) — zie BondLossRecovery.kt's
-            // kdoc: alleen "aan" als de gebruiker de schakelaar heeft
-            // aangezet ÉN er al eerder succesvol verbonden is met dit
-            // toestel (anders is een verse BOND_NONE gewoon normaal, geen
-            // "verlies").
-            bondLossAutoRecoveryEnabled = settings.isBondLossAutoRecoveryEnabledOnce() &&
-                settings.getCareSensAirLastConnectedAtMsOnce(slot) != null
         }
 
         // 01/08/2026 (editor) — de kalibratiebibliotheek moet vóór de
@@ -1011,27 +997,7 @@ class CareSensAirDriver(private val slot: SensorSlot) : SensorDriver {
                     // (CONNECTION_PRIORITY_HIGH)` aanroept.
                     runCatching { gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH) }
                 }
-                // 08/08/2026 (editor, RONDE 57) — zie BondLossRecovery.kt's
-                // kdoc: alleen relevant als de schakelaar aan staat EN we al
-                // eerder succesvol verbonden waren (zie
-                // bondLossAutoRecoveryEnabled's zetting in connect()).
-                if (bondLossAutoRecoveryEnabled && BondLossRecovery.isBondMissing(result.device)) {
-                    pendingAfterBondForConnect = { proceedToConnect() }
-                    BondLossRecovery.attemptRecovery(result.device, "CareSensAir")
-                    // Terugvalpad: als BOND_BONDED niet binnen 15s terugkomt
-                    // (herstel mislukt/duurt te lang), alsnog gewoon
-                    // verbinden — niet slechter dan het gedrag vóór deze
-                    // functie bestond.
-                    scope.launch {
-                        delay(15_000L)
-                        if (pendingAfterBondForConnect != null) {
-                            pendingAfterBondForConnect = null
-                            proceedToConnect()
-                        }
-                    }
-                } else {
-                    proceedToConnect()
-                }
+                proceedToConnect()
             }
             override fun onScanFailed(errorCode: Int) {
                 if (resolved) return

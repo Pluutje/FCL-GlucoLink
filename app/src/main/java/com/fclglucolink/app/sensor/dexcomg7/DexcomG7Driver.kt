@@ -29,7 +29,6 @@ import com.fclglucolink.app.sensor.SensorSlot
 import com.fclglucolink.app.sensor.SensorType
 import com.fclglucolink.app.sensor.ble.AapsSlotSchedule
 import com.fclglucolink.app.sensor.ble.ActiveWorkWakeLock
-import com.fclglucolink.app.sensor.ble.BondLossRecovery
 import com.fclglucolink.app.sensor.ble.GattExclusivityGate
 import com.fclglucolink.app.sensor.ble.PredictiveReconnectAlarm
 import com.fclglucolink.app.sensor.ble.ScanRateLimiter
@@ -166,8 +165,6 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
     private var appContext: Context? = null
 
     private var pairingCode: String = ""
-
-    private var bondLossAutoRecoveryEnabled: Boolean = false
 
     private var charControl: BluetoothGattCharacteristic? = null
     private var charAuthentication: BluetoothGattCharacteristic? = null
@@ -628,8 +625,6 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
                 return@launch
             }
             sensorStartedAtMs = settings.getOrInitSensorStartedAtMs(slot)
-            bondLossAutoRecoveryEnabled = settings.isBondLossAutoRecoveryEnabledOnce() &&
-                    settings.getDexcomG7LastConnectedAtMsOnce(slot) != null
 
             // 25/09/2026 (editor, RONDE 184) — laad een eventueel opgeslagen
             // sessiesleutel meteen bij het opstarten van deze driver-
@@ -980,19 +975,7 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
                     // vóór de J-PAKE-authenticatie (log: "Pairing → Unpaired" binnen 1 s,
                     // elke scan opnieuw, wat de rustperiode van de sensor verstoort).
                     // De bonding hoort via de handshake zelf te lopen (Ronde 141).
-                    if (G7_PRE_HANDSHAKE_BOND_RECOVERY && bondLossAutoRecoveryEnabled && BondLossRecovery.isBondMissing(result.device)) {
-                        pendingAfterBond = { connectToDevice(scope, appCtx, result.device, settings) }
-                        BondLossRecovery.attemptRecovery(result.device, "DexcomG7")
-                        scope.launch {
-                            delay(15_000L)
-                            if (pendingAfterBond != null) {
-                                pendingAfterBond = null
-                                connectToDevice(scope, appCtx, result.device, settings)
-                            }
-                        }
-                    } else {
-                        connectToDevice(scope, appCtx, result.device, settings)
-                    }
+                    connectToDevice(scope, appCtx, result.device, settings)
                 }
             }
             override fun onScanFailed(errorCode: Int) {

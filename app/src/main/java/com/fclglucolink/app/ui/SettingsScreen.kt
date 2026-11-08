@@ -141,8 +141,6 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit, onOpenAbout: ()
     // SMOOTHING_SHOW_PIPELINE_ON_MAIN_SCREEN en StatusScreen.kt's
     // SlotStatusContent voor waar dit uiteindelijk gelezen wordt.
     val showFilteredPipelineOnMainScreen by settings.showFilteredPipelineOnMainScreen.collectAsState(initial = false)
-    // 08/08/2026 (editor, RONDE 57) — zie sensor/ble/BondLossRecovery.kt's kdoc.
-    val bondLossAutoRecoveryEnabled by settings.bondLossAutoRecoveryEnabled.collectAsState(initial = false)
 
     Scaffold(
         topBar = {
@@ -998,77 +996,6 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit, onOpenAbout: ()
                             checked = predictionEnabled,
                             onCheckedChange = { enabled ->
                                 scope.launch { settings.setPredictionEnabled(enabled) }
-                            }
-                        )
-                    }
-                }
-            }
-
-            // 08/08/2026 (editor, RONDE 57, op verzoek om, in plaats van
-            // handmatig opnieuw koppelen, de app dit automatisch te laten
-            // doen) — geldt voor beide sensoren
-            // (CareSens Air + Dexcom G6), zie
-            // sensor/ble/BondLossRecovery.kt's kdoc voor het volledige
-            // verhaal, inclusief het OS-brede removeBond()-risico.
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(tr("Automatic re-pair", "Automatisch opnieuw koppelen"), style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        tr(
-                            "If the phone's Bluetooth pairing with your sensor/transmitter is " +
-                                "unexpectedly lost after it worked before (some Android phones do " +
-                                "this to other apps' sensors too), FCLGlucoLink will try to " +
-                                "silently re-pair instead of waiting for you to reconnect " +
-                                "manually. Only acts when a previous successful connection is on " +
-                                "record — never on a brand-new, never-yet-paired sensor.",
-                            "Als de Bluetooth-koppeling van de telefoon met je " +
-                                "sensor/transmitter onverwacht verdwijnt nadat " +
-                                "die eerder werkte (sommige Android-toestellen " +
-                                "doen dit ook bij sensoren van andere apps), " +
-                                "probeert FCLGlucoLink stilletjes opnieuw te " +
-                                "koppelen in plaats van te wachten tot jij " +
-                                "handmatig opnieuw verbindt. Grijpt alleen in " +
-                                "als er een eerdere geslaagde verbinding " +
-                                "geregistreerd staat — nooit bij een " +
-                                "gloednieuwe, nog nooit gekoppelde sensor."
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.secondary
-                    )
-                    Text(
-                        tr(
-                            "This removes and re-creates the phone's Bluetooth pairing, which " +
-                                "affects the whole phone, not just this app — if another app " +
-                                "(e.g. xDrip+) is also paired with the same sensor, its pairing " +
-                                "breaks too. Every attempt is written to the diagnostic log.",
-                            "Dit verwijdert en herbouwt de Bluetooth-koppeling " +
-                                "van de telefoon, wat de hele telefoon " +
-                                "beïnvloedt, niet alleen deze app — als een " +
-                                "andere app (bv. xDrip+) ook gekoppeld is met " +
-                                "dezelfde sensor, breekt die koppeling ook. " +
-                                "Elke poging wordt in het diagnostieklogboek " +
-                                "vastgelegd."
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(tr("Enable automatic re-pair", "Automatisch opnieuw koppelen inschakelen"), style = MaterialTheme.typography.bodyMedium)
-                        Switch(
-                            checked = bondLossAutoRecoveryEnabled,
-                            onCheckedChange = { enabled ->
-                                scope.launch { settings.setBondLossAutoRecoveryEnabled(enabled) }
                             }
                         )
                     }

@@ -29,7 +29,6 @@ import com.fclglucolink.app.sensor.SensorSlot
 import com.fclglucolink.app.sensor.SensorType
 import com.fclglucolink.app.sensor.ble.AapsSlotSchedule
 import com.fclglucolink.app.sensor.ble.ActiveWorkWakeLock
-import com.fclglucolink.app.sensor.ble.BondLossRecovery
 import com.fclglucolink.app.sensor.ble.GattExclusivityGate
 import com.fclglucolink.app.sensor.ble.PredictiveReconnectAlarm
 import com.fclglucolink.app.sensor.ble.ScanRateLimiter
@@ -144,13 +143,6 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
 
     private var transmitterId: String = ""
 
-    /** 08/08/2026 (editor, RONDE 57) — zie BondLossRecovery.kt's kdoc en
-     *  AppSettings.bondLossAutoRecoveryEnabled's kdoc: eenmalig gelezen in
-     *  connect() (samen met transmitterId hieronder), gebruikt in
-     *  startConnectScan()'s scan-resultaat vlak vóór connectGatt(). Al
-     *  false als er nog nooit eerder succesvol verbonden is met dit
-     *  toestel — zie de voorwaarde daar. */
-    private var bondLossAutoRecoveryEnabled: Boolean = false
 
     private var charControl: BluetoothGattCharacteristic? = null
     private var charAuthentication: BluetoothGattCharacteristic? = null
@@ -449,13 +441,6 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
             // getOrInitSensorStartedAtMs(): generieke fallback, net als
             // G7/SmartGuide zolang die niet geport zijn.
             sensorStartedAtMs = settings.getOrInitSensorStartedAtMs(slot)
-            // 08/08/2026 (editor, RONDE 57) — zie BondLossRecovery.kt's
-            // kdoc: alleen "aan" als de gebruiker de schakelaar heeft
-            // aangezet ÉN er al eerder succesvol verbonden is met dit
-            // toestel (anders is een verse BOND_NONE gewoon normaal, geen
-            // "verlies").
-            bondLossAutoRecoveryEnabled = settings.isBondLossAutoRecoveryEnabledOnce() &&
-                settings.getDexcomG6LastConnectedAtMsOnce(slot) != null
         }
 
         val adapter = bluetoothAdapter(context)
@@ -737,27 +722,7 @@ class DexcomG6Driver(private val slot: SensorSlot) : SensorDriver {
                     resolved = true
                     runCatching { scanner.stopScan(this) }
                     connectScanCallback = null
-                    // 08/08/2026 (editor, RONDE 57) — zie BondLossRecovery.kt's
-                    // kdoc: alleen relevant als de schakelaar aan staat EN we
-                    // al eerder succesvol verbonden waren (zie
-                    // bondLossAutoRecoveryEnabled's zetting in connect()).
-                    if (bondLossAutoRecoveryEnabled && BondLossRecovery.isBondMissing(result.device)) {
-                        pendingAfterBond = { connectToDevice(scope, appCtx, result.device, settings) }
-                        BondLossRecovery.attemptRecovery(result.device, "DexcomG6")
-                        // Terugvalpad: als BOND_BONDED niet binnen 15s
-                        // terugkomt (herstel mislukt/duurt te lang), alsnog
-                        // gewoon verbinden — niet slechter dan het gedrag
-                        // vóór deze functie bestond.
-                        scope.launch {
-                            delay(15_000L)
-                            if (pendingAfterBond != null) {
-                                pendingAfterBond = null
-                                connectToDevice(scope, appCtx, result.device, settings)
-                            }
-                        }
-                    } else {
-                        connectToDevice(scope, appCtx, result.device, settings)
-                    }
+                    connectToDevice(scope, appCtx, result.device, settings)
                 }
             }
             override fun onScanFailed(errorCode: Int) {

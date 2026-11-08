@@ -21,6 +21,10 @@
          gevonden"-log) en er wordt nooit een broadcast verstuurd. Bewust op
          actie i.p.v. pakketnaam (geen enkele AAPS-fork hardcoded, past bij
          het bestaande ontwerp van XDripBroadcaster). -->
+    <!-- Lets CompetingAppDetector see all installed apps, to warn about other
+         CGM apps (xDrip+, Juggluco, Dexcom) that can take over the sensor connection. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+
     <queries>
         <intent>
             <action android:name="com.eveningoutpost.dexdrip.BgEstimate" />

@@ -243,6 +243,11 @@ class BleConnectionService : Service() {
         // RONDE 230 — eenkleurig klein pictogram (ring + BG + pijl) voor statusbalk/gedimd lockscreen.
         var latestSmallIconBitmap: Bitmap? = null
         val smoother = KalmanSmoother()
+        // Detectie van concurrerende apps (CompetingAppDetector).
+        var sessionStartedAtMs: Long = 0L
+        var lastCompetingCheckMs: Long = 0L
+        var competingHits: Int = 0
+        var lastCompetingNotifyMs: Long = 0L
     }
 
     private val slotRuntimes: Map<SensorSlot, SlotRuntime> =
@@ -485,6 +490,7 @@ class BleConnectionService : Service() {
         runtime.driver = null
         runtime.activeSensorType = sensorType
         runtime.activeDeviceAddress = deviceAddress
+        runtime.sessionStartedAtMs = System.currentTimeMillis()
 
         runtime.connectionJob = launch {
             val driver = SensorRegistry.createDriver(sensorType, slot)
@@ -502,6 +508,7 @@ class BleConnectionService : Service() {
                     runtime.lastConnectionState = state
                     refreshNotification()
                     ConnectionStatusBridge.update(slot, state)
+                    checkCompetingApps(slot, runtime, state)
                 }
             }
             // Elke meting -> opslag + AAPS-broadcast. sensorStartedAtMs
@@ -1210,6 +1217,61 @@ class BleConnectionService : Service() {
      * bestaat nog niet, dus opent dit gewoon de app (van waaruit About via
      * het bestaande menu bereikbaar is).
      */
+    /**
+     * Als er al ruim 15 min geen meting is en de driver niet verbonden is:
+     * kijk lokaal of een andere app de sensor kan kapen (zie
+     * CompetingAppDetector). Hoogstens elke 10 min; pas na 2 opeenvolgende
+     * verdachte controles komt er een melding (hoogstens 1x per 6 uur).
+     */
+    private suspend fun checkCompetingApps(slot: SensorSlot, runtime: SlotRuntime, state: ConnectionState) {
+        val type = runtime.activeSensorType ?: return
+        if (type != SensorType.CARESENS_AIR && type != SensorType.DEXCOM_G6 && type != SensorType.DEXCOM_G7) return
+        val now = System.currentTimeMillis()
+        val lastSignOfLife = if (runtime.latestReadingAtMs > 0L) runtime.latestReadingAtMs else runtime.sessionStartedAtMs
+        if (now - lastSignOfLife < COMPETING_STALE_MS) {
+            runtime.competingHits = 0
+            return
+        }
+        if (now - runtime.lastCompetingCheckMs < COMPETING_CHECK_INTERVAL_MS) return
+        runtime.lastCompetingCheckMs = now
+        val ownConnected = state is ConnectionState.Connected || state is ConnectionState.Connecting
+        val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            CompetingAppDetector.check(this@BleConnectionService, runtime.activeDeviceAddress, ownConnected)
+        }
+        CompetingAppDetector.logResult("slot ${slot.name}", result)
+        if (!result.suspicious) {
+            runtime.competingHits = 0
+            return
+        }
+        runtime.competingHits++
+        if (runtime.competingHits < 2 || now - runtime.lastCompetingNotifyMs < COMPETING_NOTIFY_INTERVAL_MS) return
+        runtime.lastCompetingNotifyMs = now
+        val nl = runCatching { settings.getAppLanguageOnce() == com.fclglucolink.app.ui.AppLanguage.DUTCH }.getOrDefault(false)
+        val apps = result.installedApps.joinToString(", ")
+        val title = if (nl) "Sensorverbinding verstoord" else "Sensor connection disturbed"
+        val text = when {
+            result.sensorHeldByOther && apps.isNotEmpty() ->
+                if (nl) "De sensor is verbonden met een andere app. Op deze telefoon staat ook: $apps. Sluit of verwijder die app."
+                else "The sensor is connected to another app. Also installed: $apps. Close or remove that app."
+            result.sensorHeldByOther ->
+                if (nl) "De sensor lijkt verbonden met een andere app op deze telefoon. Sluit die app."
+                else "The sensor seems connected to another app on this phone. Close that app."
+            else ->
+                if (nl) "Geen meting meer. Op deze telefoon staat ook: $apps. Zo'n app kan de sensorverbinding afpakken; sluit of verwijder die."
+                else "No readings. Also installed: $apps. Such an app can take over the sensor connection; close or remove it."
+        }
+        val openAppIntent = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        val notification = NotificationCompat.Builder(this, UPDATE_CHANNEL_ID)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setSmallIcon(android.R.drawable.stat_sys_warning)
+            .setContentIntent(openAppIntent)
+            .setAutoCancel(true)
+            .build()
+        getSystemService(NotificationManager::class.java).notify(COMPETING_NOTIFICATION_ID + slot.ordinal, notification)
+    }
+
     private fun notifyUpdateAvailable(fileName: String) {
         val openAppIntent = PendingIntent.getActivity(
             this, 0,
@@ -1421,6 +1483,10 @@ class BleConnectionService : Service() {
         // de permanente BLE-statusmelding (NOTIFICATION_ID=1) overschrijft.
         private const val UPDATE_CHANNEL_ID = "fclglucolink_updates"
         private const val UPDATE_NOTIFICATION_ID = 2
+        private const val COMPETING_NOTIFICATION_ID = 30
+        private const val COMPETING_STALE_MS = 15 * 60 * 1000L
+        private const val COMPETING_CHECK_INTERVAL_MS = 10 * 60 * 1000L
+        private const val COMPETING_NOTIFY_INTERVAL_MS = 6 * 60 * 60 * 1000L
 
         // 04/09/2026 (editor, RONDE 165) — zie de update-check-lus in
         // onCreate() hierboven: 12 uur, niet vaker — dit is een "is er een

@@ -45,7 +45,7 @@ import kotlinx.coroutines.flow.map
  *
  * Wat NIET per slot is (bewust gedeeld/globaal, ongewijzigd): de
  * app-brede togglegs calibrationEnabled/smoothingEnabled/
- * bondLossAutoRecoveryEnabled/batteryOptimizationLastPromptedAtMs — dat blijven, net als vandaag,
+ * batteryOptimizationLastPromptedAtMs — dat blijven, net als vandaag,
  * instellingen die voor de hele app gelden, niet per fysieke sensor.
  * (Kan later alsnog per-slot worden als daar behoefte aan blijkt; bewust
  * NIET vooruit-gebouwd zonder concreet verzoek.)
@@ -104,7 +104,6 @@ class AppSettings(private val context: Context) {
         // dezelfde reden als daar: dit is een algemene, sensor-onafhankelijke
         // instelling.
         val SMOOTHING_STRENGTH = stringPreferencesKey("smoothing_strength")
-        val BOND_LOSS_AUTO_RECOVERY_ENABLED = booleanPreferencesKey("bond_loss_auto_recovery_enabled")
 
         // 16/08/2026 (editor, RONDE 111) — instelbare filtering die de eerste
         // 2 dagen iets heftiger filtert en dan langzaam afbouwt, naar
@@ -580,17 +579,6 @@ class AppSettings(private val context: Context) {
 
     suspend fun isShowFilteredPipelineOnMainScreenOnce(): Boolean =
         context.dataStore.data.first()[Keys.SMOOTHING_SHOW_PIPELINE_ON_MAIN_SCREEN] ?: false
-
-    val bondLossAutoRecoveryEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[Keys.BOND_LOSS_AUTO_RECOVERY_ENABLED] ?: false
-    }
-
-    suspend fun setBondLossAutoRecoveryEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs -> prefs[Keys.BOND_LOSS_AUTO_RECOVERY_ENABLED] = enabled }
-    }
-
-    suspend fun isBondLossAutoRecoveryEnabledOnce(): Boolean =
-        context.dataStore.data.first()[Keys.BOND_LOSS_AUTO_RECOVERY_ENABLED] ?: false
 
     // ============================================================
     // Per-slot identiteit — welk sensortype/adres zit in deze slot
