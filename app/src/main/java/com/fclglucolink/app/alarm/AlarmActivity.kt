@@ -15,7 +15,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Slider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -44,6 +46,7 @@ import com.fclglucolink.app.ui.theme.FCLGlucoLinkTheme
 import com.fclglucolink.app.ui.tr
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /**
  * ============================================================================
@@ -69,11 +72,13 @@ import kotlinx.coroutines.launch
 class AlarmActivity : ComponentActivity() {
 
     private var alarmType by mutableStateOf<AlarmType?>(null)
+    private var openSnoozePicker by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setUpWakeScreenFlags()
         alarmType = parseAlarmType(intent)
+        openSnoozePicker = intent?.getBooleanExtra(EXTRA_OPEN_SNOOZE, false) == true
 
         setContent {
             // 01/10/2026 (editor, RONDE 196, op verzoek — een alarm moet
@@ -104,6 +109,7 @@ class AlarmActivity : ComponentActivity() {
                         } else {
                             AlarmContent(
                                 type = type,
+                                openSnoozeInitially = openSnoozePicker,
                                 onStop = {
                                     lifecycleScope.launch {
                                         AlarmController.stop(this@AlarmActivity, type)
@@ -128,6 +134,7 @@ class AlarmActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         alarmType = parseAlarmType(intent)
+        openSnoozePicker = intent.getBooleanExtra(EXTRA_OPEN_SNOOZE, false)
     }
 
     /** Zie klasse-kdoc. `setShowWhenLocked`/`setTurnScreenOn` (API 27+) zijn
@@ -156,19 +163,23 @@ class AlarmActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_ALARM_TYPE = "alarm_type"
+        const val EXTRA_OPEN_SNOOZE = "open_snooze"
     }
 }
 
 @Composable
-private fun AlarmContent(type: AlarmType, onStop: () -> Unit, onSnooze: (Int) -> Unit) {
+private fun AlarmContent(type: AlarmType, openSnoozeInitially: Boolean, onStop: () -> Unit, onSnooze: (Int) -> Unit) {
     val context = LocalContext.current
     val settings = remember { AppSettings(context) }
     val readingStore = remember { GlucoseReadingStore(context) }
     var latestReading by remember { mutableStateOf<GlucoseReading?>(null) }
     var displayUnit by remember { mutableStateOf(GlucoseUnit.MMOL) }
+    var showSnoozeDialog by remember(openSnoozeInitially) { mutableStateOf(openSnoozeInitially) }
+    var snoozeMinutes by remember { mutableStateOf(15) }
 
     LaunchedEffect(type) {
         displayUnit = settings.getDisplayUnitOnce()
+        snoozeMinutes = settings.getAlarmLastSnoozeMinutesOnce().coerceIn(15, AlarmController.maxSnoozeMinutes(type))
         val slot = settings.getAapsActiveSlotOnce()
         // 28/08/2026 (editor, RONDE 153, CRITIEKE FIX) — was
         // `sensorType = sensorType` (sensorType hier alleen nog gebruikt
@@ -200,15 +211,58 @@ private fun AlarmContent(type: AlarmType, onStop: () -> Unit, onSnooze: (Int) ->
         }
         Spacer(Modifier.height(40.dp))
         Button(onClick = onStop, modifier = Modifier.fillMaxWidth()) { Text(tr("Stop", "Stoppen")) }
-        Spacer(Modifier.height(24.dp))
-        Text(tr("Snooze", "Sluimeren"), style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(8.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(15, 30, 60).forEach { minutes ->
-                OutlinedButton(onClick = { onSnooze(minutes) }, modifier = Modifier.weight(1f)) {
-                    Text("$minutes min")
-                }
-            }
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(onClick = { showSnoozeDialog = true }, modifier = Modifier.fillMaxWidth()) {
+            Text(tr("Snooze…", "Sluimeren…"))
+        }
+        if (showSnoozeDialog) {
+            SnoozeDialogHost(
+                type = type,
+                minutes = snoozeMinutes,
+                onMinutesChange = { snoozeMinutes = it },
+                onDismiss = { showSnoozeDialog = false },
+                onConfirm = { showSnoozeDialog = false; onSnooze(snoozeMinutes) }
+            )
         }
     }
+}
+
+/** Schuif met stappen van 15 min; de bevestigknop toont de gekozen tijd. */
+@Composable
+private fun SnoozeDialogHost(
+    type: AlarmType,
+    minutes: Int,
+    onMinutesChange: (Int) -> Unit,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    val step = AlarmController.SNOOZE_STEP_MINUTES
+    val max = AlarmController.maxSnoozeMinutes(type)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(tr("Snooze for how long?", "Hoe lang sluimeren?")) },
+        text = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                Text("$minutes min", style = MaterialTheme.typography.headlineMedium)
+                Slider(
+                    value = minutes.toFloat(),
+                    onValueChange = { onMinutesChange(((it / step).roundToInt() * step).coerceIn(step, max)) },
+                    valueRange = step.toFloat()..max.toFloat(),
+                    steps = ((max - step) / step - 1).coerceAtLeast(0)
+                )
+                if (type == AlarmType.URGENT_LOW) {
+                    Text(
+                        tr("Urgent Low can be snoozed for 30 minutes at most.", "Urgent Low kan maximaal 30 minuten gesluimerd worden."),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onConfirm) { Text(tr("Snooze $minutes min", "Sluimer $minutes min")) }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) { Text(tr("Cancel", "Annuleren")) }
+        }
+    )
 }

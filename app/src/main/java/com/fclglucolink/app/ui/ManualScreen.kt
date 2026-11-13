@@ -1153,15 +1153,27 @@ enum class ManualTopic(
                 headingEn = "Stop and snooze",
                 headingNl = "Stoppen en snoozen",
                 bodyEn = "A firing alarm opens a full-screen alert with the " +
-                    "current BG value. \"Stop\" silences it for a while — " +
-                    "it isn't permanent, so it comes back on its own if " +
-                    "the situation hasn't improved. \"Snooze\" lets you " +
-                    "pick 15, 30, or 60 minutes instead.",
+                    "current BG value. \"Stop\" keeps the alarm quiet until the " +
+                    "value has recovered (a little beyond your limit); if it " +
+                    "then crosses the limit again, the alarm sounds again, " +
+                    "never within 15 minutes of the stop. Urgent Low is the " +
+                    "exception: it repeats after 30 minutes while the value " +
+                    "is still low. \"Snooze\" opens a slider (15 to 90 " +
+                    "minutes in steps of 15, Urgent Low at most 30) and " +
+                    "silences the alarm for that time. If the value recovers " +
+                    "and crosses the limit again during a snooze, the alarm " +
+                    "sounds again right away.",
                 bodyNl = "Een afgaand alarm opent een volledig-scherm-melding " +
-                    "met de huidige BG-waarde. \"Stop\" zet het een tijdje " +
-                    "stil — dat is niet permanent, dus het komt vanzelf " +
-                    "terug als de situatie niet verbeterd is. \"Snooze\" " +
-                    "laat je in plaats daarvan 15, 30, of 60 minuten kiezen."
+                    "met de huidige BG-waarde. \"Stop\" houdt het alarm stil " +
+                    "tot de waarde hersteld is (een stukje voorbij je grens); " +
+                    "passeert de waarde de grens daarna opnieuw, dan gaat " +
+                    "het alarm weer af, nooit binnen 15 minuten na de stop. " +
+                    "Urgent Low is de uitzondering: dat herhaalt na 30 " +
+                    "minuten zolang de waarde nog laag is. \"Sluimeren\" " +
+                    "opent een schuif (15 tot 90 minuten in stappen van 15, " +
+                    "Urgent Low maximaal 30) en zet het alarm zo lang stil. " +
+                    "Herstelt de waarde tijdens het sluimeren en passeert ze " +
+                    "de grens opnieuw, dan gaat het alarm meteen weer af."
             )
         )
     ),

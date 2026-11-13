@@ -2155,6 +2155,36 @@ class AppSettings(private val context: Context) {
         context.dataStore.edit { prefs -> prefs[alarmLong("muted_until_ms", type)] = untilMs }
     }
 
+    /** "Stop" is ingedrukt en de episode (te laag/te hoog/geen data) is nog niet
+     *  hersteld: het alarm mag niet terugkomen tot de waarde hersteld is. */
+    suspend fun isAlarmStoppedEpisodeOnce(type: AlarmType): Boolean =
+        context.dataStore.data.first()[alarmLong("stopped_episode", type)] == 1L
+
+    suspend fun setAlarmStoppedEpisode(type: AlarmType, stopped: Boolean) {
+        context.dataStore.edit { prefs ->
+            if (stopped) prefs[alarmLong("stopped_episode", type)] = 1L
+            else prefs.remove(alarmLong("stopped_episode", type))
+        }
+    }
+
+    /** true = de huidige demping komt van "Sluimeren" (vervalt bij herstel van de waarde). */
+    suspend fun isAlarmSnoozeActiveOnce(type: AlarmType): Boolean =
+        context.dataStore.data.first()[alarmLong("snooze_active", type)] == 1L
+
+    suspend fun setAlarmSnoozeActive(type: AlarmType, active: Boolean) {
+        context.dataStore.edit { prefs ->
+            if (active) prefs[alarmLong("snooze_active", type)] = 1L
+            else prefs.remove(alarmLong("snooze_active", type))
+        }
+    }
+
+    suspend fun getAlarmLastSnoozeMinutesOnce(): Int =
+        (context.dataStore.data.first()[longPreferencesKey("alarm_last_snooze_minutes")] ?: 15L).toInt()
+
+    suspend fun setAlarmLastSnoozeMinutes(minutes: Int) {
+        context.dataStore.edit { prefs -> prefs[longPreferencesKey("alarm_last_snooze_minutes")] = minutes.toLong() }
+    }
+
     suspend fun clearAlarmMutedUntilMs(type: AlarmType) {
         context.dataStore.edit { prefs -> prefs.remove(alarmLong("muted_until_ms", type)) }
     }

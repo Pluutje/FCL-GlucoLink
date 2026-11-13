@@ -96,14 +96,50 @@ class AlarmMonitor(private val context: Context) {
             return
         }
 
-        val candidate = AlarmEvaluator.highestPriority(firing) ?: return
-        val mutedUntilMs = settings.alarmMutedUntilMs(candidate).first()
-        if (mutedUntilMs != null && nowMs < mutedUntilMs) return
+        // Herstel-controle per alarmtype: een "Stop" (of sluimerstand) vervalt
+        // pas als de waarde echt hersteld is (met een marge, zodat een waarde
+        // die rond de grens schommelt niet steeds opnieuw afgaat).
+        for ((type, config) in configs) {
+            if (!episodeResolved(type, config, firing, latestReading, nowMs)) continue
+            if (settings.isAlarmStoppedEpisodeOnce(type)) settings.setAlarmStoppedEpisode(type, false)
+            if (settings.isAlarmSnoozeActiveOnce(type)) {
+                settings.clearAlarmMutedUntilMs(type)
+                settings.setAlarmSnoozeActive(type, false)
+            }
+        }
+
+        val audible = firing.filter { type ->
+            val mutedUntilMs = settings.alarmMutedUntilMs(type).first()
+            val timedMute = mutedUntilMs != null && nowMs < mutedUntilMs
+            !timedMute && !settings.isAlarmStoppedEpisodeOnce(type)
+        }
+        val candidate = AlarmEvaluator.highestPriority(audible) ?: return
 
         AlarmController.trigger(context, candidate)
     }
 
+    private fun episodeResolved(
+        type: AlarmType,
+        config: ResolvedAlarmConfig,
+        firing: List<AlarmType>,
+        latest: com.fclglucolink.app.sensor.GlucoseReading?,
+        nowMs: Long
+    ): Boolean {
+        if (!config.enabled) return true
+        if (type in firing) return false
+        return when (type.category) {
+            AlarmCategory.THRESHOLD_LOW ->
+                latest != null && latest.glucoseMgdl >= config.thresholdMgdl + RECOVERY_MARGIN_MGDL
+            AlarmCategory.THRESHOLD_HIGH ->
+                latest != null && latest.glucoseMgdl <= config.thresholdMgdl - RECOVERY_MARGIN_MGDL
+            // Voorspellend en "geen data": hersteld zodra het alarm niet meer afgaat.
+            else -> true
+        }
+    }
+
     companion object {
+        /** ~0,3 mmol/L: zo ver voorbij de grens geldt een waarde als hersteld. */
+        const val RECOVERY_MARGIN_MGDL = 5.0
         const val CHECK_INTERVAL_MS = 60_000L
     }
 }

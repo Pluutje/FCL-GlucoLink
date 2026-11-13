@@ -27,13 +27,10 @@ import kotlinx.coroutines.flow.first
  * "Stop" vs. "Snooze" vs. automatisch opgelost — drie verschillende
  * dempingen, alle via [AppSettings.alarmMutedUntilMs]:
  * - [snooze]: de gebruiker kiest zelf hoe lang (AlarmActivity.kt toont een
- *   paar vaste keuzes — 15/30/60 min).
- * - [stop]: een vast, per-categorie afkoelmoment ([stopCooldownMs]) — GEEN
- *   permanente stilte. Bewust zo (i.p.v. bv. "pas weer melden als de
- *   waarde eerst hersteld is") — bij een aanhoudend kritieke waarde (bv.
- *   Urgent Low die niet herstelt) moet de gebruiker na een tijdje sowieso
- *   opnieuw gewaarschuwd worden, ook als "Stop" ooit is ingedrukt. Zie
- *   README's Ronde 107-sectie voor de volledige afweging.
+ *   schuif — 15 tot 90 min, Urgent Low max 30). Vervalt bij herstel van de waarde.
+ * - [stop]: stil zolang de episode duurt, pas weer na herstel van de waarde
+ *   (en nooit binnen 15 min); Urgent Low herhaalt na 30 min. GEEN
+ *   permanente stilte voor Urgent Low (veiligheid).
  * - [clear]: GEEN demping — het alarm stopt omdat de onderliggende
  *   conditie vanzelf niet meer geldt (AlarmMonitor.kt ziet het type niet
  *   meer in de vurende lijst), of omdat de hoofdschakelaar/AAPS-actieve
@@ -61,9 +58,23 @@ object AlarmController {
     }
 
     /** "Stop"-knop op AlarmActivity.kt. */
+    /**
+     * "Stop": het alarm komt niet terug zolang de episode duurt; pas na herstel
+     * van de waarde (zie AlarmMonitor) en dan nooit binnen [STOP_MIN_GAP_MS].
+     * Uitzondering Urgent Low (veiligheid): geen episode-stop, maar na
+     * [URGENT_LOW_REPEAT_MS] opnieuw als de waarde nog steeds te laag is.
+     */
     suspend fun stop(context: Context, type: AlarmType) {
         val settings = AppSettings(context)
-        settings.setAlarmMutedUntilMs(type, System.currentTimeMillis() + stopCooldownMs(type))
+        val now = System.currentTimeMillis()
+        if (type == AlarmType.URGENT_LOW) {
+            settings.setAlarmMutedUntilMs(type, now + URGENT_LOW_REPEAT_MS)
+            settings.setAlarmStoppedEpisode(type, false)
+        } else {
+            settings.setAlarmMutedUntilMs(type, now + STOP_MIN_GAP_MS)
+            settings.setAlarmStoppedEpisode(type, true)
+        }
+        settings.setAlarmSnoozeActive(type, false)
         finishAlarm(context)
     }
 
@@ -71,7 +82,11 @@ object AlarmController {
      *  keuzes die dat scherm toont. */
     suspend fun snooze(context: Context, type: AlarmType, minutes: Int) {
         val settings = AppSettings(context)
-        settings.setAlarmMutedUntilMs(type, System.currentTimeMillis() + minutes * 60_000L)
+        val capped = minutes.coerceAtMost(maxSnoozeMinutes(type))
+        settings.setAlarmMutedUntilMs(type, System.currentTimeMillis() + capped * 60_000L)
+        settings.setAlarmSnoozeActive(type, true)
+        settings.setAlarmStoppedEpisode(type, false)
+        settings.setAlarmLastSnoozeMinutes(capped)
         finishAlarm(context)
     }
 
@@ -93,11 +108,12 @@ object AlarmController {
      *  een aanhoudende situatie opnieuw waarschuwt), predictief/stale-data
      *  een langer moment (minder acuut, meer ruimte om zelf te handelen
      *  voordat er opnieuw gemeld wordt). */
-    private fun stopCooldownMs(type: AlarmType): Long = when (type.category) {
-        AlarmCategory.THRESHOLD_LOW, AlarmCategory.THRESHOLD_HIGH -> 20 * 60_000L
-        AlarmCategory.PREDICTIVE_LOW, AlarmCategory.PREDICTIVE_HIGH -> 30 * 60_000L
-        AlarmCategory.STALE_DATA -> 15 * 60_000L
-    }
+    const val SNOOZE_STEP_MINUTES = 15
+    const val STOP_MIN_GAP_MS = 15 * 60_000L
+    const val URGENT_LOW_REPEAT_MS = 30 * 60_000L
+
+    /** Urgent Low mag maximaal 30 min gesluimerd worden, de rest 90. */
+    fun maxSnoozeMinutes(type: AlarmType): Int = if (type == AlarmType.URGENT_LOW) 30 else 90
 
     /**
      * 13/08/2026 (editor, RONDE 107) — de eigenlijke "wek dit toestel"-stap:
@@ -147,11 +163,24 @@ object AlarmController {
             // RONDE 229 — wegvegen = Stop; ook knoppen in de melding zelf.
             .setDeleteIntent(actionIntent(context, AlarmActionReceiver.ACTION_STOP, 1))
             .addAction(0, "Stop", actionIntent(context, AlarmActionReceiver.ACTION_STOP, 2))
-            .addAction(0, "Snooze ${AlarmActionReceiver.SNOOZE_MINUTES} min", actionIntent(context, AlarmActionReceiver.ACTION_SNOOZE, 3))
+            .addAction(0, "Snooze…", snoozePickerIntent(context, type))
             .build()
 
         NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
     }
+
+    /** Opent het alarmscherm met de sluimerkeuze al open. */
+    private fun snoozePickerIntent(context: Context, type: AlarmType): PendingIntent =
+        PendingIntent.getActivity(
+            context,
+            4,
+            Intent(context, AlarmActivity::class.java).apply {
+                putExtra(AlarmActivity.EXTRA_ALARM_TYPE, type.name)
+                putExtra(AlarmActivity.EXTRA_OPEN_SNOOZE, true)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
 
     private fun actionIntent(context: Context, action: String, requestCode: Int): PendingIntent =
         PendingIntent.getBroadcast(
