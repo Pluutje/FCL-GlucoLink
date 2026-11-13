@@ -1,3 +1,7 @@
 Alarmen: "Sluimeren" opent een schuif (15 tot 90 min, stappen van 15; Urgent Low max 30). "Stoppen" houdt het alarm stil tot de waarde hersteld is; Urgent Low herhaalt na 30 min. Sluimeren vervalt als de waarde herstelt en opnieuw de grens passeert. De meldingsknop heet nu "Snooze…" en opent de schuif.
+Nieuw: belknop op het hoofdscherm om alle alarmen 15 min tot 4 uur te pauzeren (Urgent Low trilt dan 4x zonder geluid). Het hoofdscherm toont hoe lang pauze, sluimeren of stop nog lopen.
+De controle op concurrerende apps noemt GlucoDataHandler niet meer (die verbindt niet zelf met de sensor).
 ---EN---
 Alarms: "Snooze" opens a slider (15 to 90 min, steps of 15; Urgent Low max 30). "Stop" keeps the alarm quiet until the value has recovered; Urgent Low repeats after 30 min. A snooze ends if the value recovers and crosses the limit again. The notification button is now "Snooze…" and opens the slider.
+New: bell button on the main screen to pause all alarms for 15 min to 4 hours (Urgent Low then vibrates 4 times, no sound). The main screen shows how long a pause, snooze or stop still lasts.
+The competing-app check no longer lists GlucoDataHandler (it does not connect to the sensor itself).

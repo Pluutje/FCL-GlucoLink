@@ -1162,7 +1162,10 @@ enum class ManualTopic(
                     "minutes in steps of 15, Urgent Low at most 30) and " +
                     "silences the alarm for that time. If the value recovers " +
                     "and crosses the limit again during a snooze, the alarm " +
-                    "sounds again right away.",
+                    "sounds again right away. With the bell button at the top of " +
+                    "the main screen you can pause all alarms for 15 minutes to " +
+                    "4 hours (for a meeting, say); only Urgent Low then vibrates " +
+                    "briefly, without sound.",
                 bodyNl = "Een afgaand alarm opent een volledig-scherm-melding " +
                     "met de huidige BG-waarde. \"Stop\" houdt het alarm stil " +
                     "tot de waarde hersteld is (een stukje voorbij je grens); " +
@@ -1173,7 +1176,10 @@ enum class ManualTopic(
                     "opent een schuif (15 tot 90 minuten in stappen van 15, " +
                     "Urgent Low maximaal 30) en zet het alarm zo lang stil. " +
                     "Herstelt de waarde tijdens het sluimeren en passeert ze " +
-                    "de grens opnieuw, dan gaat het alarm meteen weer af."
+                    "de grens opnieuw, dan gaat het alarm meteen weer af. Met de " +
+                    "belknop bovenaan het hoofdscherm pauzeer je alle alarmen " +
+                    "15 minuten tot 4 uur (bijvoorbeeld tijdens een vergadering); " +
+                    "alleen Urgent Low trilt dan kort, zonder geluid."
             )
         )
     ),

@@ -81,8 +81,8 @@ object CompetingAppDetector {
         "byoda", "miaomiao", "bluecon", "tomato"
     )
 
-    /** Hoort bij het Dexcom-ecosysteem maar verbindt niet met de sensor. */
-    private val IGNORE_SUBSTRINGS = listOf("follow", "clarity", "stelo")
+    /** Verbinden niet zelf met de sensor (volgers; GlucoDataHandler leest alleen uitzendingen van andere apps). */
+    private val IGNORE_SUBSTRINGS = listOf("follow", "clarity", "stelo", "glucodatahandler", "michelinside")
 
     @SuppressLint("MissingPermission")
     fun check(

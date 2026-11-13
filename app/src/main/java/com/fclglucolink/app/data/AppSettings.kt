@@ -2185,6 +2185,36 @@ class AppSettings(private val context: Context) {
         context.dataStore.edit { prefs -> prefs[longPreferencesKey("alarm_last_snooze_minutes")] = minutes.toLong() }
     }
 
+    fun alarmSnoozeActive(type: AlarmType): Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[alarmLong("snooze_active", type)] == 1L
+    }
+
+    fun alarmStoppedEpisode(type: AlarmType): Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[alarmLong("stopped_episode", type)] == 1L
+    }
+
+    /** Alle alarmen gepauzeerd tot dit tijdstip (epoch-ms); `null` = niet gepauzeerd. */
+    val alarmsPausedUntilMs: Flow<Long?> = context.dataStore.data.map { prefs ->
+        prefs[longPreferencesKey("alarms_paused_until_ms")]
+    }
+
+    suspend fun getAlarmsPausedUntilMsOnce(): Long? =
+        context.dataStore.data.first()[longPreferencesKey("alarms_paused_until_ms")]
+
+    suspend fun setAlarmsPausedUntilMs(untilMs: Long?) {
+        context.dataStore.edit { prefs ->
+            if (untilMs == null) prefs.remove(longPreferencesKey("alarms_paused_until_ms"))
+            else prefs[longPreferencesKey("alarms_paused_until_ms")] = untilMs
+        }
+    }
+
+    suspend fun getAlarmPauseLastMinutesOnce(): Int =
+        (context.dataStore.data.first()[longPreferencesKey("alarm_pause_last_minutes")] ?: 60L).toInt()
+
+    suspend fun setAlarmPauseLastMinutes(minutes: Int) {
+        context.dataStore.edit { prefs -> prefs[longPreferencesKey("alarm_pause_last_minutes")] = minutes.toLong() }
+    }
+
     suspend fun clearAlarmMutedUntilMs(type: AlarmType) {
         context.dataStore.edit { prefs -> prefs.remove(alarmLong("muted_until_ms", type)) }
     }

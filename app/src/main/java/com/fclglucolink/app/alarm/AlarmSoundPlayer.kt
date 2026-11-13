@@ -131,6 +131,20 @@ object AlarmSoundPlayer {
      *  — `VibrationEffect.createWaveform(pattern, repeatIndex)` met
      *  repeatIndex 0 herhaalt vanaf het begin van de array, precies dit
      *  aan/uit-ritme. */
+    /** Korte trilling zonder geluid (4 pulsen, dan stil), voor Urgent Low
+     *  tijdens een alarmpauze. Valt buiten start()/stop(). */
+    @Suppress("DEPRECATION")
+    fun vibrateBurst(context: Context) {
+        val effect = VibrationEffect.createWaveform(longArrayOf(0, 400, 250, 400, 250, 400, 250, 400), -1)
+        val vib = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            context.getSystemService(VibratorManager::class.java)?.defaultVibrator
+        } else {
+            context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        }
+        val attrs = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build()
+        runCatching { vib?.vibrate(effect, attrs) }
+    }
+
     private fun startVibration(context: Context) {
         val pattern = longArrayOf(0, 500, 500)
         val effect = VibrationEffect.createWaveform(pattern, 0)

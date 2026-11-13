@@ -90,6 +90,33 @@ object AlarmController {
         finishAlarm(context)
     }
 
+    /**
+     * Urgent Low terwijl alle alarmen gepauzeerd zijn: geen geluid, geen
+     * volledig scherm; alleen een korte trilling (4 pulsen) en een stille melding.
+     */
+    suspend fun pauseVibrationBurst(context: Context) {
+        AlarmSoundPlayer.vibrateBurst(context.applicationContext)
+        val nl = runCatching { AppSettings(context).getAppLanguageOnce() == com.fclglucolink.app.ui.AppLanguage.DUTCH }.getOrDefault(false)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val ch = NotificationChannel("fclglucolink_alarms_paused", "Urgent Low while paused", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                enableVibration(false)
+                setSound(null, null)
+            }
+            context.getSystemService(NotificationManager::class.java).createNotificationChannel(ch)
+        }
+        val open = PendingIntent.getActivity(
+            context, 5, Intent(context, com.fclglucolink.app.MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
+        )
+        val n = NotificationCompat.Builder(context, "fclglucolink_alarms_paused")
+            .setContentTitle(if (nl) "Urgent Low (alarmen gepauzeerd)" else "Urgent Low (alarms paused)")
+            .setContentText(if (nl) "Je glucose is zeer laag. Open de app om de pauze op te heffen." else "Your glucose is very low. Open the app to end the pause.")
+            .setSmallIcon(android.R.drawable.stat_sys_warning)
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .build()
+        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID + 1, n)
+    }
+
     /** Conditie is vanzelf opgelost (of alarmen/AAPS-slot staan ondertussen
      *  uit) — zie klasse-kdoc: GEEN mute-tijdstip, gewoon stil. Aangeroepen
      *  vanuit AlarmMonitor.kt, niet vanuit AlarmActivity.kt zelf. */

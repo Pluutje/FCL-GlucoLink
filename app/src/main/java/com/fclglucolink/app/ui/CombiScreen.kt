@@ -25,6 +25,9 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -128,6 +131,9 @@ fun CombiScreen(
     val selectedSensorA by settings.selectedSensor(SensorSlot.A).collectAsState(initial = null)
     val selectedSensorB by settings.selectedSensor(SensorSlot.B).collectAsState(initial = null)
     val aapsActiveSlot by settings.aapsActiveSlot.collectAsState(initial = null)
+    val alarmsPausedUntil by settings.alarmsPausedUntilMs.collectAsState(initial = null)
+    var showPauseDialog by remember { mutableStateOf(false) }
+    val pauseActive = (alarmsPausedUntil ?: 0L) > System.currentTimeMillis()
     // rememberSaveable i.p.v. gewone remember: overleeft een configuratie-
     // wijziging (bv. rotatie) zonder terug te vallen naar tabblad 0.
     //
@@ -158,9 +164,24 @@ fun CombiScreen(
     val colorB = if (aapsActiveSlot == SensorSlot.B) green else MaterialTheme.colorScheme.error
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("FCLGlucoLink") }) }
+        topBar = {
+            TopAppBar(
+                title = { Text("FCLGlucoLink") },
+                actions = {
+                    IconButton(onClick = { showPauseDialog = true }) {
+                        Icon(
+                            if (pauseActive) Icons.Filled.NotificationsOff else Icons.Filled.Notifications,
+                            contentDescription = tr("Pause alarms", "Alarmen pauzeren"),
+                            tint = if (pauseActive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            )
+        }
     ) { padding ->
+        if (showPauseDialog) AlarmPauseDialog(onDismiss = { showPauseDialog = false })
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            AlarmStatusBanner()
             // 10/08/2026 (editor, RONDE 80) — eigen rij i.p.v. Material3
             // TabRow, zie kdoc bij CombiScreen() hierboven. `weight(1f)` op
             // elke chip geeft nog steeds precies "elk 1/3 van de breedte",

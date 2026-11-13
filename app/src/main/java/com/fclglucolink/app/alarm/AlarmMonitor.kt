@@ -85,6 +85,21 @@ class AlarmMonitor(private val context: Context) {
             .maxByOrNull { it.timestampMs }
         val firing = AlarmEvaluator.evaluate(configs, latestReading, nowMs, previousReading)
 
+        // Alarmpauze (door de gebruiker ingesteld): geen enkel alarm klinkt.
+        // Alleen Urgent Low trilt kort (zonder geluid), elke 5 min zolang het duurt.
+        val pausedUntilMs = settings.getAlarmsPausedUntilMsOnce()
+        if (pausedUntilMs != null) {
+            if (nowMs < pausedUntilMs) {
+                if (AlarmRuntimeState.currentlySoundingType != null) AlarmController.clear(context)
+                if (AlarmType.URGENT_LOW in firing && nowMs - lastPauseBurstMs >= PAUSE_BURST_INTERVAL_MS) {
+                    lastPauseBurstMs = nowMs
+                    AlarmController.pauseVibrationBurst(context)
+                }
+                return
+            }
+            settings.setAlarmsPausedUntilMs(null)
+        }
+
         val sounding = AlarmRuntimeState.currentlySoundingType
         if (sounding != null) {
             if (sounding !in firing) {
@@ -140,6 +155,8 @@ class AlarmMonitor(private val context: Context) {
     companion object {
         /** ~0,3 mmol/L: zo ver voorbij de grens geldt een waarde als hersteld. */
         const val RECOVERY_MARGIN_MGDL = 5.0
+        const val PAUSE_BURST_INTERVAL_MS = 5 * 60_000L
+        @Volatile private var lastPauseBurstMs = 0L
         const val CHECK_INTERVAL_MS = 60_000L
     }
 }
