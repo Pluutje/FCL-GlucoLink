@@ -1,0 +1,7 @@
+Alarmpauze: de pauze wordt nu goed opgeslagen en getoond (rode balk en doorgestreepte bel). Sluimer- en stopregels op het hoofdscherm hebben een knop "Opheffen". Knoppen in de pauze- en sluimerschuif springen niet meer.
+Alarmen: een gesluimerd of gestopt alarm dempt nu ook de minder ernstige alarmen in dezelfde richting (Low dempt Predictive Low). Urgent Low en Urgent High blijven doorkomen. Nieuw: potloodje bij de glucosegrafiek om de hoogte van de grafiek in te stellen.
+Hoofdscherm: klein potloodje bij de grafiek met instelbare hoogte en een iets compactere BG-cirkel en tussenruimte.
+---EN---
+Alarm pause: the pause is now saved and shown correctly (red banner and crossed-out bell). Snooze and stop lines on the main screen have an "End" button. Buttons in the pause and snooze sliders no longer jump around.
+Alarms: a snoozed or stopped alarm now also mutes the less severe alarms in the same direction (Low mutes Predictive Low). Urgent Low and Urgent High still come through. New: pencil on the glucose chart to set the chart height.
+Main screen: smal pencil on the chart to adjust heigt and a slightly more compact BG circle and spacing.

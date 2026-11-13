@@ -2215,6 +2215,15 @@ class AppSettings(private val context: Context) {
         context.dataStore.edit { prefs -> prefs[longPreferencesKey("alarm_pause_last_minutes")] = minutes.toLong() }
     }
 
+    /** Hoogte van de glucosegrafiek in dp (standaard 220). */
+    val chartHeightDp: Flow<Int> = context.dataStore.data.map { prefs ->
+        (prefs[longPreferencesKey("chart_height_dp")] ?: 220L).toInt()
+    }
+
+    suspend fun setChartHeightDp(dp: Int) {
+        context.dataStore.edit { prefs -> prefs[longPreferencesKey("chart_height_dp")] = dp.toLong() }
+    }
+
     suspend fun clearAlarmMutedUntilMs(type: AlarmType) {
         context.dataStore.edit { prefs -> prefs.remove(alarmLong("muted_until_ms", type)) }
     }

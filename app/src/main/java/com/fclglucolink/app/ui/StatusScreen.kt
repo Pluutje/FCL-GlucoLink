@@ -43,6 +43,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -294,6 +295,8 @@ fun SlotStatusContent(
     // 29/08/2026 (editor, RONDE 160) — zie prediction/GlucosePrediction.kt en
     // AppSettings.kt's PREDICTION_ENABLED-kdoc.
     val predictionEnabled by settings.predictionEnabled.collectAsState(initial = false)
+    val chartHeightDp by settings.chartHeightDp.collectAsState(initial = CHART_HEIGHT_DEFAULT_DP)
+    val chartScope = androidx.compose.runtime.rememberCoroutineScope()
     val showFilteredPipelineOnMainScreen by settings.showFilteredPipelineOnMainScreen.collectAsState(initial = false)
     // 30/07/2026 (editor, na feedback: 24-48u terug kunnen swipen in de
     // grafiek) — was hours = 6, wat sowieso al hoe ver je ooit kon
@@ -338,7 +341,7 @@ fun SlotStatusContent(
         modifier = modifier
             .padding(16.dp)
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         // 30/07/2026 (editor, na feedback voor een weergave zoals die in
         // AAPS gebruikelijk is) — zie kdoc bij BgRingDisplay hieronder voor de
@@ -429,18 +432,28 @@ fun SlotStatusContent(
         // fillMaxSize(). elevation = 0.dp + expliciete containerColor: zie
         // Theme.kt's kdoc over Card's standaard surfaceVariant-gebruik.
         Card(
-            modifier = Modifier.fillMaxWidth().height(280.dp),
+            modifier = Modifier.fillMaxWidth().height((chartHeightDp + 56).dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
             Column(modifier = Modifier.padding(8.dp)) {
-                Text("Glucose", style = MaterialTheme.typography.titleSmall)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Glucose", style = MaterialTheme.typography.titleSmall)
+                    ChartHeightEditButton(currentDp = chartHeightDp) { dp ->
+                        chartScope.launch { settings.setChartHeightDp(dp) }
+                    }
+                }
                 GlucoseChart(
                     readings = recent,
                     switchEvents = switchEvents,
                     unit = displayUnit,
                     predictionEnabled = predictionEnabled,
-                    modifier = Modifier.padding(top = 8.dp)
+                    chartHeightDp = chartHeightDp,
+                    modifier = Modifier
                 )
             }
         }
@@ -590,8 +603,8 @@ private fun BgRingDisplay(
 
     // 31/07/2026 (editor, na feedback om de cirkel iets kleiner te maken) —
     // was 140.dp/36.dp.
-    val ringSize = 120.dp
-    val chevronSize = 30.dp
+    val ringSize = 100.dp
+    val chevronSize = 22.dp
 
     // 30/07/2026 (editor, bevestigd via schets in het gesprek: ring en
     // driehoekje draaien samen als één star geheel om het middelpunt van de
@@ -618,7 +631,7 @@ private fun BgRingDisplay(
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+                verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
                 Text(
                     deltaMgdl?.let { formatDelta(it, unit) } ?: "",
@@ -627,7 +640,7 @@ private fun BgRingDisplay(
                 )
                 Text(
                     if (isStale) "—" else latest.glucoseMgdl.formatForDisplay(unit),
-                    fontSize = 40.sp,
+                    fontSize = 34.sp,
                     fontWeight = FontWeight.Bold,
                     color = ringColor
                 )

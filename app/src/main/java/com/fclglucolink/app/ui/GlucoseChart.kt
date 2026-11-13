@@ -211,6 +211,7 @@ fun GlucoseChart(
     // Default false zodat een eventuele andere aanroeper die dit (nog) niet
     // meegeeft niets ziet veranderen (zelfde conventie als `unit` hierboven).
     predictionEnabled: Boolean = false,
+    chartHeightDp: Int = 220,
     modifier: Modifier = Modifier
 ) {
     // 31/07/2026 (editor, ronde 15, na de controlevraag of de Bg-lijn onder
@@ -268,7 +269,7 @@ fun GlucoseChart(
     AndroidView(
         modifier = modifier
             .fillMaxWidth()
-            .height(220.dp),
+            .height(chartHeightDp.dp),
         factory = { context ->
             LineChart(context).apply {
                 description.isEnabled = false
@@ -707,6 +708,7 @@ fun DualGlucoseChart(
     // één globale instelling (geen per-slot toggle), hier toegepast op BEIDE
     // curven tegelijk — als aanvulling voor beide slots, zoals gevraagd.
     predictionEnabled: Boolean = false,
+    chartHeightDp: Int = 220,
     modifier: Modifier = Modifier
 ) {
     val colorAArgb = colorA.toArgb()
@@ -723,7 +725,7 @@ fun DualGlucoseChart(
     AndroidView(
         modifier = modifier
             .fillMaxWidth()
-            .height(220.dp),
+            .height(chartHeightDp.dp),
         factory = { context ->
             LineChart(context).apply {
                 description.isEnabled = false

@@ -66,7 +66,7 @@ fun AlarmStatusBanner(modifier: Modifier = Modifier) {
         }
     }
     val pausedUntil by settings.alarmsPausedUntilMs.collectAsState(initial = null)
-    val lines = mutableListOf<String>()
+    val lines = mutableListOf<Pair<String, AlarmType>>()
     AlarmType.entries.forEach { type ->
         val muted by settings.alarmMutedUntilMs(type).collectAsState(initial = null)
         val snooze by settings.alarmSnoozeActive(type).collectAsState(initial = false)
@@ -74,14 +74,14 @@ fun AlarmStatusBanner(modifier: Modifier = Modifier) {
         val remainingMin = muted?.let { (((it - now) + 59_999L) / 60_000L).toInt() } ?: 0
         when {
             snooze && remainingMin > 0 ->
-                lines += tr("${type.displayName} snoozed — ${formatDuration(remainingMin)} left",
-                    "${type.displayName} gesluimerd — nog ${formatDuration(remainingMin)}")
+                lines += Pair(tr("${type.displayName} snoozed — ${formatDuration(remainingMin)} left",
+                    "${type.displayName} gesluimerd — nog ${formatDuration(remainingMin)}"), type)
             stopped ->
-                lines += tr("${type.displayName} stopped until recovered",
-                    "${type.displayName} gestopt tot herstel")
+                lines += Pair(tr("${type.displayName} stopped until recovered",
+                    "${type.displayName} gestopt tot herstel"), type)
             remainingMin > 0 ->
-                lines += tr("${type.displayName} stopped — may return in ${formatDuration(remainingMin)}",
-                    "${type.displayName} gestopt — kan over ${formatDuration(remainingMin)} terugkomen")
+                lines += Pair(tr("${type.displayName} stopped — may return in ${formatDuration(remainingMin)}",
+                    "${type.displayName} gestopt — kan over ${formatDuration(remainingMin)} terugkomen"), type)
         }
     }
     val pauseRemaining = pausedUntil?.takeIf { it > now }
@@ -89,7 +89,9 @@ fun AlarmStatusBanner(modifier: Modifier = Modifier) {
 
     Card(
         modifier = modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+        colors = CardDefaults.cardColors(
+            containerColor = if (pauseRemaining != null) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer
+        )
     ) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             if (pauseRemaining != null) {
@@ -110,14 +112,29 @@ fun AlarmStatusBanner(modifier: Modifier = Modifier) {
                     }
                 }
             }
-            lines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+            lines.forEach { (text, type) ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    OutlinedButton(onClick = {
+                        scope.launch {
+                            settings.clearAlarmMutedUntilMs(type)
+                            settings.setAlarmSnoozeActive(type, false)
+                            settings.setAlarmStoppedEpisode(type, false)
+                        }
+                    }) { Text(tr("End", "Opheffen")) }
+                }
+            }
         }
     }
 }
 
 /** Schuif (15 min tot 4 u) om alle alarmen te pauzeren. */
 @Composable
-fun AlarmPauseDialog(onDismiss: () -> Unit) {
+fun AlarmPauseDialog(onDismiss: () -> Unit, onConfirm: (Int) -> Unit) {
     val context = LocalContext.current
     val settings = remember { AppSettings(context) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -146,17 +163,19 @@ fun AlarmPauseDialog(onDismiss: () -> Unit) {
                         "Geen enkel alarm klinkt. Alleen Urgent Low trilt kort (4 pulsen, geen geluid), elke 5 minuten zolang het duurt."),
                     style = MaterialTheme.typography.bodySmall
                 )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
+                        Text(tr("Cancel", "Annuleren"), maxLines = 1)
+                    }
+                    Button(onClick = { onConfirm(minutes); onDismiss() }, modifier = Modifier.weight(1f)) {
+                        Text(tr("Pause", "Pauzeren"), maxLines = 1)
+                    }
+                }
             }
         },
-        confirmButton = {
-            Button(onClick = {
-                scope.launch {
-                    settings.setAlarmPauseLastMinutes(minutes)
-                    settings.setAlarmsPausedUntilMs(System.currentTimeMillis() + minutes * 60_000L)
-                }
-                onDismiss()
-            }) { Text(tr("Pause ${formatDuration(minutes)}", "Pauzeer ${formatDuration(minutes)}")) }
-        },
-        dismissButton = { OutlinedButton(onClick = onDismiss) { Text(tr("Cancel", "Annuleren")) } }
+        confirmButton = {},
     )
 }

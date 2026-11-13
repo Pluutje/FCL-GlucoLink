@@ -256,13 +256,19 @@ private fun SnoozeDialogHost(
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
+                        Text(tr("Cancel", "Annuleren"), maxLines = 1)
+                    }
+                    Button(onClick = onConfirm, modifier = Modifier.weight(1f)) {
+                        Text(tr("Snooze", "Sluimeren"), maxLines = 1)
+                    }
+                }
             }
         },
-        confirmButton = {
-            Button(onClick = onConfirm) { Text(tr("Snooze $minutes min", "Sluimer $minutes min")) }
-        },
-        dismissButton = {
-            OutlinedButton(onClick = onDismiss) { Text(tr("Cancel", "Annuleren")) }
-        }
+        confirmButton = {},
     )
 }

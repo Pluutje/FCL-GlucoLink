@@ -123,10 +123,18 @@ class AlarmMonitor(private val context: Context) {
             }
         }
 
-        val audible = firing.filter { type ->
+        // Een gedempt alarm dempt ook de minder ernstige alarmen in dezelfde
+        // richting (Urgent Low > Low > Predictive Low; Urgent High > High >
+        // Predictive High). Sluimer je Low, dan komt Predictive Low er niet
+        // overheen; alleen het ernstigere Urgent Low blijft doorkomen.
+        val mutedTypes = AlarmType.entries.filter { type ->
             val mutedUntilMs = settings.alarmMutedUntilMs(type).first()
-            val timedMute = mutedUntilMs != null && nowMs < mutedUntilMs
-            !timedMute && !settings.isAlarmStoppedEpisodeOnce(type)
+            (mutedUntilMs != null && nowMs < mutedUntilMs) || settings.isAlarmStoppedEpisodeOnce(type)
+        }.toSet()
+        val audible = firing.filter { type ->
+            val chain = SEVERITY_CHAINS.firstOrNull { type in it }
+            val moreSevereOrSelf = chain?.takeWhile { it != type }.orEmpty() + type
+            moreSevereOrSelf.none { it in mutedTypes }
         }
         val candidate = AlarmEvaluator.highestPriority(audible) ?: return
 
@@ -153,6 +161,10 @@ class AlarmMonitor(private val context: Context) {
     }
 
     companion object {
+        private val SEVERITY_CHAINS = listOf(
+            listOf(AlarmType.URGENT_LOW, AlarmType.LOW, AlarmType.PREDICTIVE_LOW),
+            listOf(AlarmType.URGENT_HIGH, AlarmType.HIGH, AlarmType.PREDICTIVE_HIGH)
+        )
         /** ~0,3 mmol/L: zo ver voorbij de grens geldt een waarde als hersteld. */
         const val RECOVERY_MARGIN_MGDL = 5.0
         const val PAUSE_BURST_INTERVAL_MS = 5 * 60_000L

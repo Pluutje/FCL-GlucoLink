@@ -31,6 +31,8 @@ import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -41,6 +43,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -133,7 +136,10 @@ fun CombiScreen(
     val aapsActiveSlot by settings.aapsActiveSlot.collectAsState(initial = null)
     val alarmsPausedUntil by settings.alarmsPausedUntilMs.collectAsState(initial = null)
     var showPauseDialog by remember { mutableStateOf(false) }
-    val pauseActive = (alarmsPausedUntil ?: 0L) > System.currentTimeMillis()
+    var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) { while (true) { nowMs = System.currentTimeMillis(); kotlinx.coroutines.delay(15_000L) } }
+    val pauseScope = androidx.compose.runtime.rememberCoroutineScope()
+    val pauseActive = (alarmsPausedUntil ?: 0L) > nowMs
     // rememberSaveable i.p.v. gewone remember: overleeft een configuratie-
     // wijziging (bv. rotatie) zonder terug te vallen naar tabblad 0.
     //
@@ -165,9 +171,18 @@ fun CombiScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("FCLGlucoLink") },
-                actions = {
+            // Compacte titelbalk (44 dp i.p.v. de standaard 64 dp van TopAppBar).
+            Surface(color = MaterialTheme.colorScheme.surface) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .height(44.dp)
+                        .padding(start = 16.dp, end = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("FCLGlucoLink", style = MaterialTheme.typography.titleLarge)
                     IconButton(onClick = { showPauseDialog = true }) {
                         Icon(
                             if (pauseActive) Icons.Filled.NotificationsOff else Icons.Filled.Notifications,
@@ -176,10 +191,18 @@ fun CombiScreen(
                         )
                     }
                 }
-            )
+            }
         }
     ) { padding ->
-        if (showPauseDialog) AlarmPauseDialog(onDismiss = { showPauseDialog = false })
+        if (showPauseDialog) AlarmPauseDialog(
+            onDismiss = { showPauseDialog = false },
+            onConfirm = { minutes ->
+                pauseScope.launch {
+                    settings.setAlarmPauseLastMinutes(minutes)
+                    settings.setAlarmsPausedUntilMs(System.currentTimeMillis() + minutes * 60_000L)
+                }
+            }
+        )
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             AlarmStatusBanner()
             // 10/08/2026 (editor, RONDE 80) — eigen rij i.p.v. Material3
@@ -424,6 +447,8 @@ private fun CombiTabContent(
     // 29/08/2026 (editor, RONDE 160) — zie prediction/GlucosePrediction.kt en
     // AppSettings.kt's PREDICTION_ENABLED-kdoc.
     val predictionEnabled by settings.predictionEnabled.collectAsState(initial = false)
+    val chartHeightDp by settings.chartHeightDp.collectAsState(initial = CHART_HEIGHT_DEFAULT_DP)
+    val chartScope = androidx.compose.runtime.rememberCoroutineScope()
 
     // 11/08/2026 (editor, RONDE 90, op verzoek om de ingevoerde vingerprik-
     // calibraties ook zichtbaar te maken in de combi-curve) —
@@ -554,6 +579,11 @@ private fun CombiTabContent(
             isSendingB = aapsActiveSlot == SensorSlot.B
         )
         if (readingsA.isNotEmpty() || readingsB.isNotEmpty()) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                ChartHeightEditButton(currentDp = chartHeightDp) { dp ->
+                    chartScope.launch { settings.setChartHeightDp(dp) }
+                }
+            }
             DualGlucoseChart(
                 readingsA = readingsA,
                 readingsB = readingsB,
@@ -562,6 +592,7 @@ private fun CombiTabContent(
                 fingerstickPoints = fingerstickPoints,
                 unit = displayUnit,
                 predictionEnabled = predictionEnabled,
+                chartHeightDp = chartHeightDp,
                 modifier = Modifier.fillMaxWidth()
             )
         }
