@@ -179,7 +179,7 @@ enum class DexcomG6TransmitterType {
      *  klasse's kdoc voor de achtergrond. */
     val fallbackWarmupSeconds: Int
         get() = when (this) {
-            ANUBIS -> 30 * 60
+            ANUBIS -> 50 * 60 // 14/11/2026: een Anubis warmt in de praktijk 50 min op
             ORIGINAL -> 2 * 60 * 60 // RONDE 234: een stock G6 warmt 2 uur op
         }
 }
@@ -249,7 +249,8 @@ fun dexcomG6FallbackWarmupSeconds(typicalSensorDays: Int?): Int? =
  * als extra, altijd-actieve veiligheidsmarge, in plaats van deze
  * plausibiliteits-check als enige gate te laten dienen.
  */
-const val MINIMUM_WARMUP_SECONDS_ALWAYS = 30 * 60
+/** 14/11/2026: 50 minuten (was 30), gemeten bij een Anubis-transmitter. */
+const val MINIMUM_WARMUP_SECONDS_ALWAYS = 50 * 60
 
 /** Dexcom's protocol gebruikt deze lage mg/dL-waarden als gereserveerde
  *  interne statuscodes (zie [DexcomG6CalibrationState.usableGlucose]'s

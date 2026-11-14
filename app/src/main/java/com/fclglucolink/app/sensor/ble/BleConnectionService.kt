@@ -284,6 +284,7 @@ class BleConnectionService : Service() {
         calibrationStore = CalibrationStore(this)
         switchEventStore = SensorSwitchEventStore(this)
         createNotificationChannel()
+        ServiceHeartbeat.start(this)
 
         // RONDE 224 — de grote waarde in de melding hoort bij de AAPS-zendende slot.
         scope.launch {
@@ -818,6 +819,7 @@ class BleConnectionService : Service() {
     }
 
     override fun onDestroy() {
+        ServiceHeartbeat.stop()
         WatchdripBridge.stop(this)
         for (runtime in slotRuntimes.values) {
             runtime.connectionJob?.cancel()

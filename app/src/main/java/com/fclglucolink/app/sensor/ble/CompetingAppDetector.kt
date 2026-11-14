@@ -77,12 +77,12 @@ object CompetingAppDetector {
     /** Trefwoorden in de pakketnaam; alleen gebruikt als extra vangnet. */
     private val KEYWORDS = listOf(
         "xdrip", "juggluco", "glucodata", "diabox", "caresens", "csair",
-        "dexcom", "camdiab", "camaps", "libre", "eversense", "sibionics",
+        "dexcom", "camdiab", "camaps", "eversense", "sibionics", "chimera",
         "byoda", "miaomiao", "bluecon", "tomato"
     )
 
     /** Verbinden niet zelf met de sensor (volgers; GlucoDataHandler leest alleen uitzendingen van andere apps). */
-    private val IGNORE_SUBSTRINGS = listOf("follow", "clarity", "stelo", "glucodatahandler", "michelinside")
+    private val IGNORE_SUBSTRINGS = listOf("follow", "clarity", "stelo", "glucodatahandler", "michelinside", "libreoffice", "documentfoundation")
 
     @SuppressLint("MissingPermission")
     fun check(

@@ -393,6 +393,7 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
         // bestanden's kdoc bij scheduleRearm() voor de herkomst-analyse
         // (geen G7-specifieke afweging, generiek BLE-scan-zelfherstel).
         private const val SCAN_REARM_INTERVAL_MS = 390_000L
+        private const val SCAN_REARM_SCREEN_OFF_MS = 60_000L
 
         // 28/08/2026 (editor, RONDE 149) — zie kdoc bij `onScanFailed()`
         // hieronder voor het volledige bewijs: herhaalde "scan failed
@@ -1085,12 +1086,29 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
         isResolved: () -> Boolean
     ) {
         scope.launch {
-            delay(SCAN_REARM_INTERVAL_MS)
-            if (!isResolved() && !userStopped) {
-                DiagnosticFileLogger.log("DexcomG7: geen apparaat gevonden na ${SCAN_REARM_INTERVAL_MS / 1000}s scannen (sensor slaapt, buiten bereik of Bluetooth/scan geblokkeerd) — scan wordt herstart")
-                runCatching { scanner.stopScan(callback) }
-                connectScanCallback = null
-                scheduleScanAttempt(scope, appCtx, deviceAddress, settings, cooldownMs = 0L)
+            // 14/11/2026 — op sommige telefoons (o.a. Xiaomi/HyperOS) levert een lang
+            // lopende scan met het scherm uit geen resultaten; een verse scan vindt
+            // de sensor dan wel meteen (zie log Maarten: telkens "geen apparaat
+            // gevonden" na 390 s, direct daarna een meting). Daarom met het scherm uit
+            // elke 60 s opnieuw starten, met het scherm aan blijft het 390 s.
+            var waitedMs = 0L
+            while (true) {
+                delay(SCAN_REARM_SCREEN_OFF_MS)
+                waitedMs += SCAN_REARM_SCREEN_OFF_MS
+                if (isResolved() || userStopped) return@launch
+                val pm = appCtx.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+                val screenOff = pm?.isInteractive == false
+                if (screenOff || waitedMs >= SCAN_REARM_INTERVAL_MS) {
+                    if (screenOff && waitedMs < SCAN_REARM_INTERVAL_MS) {
+                        DiagnosticFileLogger.log("DexcomG7: scherm uit, sensor nog niet gezien na ${waitedMs / 1000}s — verse scan (korte herstartcyclus)")
+                    } else {
+                        DiagnosticFileLogger.log("DexcomG7: geen apparaat gevonden na ${waitedMs / 1000}s scannen (sensor slaapt, buiten bereik of Bluetooth/scan geblokkeerd) — scan wordt herstart")
+                    }
+                    runCatching { scanner.stopScan(callback) }
+                    connectScanCallback = null
+                    scheduleScanAttempt(scope, appCtx, deviceAddress, settings, cooldownMs = 0L)
+                    return@launch
+                }
             }
         }
     }

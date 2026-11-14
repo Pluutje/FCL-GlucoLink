@@ -1,0 +1,7 @@
+Dexcom G6 Anubis: de opwarmtijd staat nu op 50 minuten (was 30). De controle op concurrerende apps meldt LibreOffice niet meer.
+Diagnose: de service logt nu als hij langer stilstaat of de hoofdthread vastloopt.
+Dexcom G7: met het scherm uit wordt de scan naar de sensor elke minuut vernieuwd (voorheen na 6,5 minuut).
+---EN---
+Dexcom G6 Anubis: the warm-up time is now 50 minutes (was 30). The competing-app check no longer lists LibreOffice.
+Diagnostics: the service now logs when it stalls or the main thread hangs.
+Dexcom G7: with the screen off, the scan for the sensor is now restarted every minute (was every 6.5 minutes).
