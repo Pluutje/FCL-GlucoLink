@@ -31,6 +31,7 @@ import com.fclglucolink.app.sensor.ble.AapsSlotSchedule
 import com.fclglucolink.app.sensor.ble.ActiveWorkWakeLock
 import com.fclglucolink.app.sensor.ble.GattExclusivityGate
 import com.fclglucolink.app.sensor.ble.PredictiveReconnectAlarm
+import com.fclglucolink.app.sensor.ble.BrokenPairingNotifier
 import com.fclglucolink.app.sensor.ble.ScanRateLimiter
 import com.fclglucolink.app.sensor.dexcomg6.DexcomG6CalibrationState
 import java.text.SimpleDateFormat
@@ -1364,6 +1365,13 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
                                         " — sensor verbreekt steeds na/tijdens authenticatie: mogelijk verouderde bond of beëindigde sensorsessie"
                                     else ""
                             )
+                            // 15/11/2026 — al > 1 uur geen meting en de sensor verbreekt na de login:
+                            // de koppeling lijkt kapot, laat de gebruiker dat weten.
+                            if (lastFailureCounted &&
+                                System.currentTimeMillis() - (lastSuccessfulConnectionAtMs ?: driverStartedAtMs) >= 60 * 60_000L
+                            ) {
+                                appContext?.let { BrokenPairingNotifier.notifyIfDue(it, "Dexcom G7") }
+                            }
                             if (consecutiveFailedConnects >= STALE_BOND_RECOVERY_AFTER) {
                                 recoverStaleBond(gatt.device, settings)
                             }

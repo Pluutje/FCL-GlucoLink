@@ -1,0 +1,3 @@
+Dexcom G7: melding als er meer dan een uur geen meting is en de sensor direct na het inloggen verbreekt (koppeling lijkt kapot).
+---EN---
+Dexcom G7: notification when there has been no reading for over an hour and the sensor disconnects right after login (pairing seems broken).
