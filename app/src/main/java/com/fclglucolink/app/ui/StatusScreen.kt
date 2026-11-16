@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -236,6 +237,8 @@ fun SlotStatusContent(
     onOpenSensorStatus: () -> Unit,
     onOpenCalibration: () -> Unit,
     onOpenSettings: (() -> Unit)? = null,
+    // RONDE 248 — landscape: alleen BG-cirkel links (met deze zijinhoud eronder), de rest is grafiek.
+    landscapeSide: (@Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -335,6 +338,39 @@ fun SlotStatusContent(
             delay(30_000)
             nowTickMs = System.currentTimeMillis()
         }
+    }
+
+    if (landscapeSide != null) {
+        Row(modifier = modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+            Column(
+                modifier = Modifier
+                    .width(136.dp)
+                    .fillMaxHeight()
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)
+            ) {
+                BgRingDisplay(
+                    latest = latest,
+                    previousMgdl = recent.dropLast(1).lastOrNull()?.glucoseMgdl,
+                    nowMs = nowTickMs,
+                    unit = displayUnit
+                )
+                if (selectedSensor == null) {
+                    Button(onClick = onSwitchSensorType) { Text("Connect sensor") }
+                }
+                landscapeSide()
+            }
+            GlucoseChart(
+                readings = recent,
+                switchEvents = switchEvents,
+                unit = displayUnit,
+                predictionEnabled = predictionEnabled,
+                fillHeight = true,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        return
     }
 
     Column(

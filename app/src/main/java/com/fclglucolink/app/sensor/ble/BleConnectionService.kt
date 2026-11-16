@@ -5,8 +5,11 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.bluetooth.BluetoothAdapter
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.graphics.drawable.Icon
 import android.net.Uri
@@ -285,6 +288,7 @@ class BleConnectionService : Service() {
         switchEventStore = SensorSwitchEventStore(this)
         createNotificationChannel()
         ServiceHeartbeat.start(this)
+        registerBluetoothStateReceiver()
 
         // RONDE 224 — de grote waarde in de melding hoort bij de AAPS-zendende slot.
         scope.launch {
@@ -818,7 +822,53 @@ class BleConnectionService : Service() {
         )
     }
 
+    // RONDE 248 — Bluetooth-adapter aan/uit: loggen en na "aan" alle sensorverbindingen
+    // vers opzetten (Juggluco doet hetzelfde: STATE_ON -> connectToAllActiveDevices).
+    private var bluetoothStateReceiver: BroadcastReceiver? = null
+
+    private fun registerBluetoothStateReceiver() {
+        if (bluetoothStateReceiver != null) return
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (intent.action != BluetoothAdapter.ACTION_STATE_CHANGED) return
+                when (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1)) {
+                    BluetoothAdapter.STATE_OFF ->
+                        DiagnosticFileLogger.log("Bluetooth-adapter UIT (door gebruiker, systeem of energiebeheer)")
+                    BluetoothAdapter.STATE_ON -> {
+                        DiagnosticFileLogger.log("Bluetooth-adapter weer AAN — sensorverbindingen worden vers opgezet")
+                        scope.launch {
+                            delay(1_500L)
+                            restartAllSlotConnections()
+                        }
+                    }
+                }
+            }
+        }
+        bluetoothStateReceiver = receiver
+        runCatching { registerReceiver(receiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)) }
+            .onFailure { DiagnosticFileLogger.log("Bluetooth-ontvanger registreren mislukt: ${it.message}") }
+    }
+
+    private suspend fun CoroutineScope.restartAllSlotConnections() {
+        startCommandMutex.withLock {
+            for (slot in SensorSlot.entries) {
+                val runtime = slotRuntimes.getValue(slot)
+                if (runtime.activeSensorType == null) continue
+                runtime.connectionJob?.cancel()
+                runtime.driver?.disconnect()
+                runtime.driver = null
+                runtime.activeSensorType = null
+                runtime.activeDeviceAddress = null
+                DiagnosticFileLogger.log("Bluetooth terug: slot $slot opnieuw gestart")
+            }
+            for (slot in SensorSlot.entries) ensureSlotConnected(slot)
+        }
+        refreshNotification()
+    }
+
     override fun onDestroy() {
+        bluetoothStateReceiver?.let { runCatching { unregisterReceiver(it) } }
+        bluetoothStateReceiver = null
         ServiceHeartbeat.stop()
         WatchdripBridge.stop(this)
         for (runtime in slotRuntimes.values) {

@@ -1,5 +1,6 @@
 package com.fclglucolink.app.ui
 
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
@@ -212,6 +213,8 @@ fun GlucoseChart(
     // meegeeft niets ziet veranderen (zelfde conventie als `unit` hierboven).
     predictionEnabled: Boolean = false,
     chartHeightDp: Int = 220,
+    /** RONDE 248 — landscape: vul de beschikbare hoogte i.p.v. een vaste hoogte. */
+    fillHeight: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     // 31/07/2026 (editor, ronde 15, na de controlevraag of de Bg-lijn onder
@@ -267,9 +270,7 @@ fun GlucoseChart(
     val timeFormat = remember(Locale.getDefault()) { SimpleDateFormat("HH:mm", Locale.getDefault()) }
 
     AndroidView(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(chartHeightDp.dp),
+        modifier = (if (fillHeight) modifier.fillMaxSize() else modifier.fillMaxWidth().height(chartHeightDp.dp)),
         factory = { context ->
             LineChart(context).apply {
                 description.isEnabled = false
@@ -709,6 +710,8 @@ fun DualGlucoseChart(
     // curven tegelijk — als aanvulling voor beide slots, zoals gevraagd.
     predictionEnabled: Boolean = false,
     chartHeightDp: Int = 220,
+    /** RONDE 248 — landscape: vul de beschikbare hoogte i.p.v. een vaste hoogte. */
+    fillHeight: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val colorAArgb = colorA.toArgb()
@@ -723,9 +726,7 @@ fun DualGlucoseChart(
     val timeFormat = remember(Locale.getDefault()) { SimpleDateFormat("HH:mm", Locale.getDefault()) }
 
     AndroidView(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(chartHeightDp.dp),
+        modifier = (if (fillHeight) modifier.fillMaxSize() else modifier.fillMaxWidth().height(chartHeightDp.dp)),
         factory = { context ->
             LineChart(context).apply {
                 description.isEnabled = false

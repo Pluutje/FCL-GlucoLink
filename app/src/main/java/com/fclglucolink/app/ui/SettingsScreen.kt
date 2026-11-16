@@ -101,6 +101,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit, onOpenAbout: ()
     val xdripUniversalSourceCodeEnabled by settings.xdripUniversalSourceCodeEnabled.collectAsState(initial = false)
     // RONDE 243 — see broadcast/WatchdripBridge.kt.
     val watchdripEnabled by settings.watchdripEnabled.collectAsState(initial = false)
+    val g7AutoConnect by settings.g7AutoConnect.collectAsState(initial = false)
     // 13/08/2026 (editor, RONDE 104, Fase 1) — zie ui/Units.kt's
     // [GlucoseUnit]-kdoc.
     val displayUnit by settings.displayUnit.collectAsState(initial = GlucoseUnit.MMOL)
@@ -313,6 +314,42 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit, onOpenAbout: ()
                             checked = watchdripEnabled,
                             onCheckedChange = { enabled ->
                                 scope.launch { settings.setWatchdripEnabled(enabled) }
+                            }
+                        )
+                    }
+                }
+            }
+
+            // RONDE 248 — optionele test voor Dexcom G7 op telefoons die scans met het scherm uit dempen (Xiaomi/HyperOS).
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(tr("Dexcom G7: autoConnect with screen off", "Dexcom G7: autoConnect bij scherm uit"), style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        tr(
+                            "For phones that lose the G7 with the screen off (e.g. Xiaomi). When the " +
+                                "sensor is not found after a minute with the screen off, the phone's " +
+                                "Bluetooth chip waits for it itself instead of the app scanning. " +
+                                "Off by default; only switch on if the G7 connection is lost.",
+                            "Voor telefoons die de G7 verliezen met het scherm uit (bv. Xiaomi). Als " +
+                                "de sensor met het scherm uit na een minuut niet gevonden is, wacht de " +
+                                "Bluetooth-chip van de telefoon zelf op de sensor in plaats van dat de " +
+                                "app scant. Standaard uit; zet alleen aan als de G7-verbinding wegvalt."
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        Switch(
+                            checked = g7AutoConnect,
+                            onCheckedChange = { enabled ->
+                                scope.launch { settings.setG7AutoConnect(enabled) }
                             }
                         )
                     }

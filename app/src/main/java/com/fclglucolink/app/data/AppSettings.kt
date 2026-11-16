@@ -207,6 +207,8 @@ class AppSettings(private val context: Context) {
         // 20/10/2026 (RONDE 243) — switch for the WatchDrip+ feed (Mi Band / Amazfit
         // watches), see broadcast/WatchdripBridge.kt. Global, default OFF.
         val WATCHDRIP_ENABLED = booleanPreferencesKey("watchdrip_enabled")
+        /** RONDE 248 — Dexcom G7: bij scherm uit "autoConnect" gebruiken i.p.v. scannen. Default OFF. */
+        val G7_AUTOCONNECT = booleanPreferencesKey("g7_autoconnect_screen_off")
 
         // 10/08/2026 (editor, RONDE 79) — bewaakt dat migrateLegacySingleSlotDataOnce()
         // precies één keer draait, zie die functie's kdoc.
@@ -336,6 +338,18 @@ class AppSettings(private val context: Context) {
 
     suspend fun setWatchdripEnabled(enabled: Boolean) {
         context.dataStore.edit { prefs -> prefs[Keys.WATCHDRIP_ENABLED] = enabled }
+    }
+
+    /** RONDE 248 — see [Keys.G7_AUTOCONNECT]. */
+    val g7AutoConnect: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.G7_AUTOCONNECT] ?: false
+    }
+
+    suspend fun getG7AutoConnectOnce(): Boolean =
+        context.dataStore.data.first()[Keys.G7_AUTOCONNECT] ?: false
+
+    suspend fun setG7AutoConnect(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[Keys.G7_AUTOCONNECT] = enabled }
     }
 
     // ============================================================

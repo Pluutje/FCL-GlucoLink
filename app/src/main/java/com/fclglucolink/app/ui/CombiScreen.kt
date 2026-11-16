@@ -6,7 +6,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,6 +30,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -48,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -163,6 +167,7 @@ fun CombiScreen(
         }
     }
 
+    val landscape = LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     val labelA = selectedSensorA?.displayName ?: SensorSlot.A.displayLabel
     val labelB = selectedSensorB?.displayName ?: SensorSlot.B.displayLabel
     val green = Color(0xFF4CAF50)
@@ -171,8 +176,8 @@ fun CombiScreen(
 
     Scaffold(
         topBar = {
-            // Compacte titelbalk (44 dp i.p.v. de standaard 64 dp van TopAppBar).
-            Surface(color = MaterialTheme.colorScheme.surface) {
+            // Compacte titelbalk (44 dp i.p.v. de standaard 64 dp van TopAppBar); niet in landscape.
+            if (!landscape) Surface(color = MaterialTheme.colorScheme.surface) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -203,6 +208,46 @@ fun CombiScreen(
                 }
             }
         )
+        if (landscape) {
+            // Landscape: BG-cirkel links, daaronder de tabs en knoppen, de rest is grafiek.
+            val side: @Composable ColumnScope.() -> Unit = {
+                CombiTabChip(tabIndex == 0, { tabIndex = 0 }, labelA, colorA, Modifier.fillMaxWidth(), compact = true)
+                CombiTabChip(tabIndex == 1, { tabIndex = 1 }, labelB, colorB, Modifier.fillMaxWidth(), compact = true)
+                CombiTabChip(tabIndex == 2, { tabIndex = 2 }, "Combi", null, Modifier.fillMaxWidth(), compact = true)
+            }
+            Column(modifier = Modifier.fillMaxSize().padding(padding).statusBarsPadding()) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    when (tabIndex) {
+                        0 -> SlotStatusContent(
+                            slot = SensorSlot.A,
+                            onSwitchSensorType = { onSwitchSensorType(SensorSlot.A) },
+                            onOpenSensorStatus = { onOpenSensorStatus(SensorSlot.A) },
+                            onOpenCalibration = { onOpenCalibration(SensorSlot.A) },
+                            onOpenSettings = null,
+                            landscapeSide = side,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        1 -> SlotStatusContent(
+                            slot = SensorSlot.B,
+                            onSwitchSensorType = { onSwitchSensorType(SensorSlot.B) },
+                            onOpenSensorStatus = { onOpenSensorStatus(SensorSlot.B) },
+                            onOpenCalibration = { onOpenCalibration(SensorSlot.B) },
+                            onOpenSettings = null,
+                            landscapeSide = side,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        else -> CombiTabContent(
+                            colorA = colorA,
+                            colorB = colorB,
+                            aapsActiveSlot = aapsActiveSlot,
+                            landscapeSide = side,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+            }
+            return@Scaffold
+        }
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             AlarmStatusBanner()
             // 10/08/2026 (editor, RONDE 80) — eigen rij i.p.v. Material3
@@ -322,7 +367,8 @@ private fun CombiTabChip(
     onClick: () -> Unit,
     text: String,
     stripeColor: Color?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    compact: Boolean = false
 ) {
     // Bewust laag-contrast/weinig opvallend wanneer NIET geselecteerd (op
     // verzoek dat de tabbladkopjes weinig opvallend zijn behalve het
@@ -366,7 +412,7 @@ private fun CombiTabChip(
             text,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 10.dp, horizontal = 4.dp),
+                .padding(vertical = if (compact) 6.dp else 10.dp, horizontal = 4.dp),
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.labelLarge,
             color = textColor,
@@ -433,6 +479,7 @@ private fun CombiTabContent(
     colorA: Color,
     colorB: Color,
     aapsActiveSlot: SensorSlot?,
+    landscapeSide: (@Composable ColumnScope.() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -548,6 +595,36 @@ private fun CombiTabContent(
     }
     val latestA by latestAFlow.collectAsState(initial = null)
     val latestB by latestBFlow.collectAsState(initial = null)
+
+    if (landscapeSide != null) {
+        val fresh = { r: com.fclglucolink.app.sensor.GlucoseReading? ->
+            r?.takeIf { System.currentTimeMillis() - it.timestampMs <= 15 * 60_000L }
+                ?.let { it.glucoseMgdl.formatForDisplayWithUnit(displayUnit) } ?: "—"
+        }
+        Row(modifier = modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+            Column(
+                modifier = Modifier.width(136.dp).fillMaxHeight().verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)
+            ) {
+                Text(fresh(latestA), style = MaterialTheme.typography.headlineMedium, color = colorA)
+                Text(fresh(latestB), style = MaterialTheme.typography.headlineMedium, color = colorB)
+                landscapeSide()
+            }
+            DualGlucoseChart(
+                readingsA = readingsA,
+                readingsB = readingsB,
+                colorA = colorA,
+                colorB = colorB,
+                fingerstickPoints = fingerstickPoints,
+                unit = displayUnit,
+                predictionEnabled = predictionEnabled,
+                fillHeight = true,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        return
+    }
 
     Column(
         modifier = modifier

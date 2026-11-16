@@ -1,0 +1,3 @@
+Bluetooth aan/uit wordt gelogd en na "aan" worden de sensorverbindingen opnieuw opgezet. Nieuw (standaard uit): Dexcom G7 "autoConnect bij scherm uit" in Instellingen, voor telefoons die de G7 verliezen met het scherm uit. Landscape: BG-cirkel met tabs links, de rest is grafiek.
+---EN---
+Bluetooth on/off is now logged and sensor connections are restarted after Bluetooth turns back on. New (off by default): Dexcom G7 "autoConnect with screen off" in Settings, for phones that lose the G7 with the screen off. Landscape: BG circle with tabs on the left, the rest is chart.

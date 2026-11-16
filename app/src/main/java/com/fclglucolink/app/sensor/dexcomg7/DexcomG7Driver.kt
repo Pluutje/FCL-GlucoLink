@@ -1099,6 +1099,31 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
                 if (isResolved() || userStopped) return@launch
                 val pm = appCtx.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
                 val screenOff = pm?.isInteractive == false
+                if (screenOff && runCatching { settings.getG7AutoConnectOnce() }.getOrDefault(false)) {
+                    // RONDE 248 (optioneel, instelling "G7 autoConnect bij scherm uit") —
+                    // Juggluco gebruikt autoConnect: de Bluetooth-controller wacht dan zelf op
+                    // de sensor, zonder app-scan die Xiaomi bij scherm uit kan dempen.
+                    val device = runCatching { bluetoothAdapter(appCtx)?.getRemoteDevice(deviceAddress) }.getOrNull()
+                    if (device != null) {
+                        DiagnosticFileLogger.log("DexcomG7: scherm uit, sensor nog niet gezien na ${waitedMs / 1000}s — autoConnect i.p.v. scan (RONDE 248)")
+                        runCatching { scanner.stopScan(callback) }
+                        connectScanCallback = null
+                        connectToDevice(scope, appCtx, device, settings, autoConnect = true)
+                        // Veiligheidsnet: komt er binnen de normale herstartcyclus geen verbinding,
+                        // dan de wachtende verbinding sluiten en weer scannen.
+                        scope.launch {
+                            delay(SCAN_REARM_INTERVAL_MS)
+                            if (!userStopped && _connectionState.value is ConnectionState.Connecting) {
+                                DiagnosticFileLogger.log("DexcomG7: autoConnect gaf na ${SCAN_REARM_INTERVAL_MS / 1000}s geen verbinding — terug naar scannen")
+                                runCatching { bluetoothGatt?.close() }
+                                bluetoothGatt = null
+                                GattExclusivityGate.release(slot)
+                                scheduleScanAttempt(scope, appCtx, deviceAddress, settings, cooldownMs = 0L)
+                            }
+                        }
+                        return@launch
+                    }
+                }
                 if (screenOff || waitedMs >= SCAN_REARM_INTERVAL_MS) {
                     if (screenOff && waitedMs < SCAN_REARM_INTERVAL_MS) {
                         DiagnosticFileLogger.log("DexcomG7: scherm uit, sensor nog niet gezien na ${waitedMs / 1000}s — verse scan (korte herstartcyclus)")
@@ -1243,7 +1268,10 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
      * `_connectionState`-update blijft synchroon (meteen zichtbaar in de UI,
      * ongeacht hoe lang het wachten op de andere slot duurt).
      */
-    private fun connectToDevice(scope: CoroutineScope, appCtx: Context, device: BluetoothDevice, settings: AppSettings) {
+    private fun connectToDevice(
+        scope: CoroutineScope, appCtx: Context, device: BluetoothDevice, settings: AppSettings,
+        autoConnect: Boolean = false
+    ) {
         _connectionState.value = ConnectionState.Connecting(device.address)
         scope.launch {
             GattExclusivityGate.acquire(slot)
@@ -1258,9 +1286,9 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
             connectCalledAtMs = System.currentTimeMillis()
             val callback = GattCallback(scope, settings)
             val gatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                device.connectGatt(appCtx, false, callback, BluetoothDevice.TRANSPORT_LE)
+                device.connectGatt(appCtx, autoConnect, callback, BluetoothDevice.TRANSPORT_LE)
             } else {
-                device.connectGatt(appCtx, false, callback)
+                device.connectGatt(appCtx, autoConnect, callback)
             }
             bluetoothGatt = gatt
         }
