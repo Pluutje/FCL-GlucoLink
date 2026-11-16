@@ -1134,19 +1134,24 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
             // gevonden" na 390 s, direct daarna een meting). Daarom met het scherm uit
             // elke 60 s opnieuw starten, met het scherm aan blijft het 390 s.
             var waitedMs = 0L
+            // RONDE 250 — met autoConnect aan elke 10 s het scherm controleren: gaat het scherm
+            // net voor een meetmoment uit, dan moet autoConnect meteen starten (niet pas na 60 s).
+            val autoOn = runCatching { settings.getG7AutoConnectOnce() }.getOrDefault(false)
+            val stepMs = if (autoOn) 10_000L else SCAN_REARM_SCREEN_OFF_MS
             while (true) {
-                delay(SCAN_REARM_SCREEN_OFF_MS)
-                waitedMs += SCAN_REARM_SCREEN_OFF_MS
+                delay(stepMs)
+                waitedMs += stepMs
                 if (isResolved() || userStopped) return@launch
                 val pm = appCtx.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
                 val screenOff = pm?.isInteractive == false
-                if (screenOff && !autoConnectGuardFailed && runCatching { settings.getG7AutoConnectOnce() }.getOrDefault(false)) {
+                if (screenOff && !autoConnectGuardFailed && autoOn) {
                     runCatching { scanner.stopScan(callback) }
                     connectScanCallback = null
                     if (startAutoConnect(scope, appCtx, deviceAddress, settings, "scherm uit, sensor nog niet gezien na ${waitedMs / 1000}s")) {
                         return@launch
                     }
                 }
+                if (waitedMs % SCAN_REARM_SCREEN_OFF_MS != 0L) continue
                 if (screenOff || waitedMs >= SCAN_REARM_INTERVAL_MS) {
                     if (screenOff && waitedMs < SCAN_REARM_INTERVAL_MS) {
                         DiagnosticFileLogger.log("DexcomG7: scherm uit, sensor nog niet gezien na ${waitedMs / 1000}s — verse scan (korte herstartcyclus)")
@@ -2201,7 +2206,9 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
             val toEmit = records.asSequence()
                 .map { rec -> rec to (measuredAtMs - (rx.clock - rec.clock) * 1000L) }
                 .filter { (_, t) -> t <= measuredAtMs - 150_000L && t >= nowMs - 26 * 3_600_000L }
-                .filter { (_, t) -> prevConnectedAtMs == null || t > prevConnectedAtMs - 150_000L }
+                // RONDE 250 — de live meting van die verbinding is al doorgegeven (tijdstip = ontvangst,
+                // enkele seconden later dan de sensorklok): zonder deze marge kwam hij als dubbele meting terug.
+                .filter { (_, t) -> prevConnectedAtMs == null || t > prevConnectedAtMs + 60_000L }
                 .filter { (rec, _) ->
                     val st = DexcomG6CalibrationState.fromRaw(rec.calibrationStateRaw)
                     st.usableGlucose() || st.insufficientCalibration()

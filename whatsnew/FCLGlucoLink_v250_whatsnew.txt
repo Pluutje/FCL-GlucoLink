@@ -1,0 +1,3 @@
+Dexcom G7: een meting die al live was doorgegeven komt niet meer als dubbele meting uit de backfill terug. Met "autoConnect bij scherm uit" start autoConnect nu ook direct als het scherm vlak voor een meetmoment uitgaat. Het logbestand toont nu elke verzonden meting naar AAPS.
+---EN---
+Dexcom G7: a reading that was already delivered live no longer comes back as a duplicate from the backfill. With "autoConnect with screen off", autoConnect now also starts right away when the screen turns off just before a reading slot. The log file now shows every reading sent to AAPS.

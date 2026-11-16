@@ -234,6 +234,11 @@ object XDripBroadcaster {
             return
         }
         val bundle = buildBundle(reading, universalSourceCode, previousReading)
+        // RONDE 250 — in het logbestand zien wat er precies naar welke app ging (dubbele regels in AAPS).
+        com.fclglucolink.app.logging.DiagnosticFileLogger.log(
+            "Broadcast naar $packages: ${reading.glucoseMgdl} mg/dL, tijdstip=" +
+                java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date(reading.timestampMs))
+        )
         for (packageName in packages) {
             val intent = Intent(ACTION).apply {
                 putExtras(bundle)
