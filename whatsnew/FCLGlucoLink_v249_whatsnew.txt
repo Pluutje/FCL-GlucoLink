@@ -1,0 +1,3 @@
+Dexcom G7 "autoConnect bij scherm uit": start nu meteen voor het volgende meetmoment (minder gemiste metingen met het scherm uit) en een oude veiligheidstimer verstoort een lopende verbinding niet meer.
+---EN---
+Dexcom G7 "autoConnect with screen off": now starts right before the next reading slot (fewer missed readings with the screen off), and an old safety timer no longer disturbs a running connection.
