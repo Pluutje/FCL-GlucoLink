@@ -1,0 +1,3 @@
+Accu-Chek SmartGuide: als de sensor na een verbroken verbinding onder een ander Bluetooth-adres verschijnt, zoekt de app hem nu zelf weer op (scan op de CGM-service) en verbindt opnieuw. Alleen als er precies één SmartGuide in de buurt is. Mogelijk moet de pincode nog opnieuw worden ingevoerd.
+---EN---
+Accu-Chek SmartGuide: if the sensor reappears under a different Bluetooth address after a dropped connection, the app now finds it again itself (scan on the CGM service) and reconnects. Only when exactly one SmartGuide is nearby. You may still need to re-enter the PIN.

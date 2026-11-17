@@ -82,5 +82,9 @@ De xDrip-broadcast is een Kotlin-port van Juggluco's `SendLikexDrip.java`.
 De CareSens Air-ondersteuning gebruikt Juggluco's native kalibratiecode. De G6-
 en G7-protocollen volgen xDrip+ (GPL-3.0). Dank aan beide projecten.
 
+FCLGlucoLink zelf valt onder de GNU General Public License v3.0 (`LICENSE`).
+Zie `NOTICE.md` voor de herkomst van de overgenomen onderdelen. De app is geen
+medisch hulpmiddel en komt zonder garantie.
+
 De volledige ontwikkelhistorie (verslagen per testronde tot en met v223) staat
 niet meer in de repo. Een lokale kopie staat in `_archief/` (niet in git).

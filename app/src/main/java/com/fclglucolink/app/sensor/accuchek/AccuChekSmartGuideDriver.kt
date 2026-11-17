@@ -337,15 +337,62 @@ class AccuChekSmartGuideDriver(private val slot: SensorSlot) : SensorDriver {
 
     private fun startConnectScan(scope: CoroutineScope, appCtx: Context, scanner: BluetoothLeScanner, deviceAddress: String) {
         val settingsObj = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
-        val scanFilters = listOf(ScanFilter.Builder().setDeviceAddress(deviceAddress).build())
+        // RONDE 253 — de SmartGuide wisselt van (privé) adres na een verbroken verbinding. Daarom
+        // filteren we op adres OF op de CGM-service (0x181F); filters zijn een OF-combinatie.
+        val cgmUuid = android.os.ParcelUuid(AccuChekSmartGuideProtocol.SERVICE_CGM)
+        val scanFilters = listOf(
+            ScanFilter.Builder().setDeviceAddress(deviceAddress).build(),
+            ScanFilter.Builder().setServiceUuid(cgmUuid).build()
+        )
         var resolved = false
+        val candidates = LinkedHashMap<String, BluetoothDevice>()
+        var candidateTimerStarted = false
         val callback = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult) {
-                if (result.device.address == deviceAddress && !resolved) {
+                if (resolved) return
+                if (result.device.address == deviceAddress) {
                     resolved = true
                     runCatching { scanner.stopScan(this) }
                     connectScanCallback = null
                     connectToDevice(scope, appCtx, result.device)
+                    return
+                }
+                val name = result.scanRecord?.deviceName ?: runCatching { result.device.name }.getOrNull()
+                val hasCgm = result.scanRecord?.serviceUuids?.contains(cgmUuid) == true
+                val nameMatch = name != null && name.contains("smartguide", ignoreCase = true)
+                if (!hasCgm && !nameMatch) return
+                if (candidates.put(result.device.address, result.device) == null) {
+                    DiagnosticFileLogger.log(
+                        "AccuChekSmartGuide: kandidaat gezien ${result.device.address} naam=${name ?: "?"} " +
+                            "rssi=${result.rssi} cgmService=$hasCgm (opgeslagen adres $deviceAddress)"
+                    )
+                }
+                if (!candidateTimerStarted) {
+                    candidateTimerStarted = true
+                    val cb = this
+                    scope.launch {
+                        delay(5_000L)
+                        if (resolved || userStopped) return@launch
+                        val list = candidates.values.toList()
+                        if (list.size == 1) {
+                            val dev = list[0]
+                            resolved = true
+                            runCatching { scanner.stopScan(cb) }
+                            connectScanCallback = null
+                            DiagnosticFileLogger.log(
+                                "AccuChekSmartGuide: opgeslagen adres $deviceAddress niet gezien; precies één SmartGuide in de buurt " +
+                                    "(${dev.address}) — adres bijgewerkt en verbinden"
+                            )
+                            runCatching { AppSettings(appCtx).setDeviceAddress(slot, dev.address) }
+                            registerBondReceiver(appCtx, dev.address)
+                            connectToDevice(scope, appCtx, dev)
+                        } else {
+                            DiagnosticFileLogger.log(
+                                "AccuChekSmartGuide: ${list.size} SmartGuide-kandidaten (${list.joinToString { it.address }}) — niet automatisch gekozen"
+                            )
+                            candidateTimerStarted = false
+                        }
+                    }
                 }
             }
             override fun onScanFailed(errorCode: Int) {
@@ -355,7 +402,7 @@ class AccuChekSmartGuideDriver(private val slot: SensorSlot) : SensorDriver {
             }
         }
         connectScanCallback = callback
-        DiagnosticFileLogger.log("AccuChekSmartGuide: scan gestart, filter op adres $deviceAddress")
+        DiagnosticFileLogger.log("AccuChekSmartGuide: scan gestart, filter op adres $deviceAddress of CGM-service 0x181F")
         runCatching { scanner.startScan(scanFilters, settingsObj, callback) }
             .onFailure {
                 connectScanCallback = null
