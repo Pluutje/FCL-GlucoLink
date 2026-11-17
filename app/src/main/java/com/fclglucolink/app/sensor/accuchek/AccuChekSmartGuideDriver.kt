@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -360,6 +361,54 @@ class AccuChekSmartGuideDriver(private val slot: SensorSlot) : SensorDriver {
                 connectScanCallback = null
                 backoffAndRetry(scope, appCtx, deviceAddress)
             }
+        // RONDE 252 — diagnose: vindt de gefilterde scan na 60 s niets, doe dan eenmalig (max 1x per
+        // 30 min, alleen met het scherm aan) 20 s een ONGEFILTERDE scan en log alle apparaten die op
+        // een SmartGuide lijken (naam of CGM-service). Zo is te zien of de sensor wel adverteert,
+        // maar onder een ander adres dan we onthouden hebben (bv. na opnieuw koppelen in mySugr).
+        scope.launch {
+            delay(60_000L)
+            val now = System.currentTimeMillis()
+            val pm = appCtx.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+            if (!resolved && !userStopped && now - lastDiagScanAtMs > 30 * 60_000L) {
+                if (pm?.isInteractive == true) {
+                    lastDiagScanAtMs = now
+                    runDiagnosticScan(scanner, deviceAddress)
+                } else {
+                    DiagnosticFileLogger.log("AccuChekSmartGuide: diagnostische ongefilterde scan overgeslagen — scherm uit")
+                }
+            }
+        }
+    }
+
+    private var lastDiagScanAtMs = 0L
+
+    private suspend fun runDiagnosticScan(scanner: BluetoothLeScanner, expectedAddress: String) {
+        val seen = LinkedHashMap<String, String>()
+        var total = 0
+        val cgmUuid = android.os.ParcelUuid(AccuChekSmartGuideProtocol.SERVICE_CGM)
+        val cb = object : ScanCallback() {
+            override fun onScanResult(callbackType: Int, result: ScanResult) {
+                total++
+                val name = result.scanRecord?.deviceName ?: runCatching { result.device.name }.getOrNull()
+                val hasCgm = result.scanRecord?.serviceUuids?.contains(cgmUuid) == true
+                val nameMatch = name != null && listOf("smartguide", "accu", "roche", "cgm").any { name.contains(it, ignoreCase = true) }
+                if (hasCgm || nameMatch || result.device.address.equals(expectedAddress, ignoreCase = true)) {
+                    seen[result.device.address] =
+                        "naam=${name ?: "?"} rssi=${result.rssi} cgmService=$hasCgm " +
+                            "verbindbaar=${if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) result.isConnectable else "?"}"
+                }
+            }
+        }
+        val st = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
+        runCatching { scanner.startScan(emptyList(), st, cb) }
+            .onFailure { DiagnosticFileLogger.log("AccuChekSmartGuide: diagnostische scan kon niet starten: ${it.message}"); return }
+        delay(20_000L)
+        runCatching { scanner.stopScan(cb) }
+        DiagnosticFileLogger.log(
+            "AccuChekSmartGuide: diagnostische ongefilterde scan 20s: $total advertenties; SmartGuide-achtig: " +
+                (if (seen.isEmpty()) "GEEN" else seen.entries.joinToString("; ") { "${it.key} ${it.value}" }) +
+                " (verwacht adres $expectedAddress)"
+        )
     }
 
     private fun backoffAndRetry(scope: CoroutineScope, appCtx: Context, deviceAddress: String) {

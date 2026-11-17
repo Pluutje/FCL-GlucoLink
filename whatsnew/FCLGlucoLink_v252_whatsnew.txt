@@ -1,0 +1,3 @@
+Accu-Chek SmartGuide: vindt de app de sensor niet, dan doet hij een korte scan van alle Bluetooth-apparaten in de buurt en zet het resultaat in het logbestand.
+---EN---
+Accu-Chek SmartGuide: if the app cannot find the sensor, it does a short scan of all nearby Bluetooth devices and writes the result to the log file.
