@@ -366,6 +366,44 @@ object AccuChekSmartGuideProtocol {
         return CgmMeasurement(timestampMs, glucoseMgdl, trendMgdlPerMin, qualityPercent, statusFlags)
     }
 
+    // ===== CGM Session Start Time (0x2AAA) — tijdsynchronisatie (RONDE 251) =====
+    // De sensor meldt "time sync required" tot een client de sessiestarttijd schrijft; zolang
+    // dat niet gebeurt stuurt hij metingen zonder glucosewaarde. Formaat (Bluetooth CGM-profiel):
+    // jaar u16 LE, maand, dag, uur, minuut, seconde, tijdzone (sint8, kwartieren, standaardtijd),
+    // DST-offset (u8: 0 = standaard, 4 = +1 u), daarna E2E-CRC (u16 LE). De CRC is hetzelfde type
+    // als in de metingen van deze sensor (CRC-16/MCRF4XX, getest op de log van 17-11-2026).
+
+    /** CRC-16/MCRF4XX (poly 0x1021 gespiegeld, init 0xFFFF, geen xorout). */
+    fun crc16Mcrf4xx(data: ByteArray): Int {
+        var crc = 0xFFFF
+        for (b in data) {
+            crc = crc xor (b.toInt() and 0xFF)
+            repeat(8) {
+                crc = if (crc and 1 != 0) (crc ushr 1) xor 0x8408 else crc ushr 1
+            }
+        }
+        return crc and 0xFFFF
+    }
+
+    /** Payload voor CGM Session Start Time: [sessionStartMs] in de lokale tijdzone van de telefoon. */
+    fun buildSessionStartTime(sessionStartMs: Long, tz: java.util.TimeZone = java.util.TimeZone.getDefault()): ByteArray {
+        val cal = java.util.Calendar.getInstance(tz).apply { timeInMillis = sessionStartMs }
+        val year = cal.get(java.util.Calendar.YEAR)
+        val dst = if (tz.inDaylightTime(java.util.Date(sessionStartMs))) 4 else 0
+        val payload = byteArrayOf(
+            (year and 0xFF).toByte(), ((year shr 8) and 0xFF).toByte(),
+            (cal.get(java.util.Calendar.MONTH) + 1).toByte(),
+            cal.get(java.util.Calendar.DAY_OF_MONTH).toByte(),
+            cal.get(java.util.Calendar.HOUR_OF_DAY).toByte(),
+            cal.get(java.util.Calendar.MINUTE).toByte(),
+            cal.get(java.util.Calendar.SECOND).toByte(),
+            (tz.rawOffset / 900_000).toByte(),
+            dst.toByte()
+        )
+        val crc = crc16Mcrf4xx(payload)
+        return payload + byteArrayOf((crc and 0xFF).toByte(), ((crc shr 8) and 0xFF).toByte())
+    }
+
     // ===== CGM Specific Ops Control Point (0x2AAC) — communicatie-interval
     // expliciet instellen (betrouwbaarheidseis deze ronde, zie klasse-kdoc
     // en README.md's Ronde 198-sectie) + respons-decoding. Logica overgenomen

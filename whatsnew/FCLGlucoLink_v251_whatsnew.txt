@@ -1,0 +1,3 @@
+Accu-Chek SmartGuide: als de sensor "tijdsynchronisatie vereist" meldt, schrijft de app nu de sessiestarttijd naar de sensor, zodat hij glucosewaarden gaat sturen. Het resultaat staat in het logbestand.
+---EN---
+Accu-Chek SmartGuide: when the sensor reports "time sync required", the app now writes the session start time to the sensor so that it starts sending glucose values. The result is shown in the log file.

@@ -139,6 +139,10 @@ class AccuChekSmartGuideDriver(private val slot: SensorSlot) : SensorDriver {
     private var charCgmSpecificOps: BluetoothGattCharacteristic? = null
     private var charCgmStatus: BluetoothGattCharacteristic? = null
     private var charCgmSessionRunTime: BluetoothGattCharacteristic? = null
+    private var charCgmSessionStartTime: BluetoothGattCharacteristic? = null
+    /** RONDE 251 — sensor meldt "time sync required" in CGM Status; één poging per verbinding. */
+    private var needTimeSync = false
+    private var timeSyncAttempted = false
     private var charFirmwareRevision: BluetoothGattCharacteristic? = null
     private var charManufacturerName: BluetoothGattCharacteristic? = null
     private var charModelNumber: BluetoothGattCharacteristic? = null
@@ -456,6 +460,9 @@ class AccuChekSmartGuideDriver(private val slot: SensorSlot) : SensorDriver {
             charCgmSpecificOps = cgmService.getCharacteristic(AccuChekSmartGuideProtocol.CHAR_CGM_SPECIFIC_OPS)
             charCgmStatus = cgmService.getCharacteristic(AccuChekSmartGuideProtocol.CHAR_CGM_STATUS)
             charCgmSessionRunTime = cgmService.getCharacteristic(AccuChekSmartGuideProtocol.CHAR_CGM_SESSION_RUN_TIME)
+            charCgmSessionStartTime = cgmService.getCharacteristic(AccuChekSmartGuideProtocol.CHAR_CGM_SESSION_START_TIME)
+            needTimeSync = false
+            timeSyncAttempted = false
 
             val measurementChar = charCgmMeasurement
             val racpChar = charRacp
@@ -492,6 +499,7 @@ class AccuChekSmartGuideDriver(private val slot: SensorSlot) : SensorDriver {
         private fun readNextInQueue(gatt: BluetoothGatt) {
             val next = readQueue.removeFirstOrNull()
             if (next == null) {
+                if (needTimeSync && !timeSyncAttempted && writeSessionStartTime(gatt)) return
                 enableCgmMeasurementNotify(gatt)
                 return
             }
@@ -532,6 +540,7 @@ class AccuChekSmartGuideDriver(private val slot: SensorSlot) : SensorDriver {
                     }
                     val now = System.currentTimeMillis()
                     sensorStartTimeMs = now - cgmStatus.timeOffsetMinutes * 60_000L
+                    needTimeSync = cgmStatus.flags.timeSyncRequired
                     DiagnosticFileLogger.log(
                         "AccuChekSmartGuide: CGM Status timeOffsetMinutes=${cgmStatus.timeOffsetMinutes} " +
                             "sensorStartTimeMs=$sensorStartTimeMs flags=${cgmStatus.flags} allClear=${cgmStatus.flags.isAllClear}"
@@ -600,6 +609,24 @@ class AccuChekSmartGuideDriver(private val slot: SensorSlot) : SensorDriver {
                 (if (f.sensorRateOfDecreaseExceeded) 0x04 else 0) or (if (f.sensorRateOfIncreaseExceeded) 0x08 else 0) or
                 (if (f.deviceResultLowerThanPatientLowLevel) 0x10 else 0) or (if (f.deviceResultHigherThanPatientHighLevel) 0x20 else 0)
 
+        /** RONDE 251 — tijdsynchronisatie: sessiestarttijd naar CGM Session Start Time (0x2AAA) schrijven. */
+        private fun writeSessionStartTime(gatt: BluetoothGatt): Boolean {
+            val startChar = charCgmSessionStartTime
+            if (startChar == null) {
+                DiagnosticFileLogger.log("AccuChekSmartGuide: tijdsynchronisatie nodig maar CGM Session Start Time (0x2AAA) ontbreekt")
+                timeSyncAttempted = true
+                return false
+            }
+            timeSyncAttempted = true
+            val payload = AccuChekSmartGuideProtocol.buildSessionStartTime(sensorStartTimeMs)
+            DiagnosticFileLogger.log(
+                "AccuChekSmartGuide: tijdsynchronisatie — sessiestarttijd schrijven (0x2AAA): " +
+                    payload.joinToString("") { "%02x".format(it) }
+            )
+            writeCharacteristic(gatt, startChar, payload)
+            return true
+        }
+
         private fun enableCgmMeasurementNotify(gatt: BluetoothGatt) {
             val measurementChar = charCgmMeasurement ?: return
             enableNotify(gatt, measurementChar, useIndication = false) {
@@ -648,6 +675,13 @@ class AccuChekSmartGuideDriver(private val slot: SensorSlot) : SensorDriver {
         }
 
         override fun onCharacteristicWrite(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
+            if (characteristic.uuid == AccuChekSmartGuideProtocol.CHAR_CGM_SESSION_START_TIME) {
+                // RONDE 251 — uitkomst van de tijdsynchronisatie loggen en gewoon doorgaan met de opzet.
+                DiagnosticFileLogger.log("AccuChekSmartGuide: tijdsynchronisatie (0x2AAA) status=$status" + if (status == BluetoothGatt.GATT_SUCCESS) " — ok" else " — mislukt")
+                needTimeSync = false
+                enableCgmMeasurementNotify(gatt)
+                return
+            }
             if (handleInsufficientAuth(gatt, status) {
                     when (characteristic.uuid) {
                         AccuChekSmartGuideProtocol.CHAR_CGM_SPECIFIC_OPS -> requestCommunicationInterval(gatt)
