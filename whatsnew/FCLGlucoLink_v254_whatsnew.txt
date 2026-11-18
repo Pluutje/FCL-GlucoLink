@@ -1,0 +1,3 @@
+Accu-Chek SmartGuide: na een herverbinding haalt de app nu weer de gemiste metingen op (backfill). Daardoor ontbreken er geen waarden meer als de verbinding even wegviel op het moment van een meting.
+---EN---
+Accu-Chek SmartGuide: after a reconnect the app now fetches missed readings again (backfill), so no values are lost if the connection dropped right at a measurement.

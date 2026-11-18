@@ -428,6 +428,7 @@ class AccuChekSmartGuideDriver(private val slot: SensorSlot) : SensorDriver {
     }
 
     private var lastDiagScanAtMs = 0L
+    private var racpAskedThisConnection = false
 
     private suspend fun runDiagnosticScan(scanner: BluetoothLeScanner, expectedAddress: String) {
         val seen = LinkedHashMap<String, String>()
@@ -559,6 +560,7 @@ class AccuChekSmartGuideDriver(private val slot: SensorSlot) : SensorDriver {
             charCgmSessionStartTime = cgmService.getCharacteristic(AccuChekSmartGuideProtocol.CHAR_CGM_SESSION_START_TIME)
             needTimeSync = false
             timeSyncAttempted = false
+            racpAskedThisConnection = false
 
             val measurementChar = charCgmMeasurement
             val racpChar = charRacp
@@ -825,8 +827,12 @@ class AccuChekSmartGuideDriver(private val slot: SensorSlot) : SensorDriver {
                     // altijd al deden. Communicatie-interval blijft dan
                     // terecht onbekend (toont "—" op het statusscherm) —
                     // dat is eerlijker dan een geraden waarde.
-                    if (characteristic.uuid == AccuChekSmartGuideProtocol.CHAR_CGM_SPECIFIC_OPS && !intervalWriteAttempted) {
+                    // RONDE 253 — guard per VERBINDING (racpAskedThisConnection) i.p.v. per sessie:
+                    // `intervalWriteAttempted` blijft na de eerste verbinding true, waardoor bij elke
+                    // herverbinding de RACP-backfill werd overgeslagen en gemiste metingen wegvielen.
+                    if (characteristic.uuid == AccuChekSmartGuideProtocol.CHAR_CGM_SPECIFIC_OPS && !racpAskedThisConnection) {
                         intervalWriteAttempted = true
+                        racpAskedThisConnection = true
                         writeRacpRequest(gatt)
                     }
                 }
@@ -882,10 +888,11 @@ class AccuChekSmartGuideDriver(private val slot: SensorSlot) : SensorDriver {
                             intervalSetWriteInFlight = true
                             writeCharacteristic(gatt, opsChar, AccuChekSmartGuideProtocol.buildSetCommunicationIntervalCommand(TARGET_COMMUNICATION_INTERVAL_MINUTES))
                         }
-                    } else if (!intervalWriteAttempted) {
+                    } else if (!racpAskedThisConnection) {
                         // Al acceptabel (5 min, of 0xFF/"snelst mogelijk") —
                         // niets te forceren, meteen door naar backfill.
                         intervalWriteAttempted = true
+                        racpAskedThisConnection = true
                         DiagnosticFileLogger.log(
                             "AccuChekSmartGuide: device already reports ${response.minutes} min (acceptable, " +
                                 "effectively $effectiveMinutes min) — write not needed, skipping straight to backfill"
@@ -905,6 +912,7 @@ class AccuChekSmartGuideDriver(private val slot: SensorSlot) : SensorDriver {
                     // Of de "Set" nu gelukt is of niet: ga door naar backfill,
                     // een mislukte interval-forcering mag de rest van de
                     // sessie niet blokkeren.
+                    racpAskedThisConnection = true
                     writeRacpRequest(gatt)
                 }
                 null -> DiagnosticFileLogger.log("AccuChekSmartGuide: unparseable CGM Ops response bytes=${value.joinToString(",")}")
