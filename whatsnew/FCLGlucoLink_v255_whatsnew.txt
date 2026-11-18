@@ -1,0 +1,3 @@
+Dexcom G7: aangevulde metingen (backfill) krijgen nu een tijd op het 5-minutenraster van de live-metingen. Dat voorkomt dat AAPS de data als onregelmatig ziet (gele driehoek) of een waarde dubbel markeert (rode regel).
+---EN---
+Dexcom G7: backfilled readings now get a time on the same 5-minute grid as the live readings. This stops AAPS from seeing the data as irregular (yellow triangle) or flagging a value as a duplicate (red row).

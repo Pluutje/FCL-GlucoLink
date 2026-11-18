@@ -2214,6 +2214,15 @@ class DexcomG7Driver(private val slot: SensorSlot) : SensorDriver {
                     st.usableGlucose() || st.insufficientCalibration()
                 }
                 .filter { (rec, _) -> rec.glucoseMgdl in 39..401 }
+                // RONDE 255 — zet de sensortijd op het 5-minutenraster van de live-metingen
+                // (live tijd min een veelvoud van 5 min). De sensorklok heeft een andere fase dan onze
+                // ontvangsttijden (soms 2-3 min ernaast): AAPS zag dat als onregelmatige data ("herberekend",
+                // gele driehoek) of als dubbele waarde (rode regel).
+                .map { (rec, t) ->
+                    val steps = Math.round((nowMs - t) / 300_000.0).coerceAtLeast(1L)
+                    rec to (nowMs - steps * 300_000L)
+                }
+                .distinctBy { it.second }
                 .sortedBy { it.second }
                 .toList()
             for ((rec, t) in toEmit) {
