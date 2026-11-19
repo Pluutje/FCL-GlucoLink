@@ -1,0 +1,5 @@
+Alarmen: nieuwe kaart "Niet storen". Kies een start- en eindtijd en vink aan welke alarmen in die periode stil blijven (bijvoorbeeld Low 's nachts).
+Sensor: Er wordt gewerkt aan een test voor de FreeStyle Libre 3.
+---EN---
+Alarms: new "Do not disturb" card. Choose a start and end time and tick which alarms stay silent in that period (for example Low at night).
+Sensor: Work is under way on a test for the FreeStyle Libre 3.

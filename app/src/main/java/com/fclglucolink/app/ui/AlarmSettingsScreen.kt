@@ -245,6 +245,8 @@ fun AlarmSettingsScreen(onBack: () -> Unit) {
                 )
             }
 
+            QuietHoursCard(settings = settings, masterEnabled = masterEnabled, scope = scope)
+
             Text(
                 tr(
                     "Thresholds, sounds, and vibration are set here. When alarms " +
@@ -259,6 +261,113 @@ fun AlarmSettingsScreen(onBack: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.secondary
             )
+        }
+    }
+}
+
+/**
+ * RONDE 256 — "Niet storen": between a start and an end time the chosen alarm types stay silent
+ * (see alarm/AlarmQuietHours.kt). Every alarm type can be chosen, also the urgent ones.
+ */
+@Composable
+private fun QuietHoursCard(settings: AppSettings, masterEnabled: Boolean, scope: CoroutineScope) {
+    val context = LocalContext.current
+    val quiet by settings.alarmQuietHours.collectAsState(
+        initial = com.fclglucolink.app.alarm.AlarmQuietHours(
+            enabled = false,
+            startMinutes = com.fclglucolink.app.alarm.AlarmQuietHours.DEFAULT_START_MINUTES,
+            endMinutes = com.fclglucolink.app.alarm.AlarmQuietHours.DEFAULT_END_MINUTES,
+            types = emptySet()
+        )
+    )
+
+    fun timeText(minutes: Int) = "%02d:%02d".format(minutes / 60, minutes % 60)
+
+    fun pickTime(current: Int, onPicked: (Int) -> Unit) {
+        android.app.TimePickerDialog(
+            context,
+            { _, hour, minute -> onPicked(hour * 60 + minute) },
+            current / 60,
+            current % 60,
+            true
+        ).show()
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(tr("Do not disturb", "Niet storen"), style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        tr(
+                            "Between these times the alarms you tick below stay silent. All other alarms work as usual.",
+                            "Tussen deze tijden klinken de alarmen die je hieronder aanvinkt niet. Alle andere alarmen werken zoals altijd."
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                }
+                Switch(
+                    checked = quiet.enabled,
+                    enabled = masterEnabled,
+                    onCheckedChange = { value -> scope.launch { settings.setAlarmQuietEnabled(value) } }
+                )
+            }
+
+            if (quiet.enabled) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(tr("From", "Van"), style = MaterialTheme.typography.bodyMedium)
+                    TextButton(
+                        enabled = masterEnabled,
+                        onClick = { pickTime(quiet.startMinutes) { m -> scope.launch { settings.setAlarmQuietStartMinutes(m) } } }
+                    ) { Text(timeText(quiet.startMinutes)) }
+                    Text(tr("until", "tot"), style = MaterialTheme.typography.bodyMedium)
+                    TextButton(
+                        enabled = masterEnabled,
+                        onClick = { pickTime(quiet.endMinutes) { m -> scope.launch { settings.setAlarmQuietEndMinutes(m) } } }
+                    ) { Text(timeText(quiet.endMinutes)) }
+                }
+
+                Text(
+                    tr("Silent during this time:", "Stil in deze periode:"),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                AlarmType.entries.forEach { type ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        androidx.compose.material3.Checkbox(
+                            checked = type in quiet.types,
+                            enabled = masterEnabled,
+                            onCheckedChange = { value -> scope.launch { settings.setAlarmQuietType(type, value) } }
+                        )
+                        Text(type.displayName, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+                if (AlarmType.URGENT_LOW in quiet.types) {
+                    Text(
+                        tr(
+                            "Urgent Low is a safety alarm. It will not sound during this time.",
+                            "Urgent Low is een veiligheidsalarm. Dit klinkt in deze periode niet."
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
         }
     }
 }

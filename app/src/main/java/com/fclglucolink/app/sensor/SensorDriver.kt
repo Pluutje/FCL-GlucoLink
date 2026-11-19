@@ -54,7 +54,11 @@ enum class SensorType(val displayName: String, val implemented: Boolean) {
     // dat er al een echte sensor-driver hoeft te werken, en (b) een eerder
     // problematische BG-reeks exact te kunnen laten herafspelen om een
     // FCLvNext-fix te valideren voordat die live gaat.
-    SIMULATOR("BG simulator (testing)", implemented = true)
+    SIMULATOR("BG simulator (testing)", implemented = true),
+
+    // RONDE 256 — geen eigen Bluetooth: neemt de xDrip-broadcast van JugglucoNG over (Libre 3 / 3 Plus,
+    // 1-minuutdata) voor opslag, gladmaken en analyse. Zie sensor/juggluco/JugglucoDriver.kt.
+    JUGGLUCO_LIBRE3("Juggluco (Libre 3, 1-min)", implemented = true)
 }
 
 /**

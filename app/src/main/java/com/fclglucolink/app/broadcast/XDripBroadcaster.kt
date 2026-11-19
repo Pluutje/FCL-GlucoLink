@@ -135,6 +135,7 @@ object XDripBroadcaster {
             SensorType.DEXCOM_G7 -> "G7"
             SensorType.ACCUCHEK_SMARTGUIDE -> "AccuChek"
             SensorType.SIMULATOR -> "FCLGlucoLinkSimulator"
+            SensorType.JUGGLUCO_LIBRE3 -> "Libre3"
         }
     }
 
@@ -210,7 +211,11 @@ object XDripBroadcaster {
         // ResolveInfoFlags-variant is pas sinds API 33 beschikbaar; dit
         // project heeft minSdk 26, dus de oude overload blijft nodig.
         val resolveInfos = pm.queryBroadcastReceivers(intent, 0)
-        return resolveInfos.mapNotNull { it.activityInfo?.packageName }.distinct()
+        // RONDE 256 — leave this app out: it has its own receiver for this action now (for
+        // JugglucoNG readings), so sending to ourselves would make a loop.
+        return resolveInfos.mapNotNull { it.activityInfo?.packageName }
+            .filter { it != context.packageName }
+            .distinct()
     }
 
     // 20/08/2026 (editor, RONDE 115) — nieuwe parameter [universalSourceCode],

@@ -4,6 +4,7 @@ import com.fclglucolink.app.sensor.accuchek.AccuChekSmartGuideDriver
 import com.fclglucolink.app.sensor.caresensair.CareSensAirDriver
 import com.fclglucolink.app.sensor.dexcomg6.DexcomG6Driver
 import com.fclglucolink.app.sensor.dexcomg7.DexcomG7Driver
+import com.fclglucolink.app.sensor.juggluco.JugglucoDriver
 import com.fclglucolink.app.sensor.simulator.SimulatorDriver
 
 /**
@@ -41,5 +42,6 @@ object SensorRegistry {
         SensorType.DEXCOM_G7 -> DexcomG7Driver(slot)
         SensorType.ACCUCHEK_SMARTGUIDE -> AccuChekSmartGuideDriver(slot)
         SensorType.SIMULATOR -> SimulatorDriver(slot)
+        SensorType.JUGGLUCO_LIBRE3 -> JugglucoDriver(slot)
     }
 }

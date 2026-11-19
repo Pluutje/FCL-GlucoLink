@@ -162,6 +162,19 @@ object DiagnosticFileLogger {
      * `yyyy-MM-dd`-datum in de naam sorteert lexicografisch al gelijk aan
      * chronologisch.
      */
+    /**
+     * RONDE 256 — files for the "send log" dialog: the daily log files plus the CSV files of the
+     * Juggluco (Libre 3) test, `libre3_minuut_*.csv` and `referentie_*.csv`. The CSV files are not
+     * part of [listLogFiles], so they are never pruned like the daily logs.
+     */
+    fun listUploadFiles(): List<File> {
+        val dir = logDirOrNull() ?: return emptyList()
+        val csvRegex = Regex("""(libre3_minuut|referentie)_\d{4}-\d{2}-\d{2}\.csv""")
+        val csv = dir.listFiles { file -> file.isFile && csvRegex.matches(file.name) }
+            ?.sortedByDescending { it.name } ?: emptyList()
+        return listLogFiles() + csv
+    }
+
     fun listLogFiles(): List<File> {
         val dir = logDirOrNull() ?: return emptyList()
         return dir.listFiles { file -> file.isFile && logFileNameRegex.matches(file.name) }

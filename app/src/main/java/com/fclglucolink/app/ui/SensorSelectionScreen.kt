@@ -278,6 +278,15 @@ private fun SensorCard(sensor: SensorType, isActive: Boolean, onClick: () -> Uni
                         ),
                         color = MaterialTheme.colorScheme.primary
                     )
+                    sensor == SensorType.JUGGLUCO_LIBRE3 -> Text(
+                        tr(
+                            "No pairing. Takes the readings that JugglucoNG sends (Libre 3, 1-minute data). " +
+                                "Use the free slot, not the AAPS slot. Never goes to AAPS.",
+                            "Geen koppeling. Neemt de metingen over die JugglucoNG stuurt (Libre 3, 1-minuutdata). " +
+                                "Gebruik het vrije slot, niet het AAPS-slot. Gaat nooit naar AAPS."
+                        ),
+                        color = MaterialTheme.colorScheme.secondary
+                    )
                     sensor == SensorType.SIMULATOR -> Text(
                         tr(
                             "Not a real sensor — for testing without hardware",

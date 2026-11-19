@@ -527,6 +527,15 @@ fun FclGlucoLinkNavHost() {
                                     }
                                 }
                             }
+                            // RONDE 256 — no pairing: readings come in by broadcast from JugglucoNG.
+                            SensorType.JUGGLUCO_LIBRE3 -> {
+                                settings.setSelectedSensor(slot, sensorType)
+                                settings.setDeviceAddress(slot, "juggluco")
+                                startBleConnectionService(context)
+                                navController.navigate(ROUTE_COMBI) {
+                                    popUpTo(ROUTE_SENSOR_SELECTION) { inclusive = true }
+                                }
+                            }
                             else -> navController.navigate("$BASE_PAIRING/${sensorType.name}/${slot.name}") {
                                 popUpTo(ROUTE_SENSOR_SELECTION) { inclusive = true }
                             }

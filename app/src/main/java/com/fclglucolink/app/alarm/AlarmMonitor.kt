@@ -83,7 +83,11 @@ class AlarmMonitor(private val context: Context) {
         val previousReading = readingStore.recentReadings(hours = 1, slot = slot).first()
             .filter { it.timestampMs < (latestReading?.timestampMs ?: Long.MAX_VALUE) }
             .maxByOrNull { it.timestampMs }
-        val firing = AlarmEvaluator.evaluate(configs, latestReading, nowMs, previousReading)
+        val firingAll = AlarmEvaluator.evaluate(configs, latestReading, nowMs, previousReading)
+        // RONDE 256 — "Niet storen": in het ingestelde tijdvenster klinken de gekozen alarmtypes niet.
+        // Een alarm dat al klinkt en daardoor uit `firing` valt, wordt hieronder gewoon gestopt.
+        val quiet = settings.getAlarmQuietHoursOnce()
+        val firing = if (quiet.isActiveAt(nowMs)) firingAll.filter { it !in quiet.types } else firingAll
 
         // Alarmpauze (door de gebruiker ingesteld): geen enkel alarm klinkt.
         // Alleen Urgent Low trilt kort (zonder geluid), elke 5 min zolang het duurt.

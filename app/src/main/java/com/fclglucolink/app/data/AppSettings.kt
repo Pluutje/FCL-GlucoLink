@@ -2207,6 +2207,49 @@ class AppSettings(private val context: Context) {
         prefs[alarmLong("stopped_episode", type)] == 1L
     }
 
+    // RONDE 256 — "Niet storen": zie alarm/AlarmQuietHours.kt. De types staan als komma-gescheiden
+    // enum-namen in één tekstveld.
+    private val quietEnabledKey = booleanPreferencesKey("alarm_quiet_enabled")
+    private val quietStartKey = intPreferencesKey("alarm_quiet_start_min")
+    private val quietEndKey = intPreferencesKey("alarm_quiet_end_min")
+    private val quietTypesKey = stringPreferencesKey("alarm_quiet_types")
+
+    private fun quietFrom(prefs: Preferences): com.fclglucolink.app.alarm.AlarmQuietHours =
+        com.fclglucolink.app.alarm.AlarmQuietHours(
+            enabled = prefs[quietEnabledKey] ?: false,
+            startMinutes = prefs[quietStartKey] ?: com.fclglucolink.app.alarm.AlarmQuietHours.DEFAULT_START_MINUTES,
+            endMinutes = prefs[quietEndKey] ?: com.fclglucolink.app.alarm.AlarmQuietHours.DEFAULT_END_MINUTES,
+            types = (prefs[quietTypesKey] ?: "").split(',')
+                .mapNotNull { name -> AlarmType.entries.firstOrNull { it.name == name.trim() } }
+                .toSet()
+        )
+
+    val alarmQuietHours: Flow<com.fclglucolink.app.alarm.AlarmQuietHours> =
+        context.dataStore.data.map { quietFrom(it) }
+
+    suspend fun getAlarmQuietHoursOnce(): com.fclglucolink.app.alarm.AlarmQuietHours =
+        quietFrom(context.dataStore.data.first())
+
+    suspend fun setAlarmQuietEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[quietEnabledKey] = enabled }
+    }
+
+    suspend fun setAlarmQuietStartMinutes(minutes: Int) {
+        context.dataStore.edit { prefs -> prefs[quietStartKey] = minutes }
+    }
+
+    suspend fun setAlarmQuietEndMinutes(minutes: Int) {
+        context.dataStore.edit { prefs -> prefs[quietEndKey] = minutes }
+    }
+
+    suspend fun setAlarmQuietType(type: AlarmType, selected: Boolean) {
+        context.dataStore.edit { prefs ->
+            val current = quietFrom(prefs).types.toMutableSet()
+            if (selected) current.add(type) else current.remove(type)
+            prefs[quietTypesKey] = current.joinToString(",") { it.name }
+        }
+    }
+
     /** Alle alarmen gepauzeerd tot dit tijdstip (epoch-ms); `null` = niet gepauzeerd. */
     val alarmsPausedUntilMs: Flow<Long?> = context.dataStore.data.map { prefs ->
         prefs[longPreferencesKey("alarms_paused_until_ms")]

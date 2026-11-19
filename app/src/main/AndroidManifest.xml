@@ -252,6 +252,18 @@
             android:foregroundServiceType="connectedDevice"
             android:stopWithTask="false" />
 
+        <!-- RONDE 256 — receives the xDrip broadcast of JugglucoNG (Libre 3, 1-minute data).
+             See sensor/juggluco/JugglucoBroadcastReceiver.kt. exported="true" because another
+             app sends to it. It only stores the readings, it never forwards them. -->
+        <receiver
+            android:name=".sensor.juggluco.JugglucoBroadcastReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.eveningoutpost.dexdrip.BgEstimate" />
+            </intent-filter>
+        </receiver>
+
         <!-- 03/08/2026 (editor, ronde 28) — zie ConnectionWatchdog.kt's kdoc:
              ontvangt de zelf-herplannende AlarmManager-tik en herstart
              BleConnectionService onvoorwaardelijk veilig. Bewust

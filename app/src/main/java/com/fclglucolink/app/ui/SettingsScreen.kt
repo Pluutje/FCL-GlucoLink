@@ -1122,7 +1122,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit, onOpenAbout: ()
 private fun SendLogFilesDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val logFiles = remember { DiagnosticFileLogger.listLogFiles() }
+    val logFiles = remember { DiagnosticFileLogger.listUploadFiles() }
     val selected = remember { mutableStateMapOf<String, Boolean>() }
     val statusByFile = remember { mutableStateMapOf<String, String>() }
     var isUploading by remember { mutableStateOf(false) }

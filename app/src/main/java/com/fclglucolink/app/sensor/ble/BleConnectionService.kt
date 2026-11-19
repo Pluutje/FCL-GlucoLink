@@ -723,7 +723,17 @@ class BleConnectionService : Service() {
                     // als "vorige" meting terugkrijgen.
                     val previousReadingForBroadcast = readingStore.latestReading(slot = slot).first()
                     readingStore.record(smoothedReading, slot)
-                    if (settings.getAapsActiveSlotOnce() == slot) {
+                    // RONDE 256 — raw / calibrated / filtered of the AAPS-sending (reference) sensor to a
+                    // CSV file, for the comparison with the Juggluco (Libre 3) test. Writing only.
+                    if (sensorType != SensorType.JUGGLUCO_LIBRE3 && settings.getAapsActiveSlotOnce() == slot) {
+                        runCatching {
+                            com.fclglucolink.app.sensor.juggluco.ReferenceCsvLog.append(
+                                this@BleConnectionService, slot.name, stableReading, calibratedReading, smoothedReading
+                            )
+                        }
+                    }
+                    // RONDE 256 — readings of the Juggluco (Libre 3) test sensor never go to AAPS.
+                    if (settings.getAapsActiveSlotOnce() == slot && sensorType != SensorType.JUGGLUCO_LIBRE3) {
                         // 20/08/2026 (editor, RONDE 115) — zie
                         // XDripBroadcaster.kt's kdoc bij sourceInfo(): AAN ->
                         // dezelfde AAPS-v3+v4-vertrouwde code voor elke
@@ -1041,6 +1051,9 @@ class BleConnectionService : Service() {
         sensorType: SensorType
     ): GlucoseReading {
         if (!settings.isSmoothingEnabled()) return reading
+        // RONDE 256 — the Juggluco (Libre 3) test sensor stays raw: 1-minute data needs a different
+        // filter than the 5-minute Kalman settings, and that is what we want to measure.
+        if (sensorType == SensorType.JUGGLUCO_LIBRE3) return reading
         val breakInDecayFactor = computeBreakInDecayFactor(reading.timestampMs, slot, sensorType)
         val breakOutDecayFactor = computeBreakOutDecayFactor(reading.timestampMs, slot, sensorType)
         val strength = settings.getSmoothingStrengthOnce()
