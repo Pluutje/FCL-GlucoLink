@@ -1,0 +1,3 @@
+CSV-uitvoer: elke sensor heeft nu zijn eigen kolommen in het bestand, zodat je in Excel direct een grafiek per sensor kunt maken. De vingerprikken staan in een aparte kolom. Je kunt nu ook de laatste 14 dagen kiezen.
+---EN---
+CSV export: each sensor now has its own columns in the file, so you can make a chart per sensor in Excel right away. The fingersticks are in a separate column. You can now also choose the last 14 days.

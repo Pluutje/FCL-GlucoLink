@@ -1273,9 +1273,9 @@ private fun ExportCsvDialog(onDismiss: () -> Unit) {
             ) {
                 Text(
                     trNow(
-                        "Creates a CSV file with the glucose values, in the unit used on screen, " +
+                        "Creates a CSV file with one set of columns per sensor, in the unit used on screen, " +
                             "plus a column with the fingersticks (on the first reading after each fingerstick).",
-                        "Maakt een CSV-bestand met de glucosewaarden, in de eenheid van het scherm, " +
+                        "Maakt een CSV-bestand met per sensor een eigen set kolommen, in de eenheid van het scherm, " +
                             "plus een kolom met de vingerprikken (bij de eerste meting na elke vingerprik)."
                     ),
                     style = MaterialTheme.typography.bodySmall,
