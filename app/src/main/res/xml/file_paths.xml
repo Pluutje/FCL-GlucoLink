@@ -11,4 +11,6 @@
 -->
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <cache-path name="updates" path="updates/" />
+    <!-- RONDE 257 — CSV-uitvoer (Settings > Ondersteuning): tijdelijk bestand om te delen. -->
+    <cache-path name="exports" path="exports/" />
 </paths>

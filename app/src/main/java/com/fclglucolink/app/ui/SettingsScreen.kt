@@ -1,5 +1,6 @@
 package com.fclglucolink.app.ui
 
+import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,6 +24,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -49,7 +51,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
+import com.fclglucolink.app.BuildConfig
 import com.fclglucolink.app.data.AppSettings
+import com.fclglucolink.app.export.GlucoseCsvExporter
 import com.fclglucolink.app.logging.DiagnosticFileLogger
 import com.fclglucolink.app.logging.LogUploader
 import com.fclglucolink.app.sensor.SensorSlot
@@ -497,6 +502,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit, onOpenAbout: ()
             // aangeroepen vanuit FclGlucoLinkApp.kt) zodat de logmap niet
             // ongelimiteerd doorgroeit.
             var showSendLogDialog by remember { mutableStateOf(false) }
+            var showExportCsvDialog by remember { mutableStateOf(false) }
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -558,6 +564,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit, onOpenAbout: ()
                         TextButton(onClick = onOpenAbout) { Text(tr("About & update", "Over & update")) }
                     }
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { showExportCsvDialog = true }) { Text(tr("CSV export", "CSV-uitvoer")) }
                         TextButton(onClick = { showSendLogDialog = true }) { Text(tr("Send log files", "Logbestanden verzenden")) }
                     }
                 }
@@ -565,6 +572,9 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit, onOpenAbout: ()
 
             if (showSendLogDialog) {
                 SendLogFilesDialog(onDismiss = { showSendLogDialog = false })
+            }
+            if (showExportCsvDialog) {
+                ExportCsvDialog(onDismiss = { showExportCsvDialog = false })
             }
 
             // 05/08/2026 (editor, RONDE 43 — "Bij het menu. komt een
@@ -1218,6 +1228,129 @@ private fun SendLogFilesDialog(onDismiss: () -> Unit) {
                     }
                 }
             }
+        }
+    )
+}
+
+/**
+ * RONDE 257 (op verzoek van een gebruiker) — "CSV-uitvoer": kies sensor (beide/A/B) en periode,
+ * maak een CSV met de glucosewaarden (en de vingerprikken, op de eerstvolgende meting) en deel het
+ * bestand via het Android-deelmenu. Zie export/GlucoseCsvExporter.kt.
+ */
+@Composable
+private fun ExportCsvDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val language = LocalAppLanguage.current
+    fun trNow(en: String, nl: String): String = if (language == AppLanguage.DUTCH) nl else en
+
+    val slotLabels = listOf(
+        trNow("Both sensors", "Beide sensoren"),
+        trNow("Slot A", "Slot A"),
+        trNow("Slot B", "Slot B")
+    )
+    val periodDays = listOf(1, 7, 14, 30)
+    val periodLabels = listOf(
+        trNow("Last 24 hours", "Laatste 24 uur"),
+        trNow("Last 7 days", "Laatste 7 dagen"),
+        trNow("Last 14 days", "Laatste 14 dagen"),
+        trNow("Last 30 days (everything stored)", "Laatste 30 dagen (alles wat is opgeslagen)")
+    )
+    var slotIndex by remember { mutableStateOf(0) }
+    var periodIndex by remember { mutableStateOf(3) }
+    var busy by remember { mutableStateOf(false) }
+    var status by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text(trNow("CSV export", "CSV-uitvoer")) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    trNow(
+                        "Creates a CSV file with the glucose values, in the unit used on screen, " +
+                            "plus a column with the fingersticks (on the first reading after each fingerstick).",
+                        "Maakt een CSV-bestand met de glucosewaarden, in de eenheid van het scherm, " +
+                            "plus een kolom met de vingerprikken (bij de eerste meting na elke vingerprik)."
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+                Text(trNow("Sensor", "Sensor"), style = MaterialTheme.typography.titleSmall)
+                slotLabels.forEachIndexed { i, label ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = slotIndex == i, enabled = !busy, onClick = { slotIndex = i })
+                        Text(label, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+                Text(trNow("Period", "Periode"), style = MaterialTheme.typography.titleSmall)
+                periodLabels.forEachIndexed { i, label ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = periodIndex == i, enabled = !busy, onClick = { periodIndex = i })
+                        Text(label, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+                if (busy) CircularProgressIndicator(modifier = Modifier.padding(top = 8.dp))
+                if (status.isNotEmpty()) {
+                    Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !busy,
+                onClick = {
+                    busy = true
+                    status = ""
+                    scope.launch {
+                        val slot = when (slotIndex) {
+                            1 -> SensorSlot.A
+                            2 -> SensorSlot.B
+                            else -> null
+                        }
+                        val outcome = runCatching { GlucoseCsvExporter.export(context, slot, periodDays[periodIndex]) }
+                        val result = outcome.getOrNull()
+                        if (result?.file == null) {
+                            status = if (outcome.isFailure) {
+                                trNow("Failed: ${outcome.exceptionOrNull()?.message}", "Mislukt: ${outcome.exceptionOrNull()?.message}")
+                            } else {
+                                trNow("No readings in this period.", "Geen metingen in deze periode.")
+                            }
+                        } else {
+                            val file = requireNotNull(result.file)
+                            val shared = runCatching {
+                                val uri = FileProvider.getUriForFile(context, "${BuildConfig.APPLICATION_ID}.fileprovider", file)
+                                val send = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/csv"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(
+                                    Intent.createChooser(send, trNow("Share CSV file", "CSV-bestand delen"))
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                )
+                            }
+                            status = if (shared.isSuccess) {
+                                trNow(
+                                    "${result.rows} readings, ${result.fingersticksPlaced} fingersticks.",
+                                    "${result.rows} metingen, ${result.fingersticksPlaced} vingerprikken."
+                                )
+                            } else {
+                                trNow("Could not open the share menu: ${shared.exceptionOrNull()?.message}", "Delen niet gelukt: ${shared.exceptionOrNull()?.message}")
+                            }
+                        }
+                        busy = false
+                    }
+                }
+            ) { Text(trNow("Create and share", "Maken en delen")) }
+        },
+        dismissButton = {
+            TextButton(enabled = !busy, onClick = onDismiss) { Text(trNow("Close", "Sluiten")) }
         }
     )
 }

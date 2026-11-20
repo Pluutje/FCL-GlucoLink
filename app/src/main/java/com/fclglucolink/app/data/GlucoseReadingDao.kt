@@ -15,6 +15,11 @@ interface GlucoseReadingDao {
     @Query("SELECT * FROM glucose_readings WHERE timestampMs >= :sinceMs ORDER BY timestampMs ASC")
     fun recentReadings(sinceMs: Long): Flow<List<GlucoseReadingEntity>>
 
+    /** RONDE 257 — voor de CSV-uitvoer: eenmalig, oplopend in tijd. `slot == null` = beide slots
+     *  (inclusief oude rijen zonder slot); anders alleen die slot. */
+    @Query("SELECT * FROM glucose_readings WHERE timestampMs >= :sinceMs AND (:slot IS NULL OR slot = :slot) ORDER BY timestampMs ASC, slot ASC")
+    suspend fun readingsForExport(sinceMs: Long, slot: String?): List<GlucoseReadingEntity>
+
     @Query("SELECT * FROM glucose_readings ORDER BY timestampMs DESC LIMIT 1")
     fun latestReading(): Flow<GlucoseReadingEntity?>
 

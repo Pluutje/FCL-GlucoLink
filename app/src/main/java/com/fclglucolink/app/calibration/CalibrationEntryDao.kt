@@ -16,6 +16,10 @@ interface CalibrationEntryDao {
     @Query("SELECT * FROM calibration_entries ORDER BY timestampMs ASC")
     fun all(): Flow<List<CalibrationEntryEntity>>
 
+    /** RONDE 257 — eenmalige lijst van alle vingerprikken, voor de CSV-uitvoer. */
+    @Query("SELECT * FROM calibration_entries ORDER BY timestampMs ASC")
+    suspend fun allOnce(): List<CalibrationEntryEntity>
+
     @Query("DELETE FROM calibration_entries WHERE id = :id")
     suspend fun delete(id: Long)
 

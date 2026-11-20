@@ -1,0 +1,3 @@
+CSV-uitvoer: nieuwe knop onder Instellingen > Ondersteuning. Maakt een CSV-bestand met de glucosewaarden (in de eenheid van het scherm) en de vingerprikken, voor één of beide sensoren, en deelt dat. De app bewaart de metingen nu 30 dagen.
+---EN---
+CSV export: new button under Settings > Support. Creates a CSV file with the glucose values (in the unit used on screen) and the fingersticks, for one or both sensors, and shares it. The app now keeps the readings for 30 days.

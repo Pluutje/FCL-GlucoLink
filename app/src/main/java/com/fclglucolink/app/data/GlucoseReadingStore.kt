@@ -24,6 +24,11 @@ class GlucoseReadingStore(context: Context) {
 
     private val dao = FclGlucoLinkDatabase.getInstance(context).glucoseReadingDao()
 
+    companion object {
+        /** 30 dagen bewaren + 1 dag marge. */
+        const val RETENTION_DAYS = 31L
+    }
+
     /** 28/08/2026 (editor, RONDE 153) — [slot] nu VERPLICHT: zie
      *  GlucoseReadingEntity.kt's kdoc bij `slot` — zonder deze kolom kon een
      *  meting van twee gelijktijdig gekoppelde sensoren van HETZELFDE type
@@ -33,8 +38,12 @@ class GlucoseReadingStore(context: Context) {
         dao.insert(reading.toEntity(slot))
         // Huishouding hier (i.p.v. een aparte periodieke taak) — simpel en
         // vaak genoeg: elke meting is een goed moment om oude data op te
-        // ruimen. 49u i.p.v. exact 48u — zie kdoc hierboven.
-        dao.deleteOlderThan(System.currentTimeMillis() - TimeUnit.HOURS.toMillis(49))
+        // ruimen.
+        // RONDE 257 — bewaartijd van 49 uur naar 31 dagen, voor de CSV-uitvoer
+        // (Settings > Ondersteuning). 30 dagen + 1 dag marge, zelfde reden als
+        // de oude 49u-grens. De grafiek vraagt per periode op (`sinceMs`),
+        // dus die verandert niet.
+        dao.deleteOlderThan(System.currentTimeMillis() - TimeUnit.DAYS.toMillis(RETENTION_DAYS))
     }
 
     /**
