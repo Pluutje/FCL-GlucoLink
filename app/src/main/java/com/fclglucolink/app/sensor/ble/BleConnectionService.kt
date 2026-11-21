@@ -540,6 +540,17 @@ class BleConnectionService : Service() {
             var firstReadingThisSession = true
             launch {
                 driver.readings.collect { reading ->
+                    // RONDE 259 — safety net for ALL sensors. A value outside
+                    // 20..600 mg/dL is outside every supported sensor's range,
+                    // so it is a decode error. Never store it, chart it or send
+                    // it to AAPS.
+                    if (reading.glucoseMgdl > 600.0 || reading.glucoseMgdl < 20.0) {
+                        DiagnosticFileLogger.log(
+                            "BleConnectionService: implausible glucose ${reading.glucoseMgdl} mg/dL " +
+                                "(slot=$slot) dropped, not stored and not sent."
+                        )
+                        return@collect
+                    }
                     // RONDE 244 — use the start time of the CURRENT physical sensor (CareSens
                     // Air / G6 / G7), not the generic per-slot time that is set only once.
                     // AAPS makes a "sensor change" event from this value, and it skips a

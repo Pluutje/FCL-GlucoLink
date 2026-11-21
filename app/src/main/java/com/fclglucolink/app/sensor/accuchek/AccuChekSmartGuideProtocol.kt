@@ -109,10 +109,15 @@ object AccuChekSmartGuideProtocol {
         val raw = (lo.toInt() and 0xFF) or ((hi.toInt() and 0xFF) shl 8)
         val rawMantissa = raw and 0x0FFF
         return when (rawMantissa) {
-            0x07FF -> SfloatValue.NaN
-            0x0800 -> SfloatValue.PositiveInfinity
-            0x0801 -> SfloatValue.NegativeInfinity
-            0x0802 -> SfloatValue.Reserved
+            // RONDE 259 — the table was shifted by one. IEEE 11073-20601 SFLOAT:
+            // 0x07FE = +INFINITY (HI), 0x07FF = NaN, 0x0800 = NRes,
+            // 0x0801 = Reserved, 0x0802 = -INFINITY (LO). Before, a "HI" value
+            // (0x07FE) was read as the number 2046, and a LO value (0x0802)
+            // was skipped as "Reserved".
+            0x07FE -> SfloatValue.PositiveInfinity
+            0x07FF, 0x0800 -> SfloatValue.NaN
+            0x0801 -> SfloatValue.Reserved
+            0x0802 -> SfloatValue.NegativeInfinity
             else -> {
                 val mantissa = if (rawMantissa >= 0x0800) rawMantissa - 0x1000 else rawMantissa
                 val rawExponent = (raw shr 12) and 0x0F
@@ -144,8 +149,17 @@ object AccuChekSmartGuideProtocol {
     fun sfloatToGlucoseMgdl(value: SfloatValue): Double? = when (value) {
         is SfloatValue.Value -> value.value
         SfloatValue.NegativeInfinity -> LOW_FLOOR_MGDL
-        SfloatValue.NaN, SfloatValue.PositiveInfinity, SfloatValue.Reserved -> null
+        SfloatValue.PositiveInfinity -> HIGH_CEIL_MGDL
+        SfloatValue.NaN, SfloatValue.Reserved -> null
     }
+
+    /**
+     * RONDE 259 — upper end of the SmartGuide measuring range (400 mg/dL,
+     * 22.2 mmol/L). A +INFINITY ("HI") value is shown as this ceiling.
+     * This limit is specific to this sensor, so it lives here and not in
+     * shared code (other sensors measure higher, e.g. about 500 mg/dL).
+     */
+    const val HIGH_CEIL_MGDL: Double = 400.0
 
     /**
      * 01/10/2026 (editor, RONDE 200, bugfix na live-test) — [sfloatToGlucoseMgdl]

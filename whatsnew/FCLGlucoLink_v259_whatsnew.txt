@@ -1,0 +1,5 @@
+Accu-Chek SmartGuide: een "HI"-waarde werd foutief als 2046 mg/dL (113 mmol/L) gelezen en doorgestuurd. Dit is hersteld: HI wordt nu 400 mg/dL (22,2 mmol/L), de bovengrens van deze sensor. Een "LO"-waarde werd overgeslagen en wordt nu als 39 mg/dL doorgegeven.
+Nieuw voor alle sensoren: een waarde onder 20 of boven 600 mg/dL wordt nooit meer opgeslagen of naar AAPS gestuurd.
+---EN---
+Accu-Chek SmartGuide: a "HI" value was wrongly read as 2046 mg/dL (113 mmol/L) and sent on. This is fixed: HI is now 400 mg/dL (22.2 mmol/L), the upper limit of this sensor. A "LO" value was skipped and is now passed on as 39 mg/dL.
+New for all sensors: a value below 20 or above 600 mg/dL is never stored or sent to AAPS again.
