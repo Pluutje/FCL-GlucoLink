@@ -20,6 +20,7 @@ import com.fclglucolink.app.sensor.SensorSlot
 import com.fclglucolink.app.sensor.SensorType
 import com.fclglucolink.app.sensor.caresensair.CareSensAirScanResult
 import com.fclglucolink.app.sensor.simulator.PersistedSimulatorMode
+import com.fclglucolink.app.smoothing.Libre3Filter
 import com.fclglucolink.app.smoothing.SmoothingStrength
 import com.fclglucolink.app.ui.AppLanguage
 import com.fclglucolink.app.ui.GlucoseUnit
@@ -148,6 +149,13 @@ class AppSettings(private val context: Context) {
         // SMOOTHING_BREAK_IN_FILTER_DURATION_HOURS, alleen in de tijd
         // omgekeerd. UI-max 96u (SettingsScreen.kt).
         val SMOOTHING_BREAK_OUT_FILTER_DURATION_HOURS = doublePreferencesKey("smoothing_breakout_filter_duration_hours")
+
+        // RONDE 260 (TEST) — own filter for the 1-minute Libre 3 readings, see
+        // smoothing/Libre3Filter.kt. Independent of the general smoothing switch above.
+        val LIBRE3_FILTER_ENABLED = booleanPreferencesKey("libre3_filter_enabled")
+        val LIBRE3_FILTER_ALPHA = doublePreferencesKey("libre3_filter_alpha")
+        val LIBRE3_FILTER_LEAD_MINUTES = doublePreferencesKey("libre3_filter_lead_minutes")
+        val LIBRE3_FILTER_MAX_LEAD_MGDL = doublePreferencesKey("libre3_filter_max_lead_mgdl")
 
         // 13/08/2026 (editor, RONDE 104 — Fase 1) — mg/dL vs mmol/L-knop,
         // app-breed, geen per-slot: de weergave-eenheid is een
@@ -551,6 +559,52 @@ class AppSettings(private val context: Context) {
 
     suspend fun getBreakInFilterDurationHoursOnce(): Double =
         context.dataStore.data.first()[Keys.SMOOTHING_BREAK_IN_FILTER_DURATION_HOURS] ?: 24.0
+
+    /** RONDE 260 (TEST) — see [Keys.LIBRE3_FILTER_ENABLED]. Default ON: the filter only touches
+     *  the Libre 3 test sensor, and the raw value stays visible next to the filtered one. */
+    val libre3FilterEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.LIBRE3_FILTER_ENABLED] ?: true
+    }
+
+    suspend fun setLibre3FilterEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[Keys.LIBRE3_FILTER_ENABLED] = enabled }
+    }
+
+    suspend fun isLibre3FilterEnabledOnce(): Boolean =
+        context.dataStore.data.first()[Keys.LIBRE3_FILTER_ENABLED] ?: true
+
+    val libre3FilterAlpha: Flow<Double> = context.dataStore.data.map { prefs ->
+        prefs[Keys.LIBRE3_FILTER_ALPHA] ?: Libre3Filter.DEFAULT_ALPHA
+    }
+
+    suspend fun setLibre3FilterAlpha(value: Double) {
+        context.dataStore.edit { prefs -> prefs[Keys.LIBRE3_FILTER_ALPHA] = value }
+    }
+
+    suspend fun getLibre3FilterAlphaOnce(): Double =
+        context.dataStore.data.first()[Keys.LIBRE3_FILTER_ALPHA] ?: Libre3Filter.DEFAULT_ALPHA
+
+    val libre3FilterLeadMinutes: Flow<Double> = context.dataStore.data.map { prefs ->
+        prefs[Keys.LIBRE3_FILTER_LEAD_MINUTES] ?: Libre3Filter.DEFAULT_LEAD_MINUTES
+    }
+
+    suspend fun setLibre3FilterLeadMinutes(value: Double) {
+        context.dataStore.edit { prefs -> prefs[Keys.LIBRE3_FILTER_LEAD_MINUTES] = value }
+    }
+
+    suspend fun getLibre3FilterLeadMinutesOnce(): Double =
+        context.dataStore.data.first()[Keys.LIBRE3_FILTER_LEAD_MINUTES] ?: Libre3Filter.DEFAULT_LEAD_MINUTES
+
+    val libre3FilterMaxLeadMgdl: Flow<Double> = context.dataStore.data.map { prefs ->
+        prefs[Keys.LIBRE3_FILTER_MAX_LEAD_MGDL] ?: Libre3Filter.DEFAULT_MAX_LEAD_MGDL
+    }
+
+    suspend fun setLibre3FilterMaxLeadMgdl(value: Double) {
+        context.dataStore.edit { prefs -> prefs[Keys.LIBRE3_FILTER_MAX_LEAD_MGDL] = value }
+    }
+
+    suspend fun getLibre3FilterMaxLeadMgdlOnce(): Double =
+        context.dataStore.data.first()[Keys.LIBRE3_FILTER_MAX_LEAD_MGDL] ?: Libre3Filter.DEFAULT_MAX_LEAD_MGDL
 
     /** RONDE 125 — zie [Keys.SMOOTHING_BREAK_OUT_FILTER_ENABLED]'s kdoc.
      *  Default UIT, zelfde reden als break-in: een gedragswijziging voor

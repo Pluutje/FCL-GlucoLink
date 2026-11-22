@@ -41,6 +41,7 @@ import com.fclglucolink.app.sensor.simulator.SimulatorControlBridge
 import com.fclglucolink.app.sensor.dexcomg6.DexcomG6TransmitterType
 import com.fclglucolink.app.sensor.simulator.readMmolValuesFromUri
 import com.fclglucolink.app.smoothing.KalmanSmoother
+import com.fclglucolink.app.smoothing.Libre3Filter
 import com.fclglucolink.app.ui.GlucoseUnit
 import com.fclglucolink.app.ui.formatForDisplay
 import com.fclglucolink.app.ui.mgdlToMmol
@@ -246,6 +247,8 @@ class BleConnectionService : Service() {
         // RONDE 230 — eenkleurig klein pictogram (ring + BG + pijl) voor statusbalk/gedimd lockscreen.
         var latestSmallIconBitmap: Bitmap? = null
         val smoother = KalmanSmoother()
+        // RONDE 260 (TEST) — filter for the 1-minute Libre 3 readings, see Libre3Filter.
+        val libre3Filter = Libre3Filter()
         // Detectie van concurrerende apps (CompetingAppDetector).
         var sessionStartedAtMs: Long = 0L
         var lastCompetingCheckMs: Long = 0L
@@ -673,6 +676,7 @@ class BleConnectionService : Service() {
                             // toestand niet blijft doorwerken op de
                             // eerste metingen van de nieuwe sensor.
                             runtime.smoother.reset()
+                            runtime.libre3Filter.reset()
                             // 06/08/2026 (editor, RONDE 53) — zelfde
                             // moment: een eventueel nog getoonde waarde
                             // van de VORIGE fysieke sensor hoort niet in
@@ -705,7 +709,7 @@ class BleConnectionService : Service() {
                     // ruwe sensorwaarde, precies zoals AAPS's eigen UKF
                     // (`calibratedOrValue`) dat ook doet.
                     val calibratedReading = applyCalibrationIfEnabled(stableReading, sensorType, slot)
-                    val smoothedReading = applySmoothingIfEnabled(calibratedReading, runtime.smoother, slot, sensorType)
+                    val smoothedReading = applySmoothingIfEnabled(calibratedReading, runtime.smoother, runtime.libre3Filter, slot, sensorType)
                     // Lokale opslag (status-/grafiekscherm) gebeurt
                     // ALTIJD; alleen de broadcast naar AAPS zelf is
                     // voorwaardelijk.
@@ -1058,13 +1062,26 @@ class BleConnectionService : Service() {
     private suspend fun applySmoothingIfEnabled(
         reading: GlucoseReading,
         smoother: KalmanSmoother,
+        libre3Filter: Libre3Filter,
         slot: SensorSlot,
         sensorType: SensorType
     ): GlucoseReading {
+        // RONDE 260 (TEST) — the Juggluco (Libre 3) test sensor has its own filter (Libre3Filter) with
+        // its own switch in Settings. It does not use the Kalman filter below: 1-minute data needs a
+        // different filter than the 5-minute Kalman settings. The raw value stays in rawSensorMgdl, so
+        // the chart and the status screen show raw and filtered side by side.
+        if (sensorType == SensorType.JUGGLUCO_LIBRE3) {
+            if (!settings.isLibre3FilterEnabledOnce()) return reading
+            val out = libre3Filter.filter(
+                rawMgdl = reading.glucoseMgdl,
+                timestampMs = reading.timestampMs,
+                alpha = settings.getLibre3FilterAlphaOnce(),
+                leadMinutes = settings.getLibre3FilterLeadMinutesOnce(),
+                maxLeadMgdl = settings.getLibre3FilterMaxLeadMgdlOnce()
+            )
+            return reading.copy(glucoseMgdl = out.glucoseMgdl)
+        }
         if (!settings.isSmoothingEnabled()) return reading
-        // RONDE 256 — the Juggluco (Libre 3) test sensor stays raw: 1-minute data needs a different
-        // filter than the 5-minute Kalman settings, and that is what we want to measure.
-        if (sensorType == SensorType.JUGGLUCO_LIBRE3) return reading
         val breakInDecayFactor = computeBreakInDecayFactor(reading.timestampMs, slot, sensorType)
         val breakOutDecayFactor = computeBreakOutDecayFactor(reading.timestampMs, slot, sensorType)
         val strength = settings.getSmoothingStrengthOnce()

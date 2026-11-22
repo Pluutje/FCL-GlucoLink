@@ -59,6 +59,7 @@ import com.fclglucolink.app.logging.DiagnosticFileLogger
 import com.fclglucolink.app.logging.LogUploader
 import com.fclglucolink.app.sensor.SensorSlot
 import com.fclglucolink.app.sensor.SensorType
+import com.fclglucolink.app.smoothing.Libre3Filter
 import com.fclglucolink.app.smoothing.SmoothingStrength
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.combine
@@ -140,6 +141,11 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit, onOpenAbout: ()
     // instabiel worden) — zie smoothing/KalmanSmoother.kt's klasse-kdoc
     // (RONDE-125-paragraaf) en BleConnectionService.kt's
     // computeBreakOutDecayFactor() voor het volledige mechanisme.
+    // RONDE 260 (TEST) — see smoothing/Libre3Filter.kt and the "FSL3 filter (TEST)" card below.
+    val libre3FilterEnabled by settings.libre3FilterEnabled.collectAsState(initial = true)
+    val libre3FilterAlpha by settings.libre3FilterAlpha.collectAsState(initial = Libre3Filter.DEFAULT_ALPHA)
+    val libre3FilterLead by settings.libre3FilterLeadMinutes.collectAsState(initial = Libre3Filter.DEFAULT_LEAD_MINUTES)
+    val libre3FilterMaxLead by settings.libre3FilterMaxLeadMgdl.collectAsState(initial = Libre3Filter.DEFAULT_MAX_LEAD_MGDL)
     val breakOutFilterEnabled by settings.breakOutFilterEnabled.collectAsState(initial = false)
     val breakOutFilterDurationHours by settings.breakOutFilterDurationHours.collectAsState(initial = 48.0)
     // 18/08/2026 (editor, RONDE 113, op verzoek om gefilterde data op het
@@ -991,6 +997,166 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit, onOpenAbout: ()
                                 scope.launch { settings.setShowFilteredPipelineOnMainScreen(enabled) }
                             }
                         )
+                    }
+                }
+            }
+
+            // RONDE 260 (TEST) — own card for the filter of the 1-minute Libre 3 readings (sensor
+            // "Juggluco (Libre 3, 1-min)"). It has its own switch and does not depend on the general
+            // smoothing switch above. Other sensors are not touched.
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            tr("FSL3 filter (TEST)", "FSL3-filter (TEST)"),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Switch(
+                            checked = libre3FilterEnabled,
+                            onCheckedChange = { enabled -> scope.launch { settings.setLibre3FilterEnabled(enabled) } }
+                        )
+                    }
+                    Text(
+                        tr(
+                            "TEST FEATURE. Filter for the 1-minute readings of a Libre 3 (sensor " +
+                                "\"Juggluco (Libre 3, 1-min)\"). It smooths the readings and moves " +
+                                "the value a little forward along the trend, so a rise or fall shows " +
+                                "up sooner. In the chart, an open circle is the raw reading and the " +
+                                "line is the filtered value. The raw readings are always saved, so " +
+                                "other filters can be tried later. These readings are not sent to AAPS.",
+                            "TESTFUNCTIE. Filter voor de 1-minuut metingen van een Libre 3 (sensor " +
+                                "\"Juggluco (Libre 3, 1-min)\"). Het maakt de metingen gladder en " +
+                                "schuift de waarde een stukje vooruit langs de trend, zodat een " +
+                                "stijging of daling eerder zichtbaar is. In de grafiek is een open " +
+                                "cirkel de ruwe meting en de lijn de gefilterde waarde. De ruwe " +
+                                "metingen worden altijd bewaard, zodat later andere filters " +
+                                "geprobeerd kunnen worden. Deze metingen gaan niet naar AAPS."
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                    val libre3Alpha = if (libre3FilterEnabled) 1.0f else 0.38f
+
+                    HorizontalDivider()
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(
+                            tr("Smoothing (weight of a new reading per minute)", "Gladstrijken (gewicht nieuwe meting per minuut)"),
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = libre3Alpha)
+                        )
+                        Text(
+                            "%.2f".format(libre3FilterAlpha),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = libre3Alpha)
+                        )
+                    }
+                    Text(
+                        tr(
+                            "Low = smoother but slower. High = follows the sensor closely. Default 0.70.",
+                            "Laag = gladder maar trager. Hoog = volgt de sensor dicht. Standaard 0,70."
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary.copy(alpha = libre3Alpha)
+                    )
+                    Slider(
+                        value = libre3FilterAlpha.toFloat().coerceIn(0.2f, 1.0f),
+                        onValueChange = { v ->
+                            scope.launch { settings.setLibre3FilterAlpha((v * 20f).roundToInt() / 20.0) }
+                        },
+                        valueRange = 0.2f..1.0f,
+                        steps = 15,
+                        enabled = libre3FilterEnabled
+                    )
+
+                    HorizontalDivider()
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(
+                            tr("Lead (minutes forward)", "Vooruitschuiven (minuten)"),
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = libre3Alpha)
+                        )
+                        Text(
+                            "%.1f min".format(libre3FilterLead),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = libre3Alpha)
+                        )
+                    }
+                    Text(
+                        tr(
+                            "0 = no lead. A higher lead shows a rise sooner, but overshoots more near a peak. " +
+                                "Default 2.0.",
+                            "0 = niet vooruitschuiven. Hoger toont een stijging eerder, maar schiet bij een piek " +
+                                "meer door. Standaard 2,0."
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary.copy(alpha = libre3Alpha)
+                    )
+                    Slider(
+                        value = libre3FilterLead.toFloat().coerceIn(0f, 4f),
+                        onValueChange = { v ->
+                            scope.launch { settings.setLibre3FilterLeadMinutes((v * 2f).roundToInt() / 2.0) }
+                        },
+                        valueRange = 0f..4f,
+                        steps = 7,
+                        enabled = libre3FilterEnabled
+                    )
+
+                    HorizontalDivider()
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(
+                            tr("Largest lead", "Grootste voorsprong"),
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = libre3Alpha)
+                        )
+                        Text(
+                            libre3FilterMaxLead.formatForDisplayWithUnit(displayUnit),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = libre3Alpha)
+                        )
+                    }
+                    Text(
+                        tr(
+                            "The value is never moved forward by more than this. Default 15 mg/dL (0.8 mmol/L).",
+                            "De waarde schuift nooit verder vooruit dan dit. Standaard 15 mg/dL (0,8 mmol/L)."
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary.copy(alpha = libre3Alpha)
+                    )
+                    Slider(
+                        value = libre3FilterMaxLead.toFloat().coerceIn(0f, 30f),
+                        onValueChange = { v ->
+                            scope.launch { settings.setLibre3FilterMaxLeadMgdl(v.roundToInt().toDouble()) }
+                        },
+                        valueRange = 0f..30f,
+                        steps = 29,
+                        enabled = libre3FilterEnabled
+                    )
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    settings.setLibre3FilterAlpha(Libre3Filter.DEFAULT_ALPHA)
+                                    settings.setLibre3FilterLeadMinutes(Libre3Filter.DEFAULT_LEAD_MINUTES)
+                                    settings.setLibre3FilterMaxLeadMgdl(Libre3Filter.DEFAULT_MAX_LEAD_MGDL)
+                                }
+                            },
+                            enabled = libre3FilterEnabled
+                        ) { Text(tr("Reset to defaults", "Standaardwaarden")) }
                     }
                 }
             }
