@@ -14,7 +14,8 @@ import kotlin.math.pow
  *     a rise or fall a little earlier, at the price of a larger overshoot near a peak.
  *
  * The numbers come from the offline analysis in `tools/libre3_filter_analyse.py`
- * (best choice on 2 days of data: alpha 0.7, lead 2 minutes, max 15 mg/dL). They are still a test.
+ * (RONDE 260 chose alpha 0.7 and lead 2 minutes for speed. RONDE 261 changed the defaults to alpha 0.15
+ * and no lead, because that choice was 3 times less calm than the Dexcom G6). They are still a test.
  * The raw 1-minute data is always kept (`libre3_minuut_*.csv` and the raw value in the database),
  * so another filter can be tried on the same data later.
  *
@@ -86,8 +87,11 @@ class Libre3Filter {
     }
 
     companion object {
-        const val DEFAULT_ALPHA = 0.7
-        const val DEFAULT_LEAD_MINUTES = 2.0
+        // RONDE 261 — the defaults aim at STABILITY first. On the 5-minute values, alpha 0.15 is about
+        // as calm as the Dexcom G6 before its own smoothing (alpha 0.10 matches the G6 after smoothing),
+        // and a lead makes the value less calm. Speed will come later from a separate signal.
+        const val DEFAULT_ALPHA = 0.15
+        const val DEFAULT_LEAD_MINUTES = 0.0
         const val DEFAULT_MAX_LEAD_MGDL = 15.0
 
         private const val MIN_ALPHA = 0.05

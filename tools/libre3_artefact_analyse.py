@@ -187,7 +187,7 @@ def main():
 
     st = pd.DataFrame(spike_set)
     if len(st):
-        st["tijd"] = pd.to_datetime(st["t_peak"], unit="s") + pd.Timedelta(hours=1)  # CET, zoals in de app
+        st["tijd"] = pd.to_datetime(st["t_peak"], unit="s")  # zelfde klok als in de CSV (lokale tijd)
         print("\nARTEFACT-KANDIDATEN (tijd = lokale tijd):")
         print(st[["tijd", "base", "peak", "rise", "rate5", "back", "dur_min"]].to_string(index=False))
         st.to_csv(os.path.join(out, "artefact_kandidaten.csv"), sep=";", index=False)

@@ -1064,19 +1064,21 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit, onOpenAbout: ()
                     }
                     Text(
                         tr(
-                            "Low = smoother but slower. High = follows the sensor closely. Default 0.70.",
-                            "Laag = gladder maar trager. Hoog = volgt de sensor dicht. Standaard 0,70."
+                            "Low = calmer but slower. High = follows the sensor closely. Default 0.15. " +
+                                "About 0.10 is as calm as the Dexcom G6.",
+                            "Laag = rustiger maar trager. Hoog = volgt de sensor dicht. Standaard 0,15. " +
+                                "Rond 0,10 is even rustig als de Dexcom G6."
                         ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.secondary.copy(alpha = libre3Alpha)
                     )
                     Slider(
-                        value = libre3FilterAlpha.toFloat().coerceIn(0.2f, 1.0f),
+                        value = libre3FilterAlpha.toFloat().coerceIn(0.05f, 1.0f),
                         onValueChange = { v ->
                             scope.launch { settings.setLibre3FilterAlpha((v * 20f).roundToInt() / 20.0) }
                         },
-                        valueRange = 0.2f..1.0f,
-                        steps = 15,
+                        valueRange = 0.05f..1.0f,
+                        steps = 18,
                         enabled = libre3FilterEnabled
                     )
 
@@ -1097,9 +1099,9 @@ fun SettingsScreen(onBack: () -> Unit, onOpenAlarms: () -> Unit, onOpenAbout: ()
                     Text(
                         tr(
                             "0 = no lead. A higher lead shows a rise sooner, but overshoots more near a peak. " +
-                                "Default 2.0.",
+                                "Default 0 (a lead makes the value less calm).",
                             "0 = niet vooruitschuiven. Hoger toont een stijging eerder, maar schiet bij een piek " +
-                                "meer door. Standaard 2,0."
+                                "meer door. Standaard 0 (vooruitschuiven maakt de waarde onrustiger)."
                         ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.secondary.copy(alpha = libre3Alpha)

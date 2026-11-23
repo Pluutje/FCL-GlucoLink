@@ -1,0 +1,3 @@
+FSL3-filter (TEST): rustiger gemaakt. Standaard is nu gladstrijken 0,15 zonder vooruitschuiven, zodat de Libre 3 ongeveer even rustig is als de Dexcom G6. De regelaar voor gladstrijken gaat nu van 0,05 tot 1,00 (rond 0,10 is even rustig als de G6 na zijn eigen filtering). Heb je eerder eigen waarden ingesteld, druk dan op "Standaardwaarden".
+---EN---
+FSL3 filter (TEST): made calmer. The default is now smoothing 0.15 with no lead, so the Libre 3 is about as calm as the Dexcom G6. The smoothing slider now goes from 0.05 to 1.00 (about 0.10 is as calm as the G6 after its own filtering). If you set your own values earlier, press "Reset to defaults".
